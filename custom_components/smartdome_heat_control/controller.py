@@ -81,13 +81,22 @@ class SmartHeatingController:
     def _register_time(self, cfg_key: str, default: str, fn) -> None:
         t = self.config.get(cfg_key, default)
         try:
-            h, m = map(int, t.split(":"))
-        except (ValueError, AttributeError):
-            _LOGGER.warning("Smart Heating: Ungültige Zeit für '%s': %s", cfg_key, t)
-            return
+            # Trenne den String und nimm nur die ersten beiden Teile (H und M)
+            parts = t.split(":")
+            h = int(parts[0])
+            m = int(parts[1])
+        except (ValueError, AttributeError, IndexError):
+            _LOGGER.warning("Smart Heating: Ungültige Zeit für '%s': %s (Nutze Default)", cfg_key, t)
+            # Fallback auf Default, falls der String komplett kaputt ist
+            try:
+                h, m = map(int, default.split(":")[:2])
+            except:
+                h, m = 18, 0 # Absoluter Notfall-Fallback
+        
         self._unsub.append(
             async_track_time_change(self.hass, fn, hour=h, minute=m, second=0)
         )
+
 
     # ── Hilfsfunktionen ───────────────────────────────────────────────────────
 
