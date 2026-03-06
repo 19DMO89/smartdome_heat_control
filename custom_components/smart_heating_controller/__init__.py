@@ -3,14 +3,15 @@ from __future__ import annotations
 
 import logging
 import uuid
+import os
 from typing import Any
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers.storage import Store
-from homeassistant.components import frontend
+from homeassistant.components import frontend, websocket_api
+from homeassistant.components.http import StaticPathConfig
 
 from .const import (
     CONF_ROOMS,
@@ -19,41 +20,18 @@ from .const import (
     SERVICE_RELOAD,
     SERVICE_REMOVE_ROOM,
     SERVICE_UPDATE_CONFIG,
-    STORAGE_KEY,
-    STORAGE_VERSION,
 )
 from .controller import SmartHeatingController
 from .helpers import async_discover_rooms, deep_merge
 
 _LOGGER = logging.getLogger(__name__)
-DOMAIN = "smartdome_heat_control"
-
-
-async def async_setup_entry(hass, entry):
-    # Bestehende Setup-Logik deiner Integration...
-    
-    # Registrierung des Seitenleisten-Eintrags
-    frontend.async_register_built_in_panel(
-        hass,
-        component_name="custom", 
-        sidebar_title="Smartdome Heat",
-        sidebar_icon="mdi:radiator",
-        url_path="smartdome-heat-settings",
-        config={
-            # Hier kannst du definieren, was angezeigt wird
-            # Beispiel: Link zu einer Lovelace-Ansicht oder einem Custom-Element
-            "_raw_config": {}, 
-        },
-        require_admin=True
-    )
-    
-    return True
-
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Setup über Config Entry (nach Einrichtung über UI)."""
-    cfg = dict(entry.data)
+    """Setup über Config Entry."""
+    
+    hass.data.setdefault(DOMAIN, {})
 
+    cfg = dict(entry.data)
     controller = SmartHeatingController(hass, cfg)
     await controller.async_start()
 
@@ -63,11 +41,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "entry":      entry,
     }
 
+    # 1. Frontend Pfad & Seitenleisten-Panel registrieren
+    frontend_path = os.path.join(os.path.dirname(__file__), "www")
+    
+    if os.path.exists(frontend_path):
+        await hass.http.async_register_static_paths([
+            StaticPathConfig("/smartdome_ui", frontend_path, False)
+        ])
+    else:
+        _LOGGER.error("Frontend Ordner 'www' nicht gefunden in %s", frontend_path)
+
+    # Panel in der Seitenleiste (Iframe zeigt deine index.html)
+    frontend.async_register_built_in_panel(
+        hass,
+        component_name="iframe",
+        sidebar_title="Smartdome Heat",
+        sidebar_icon="mdi:radiator",
+        url_path="smartdome_control",
+        config={"url": "/smartdome_ui/index.html"},
+        require_admin=False
+    )
+
+    # 2. WebSocket API zum Speichern aus der HTML-Oberfläche
+    @websocket_api.websocket_command({
+        vol.Required("type"): f"{DOMAIN}/save_config",
+        vol.Required("config"): dict,
+    })
+    @websocket_api.async_response
+    async def ws_save_config(hass, connection, msg):
+        """Speichert die Konfiguration direkt aus dem Web-Panel."""
+        new_cfg = msg["config"]
+        # Config im Entry und Controller aktualisieren
+        hass.config_entries.async_update_entry(entry, data=new_cfg)
+        controller.update_config(new_cfg)
+        _push_state(hass, new_cfg)
+        connection.send_result(msg["id"], {"success": True})
+
+    websocket_api.async_register_command(hass, ws_save_config)
+
     # State für Lovelace-Karte bereitstellen
     _push_state(hass, cfg)
 
-    # ── Services registrieren ─────────────────────────────────────────────────
-
+    # 3. Services registrieren (Abwärtskompatibilität & Automatisierungen)
     async def handle_update_config(call: ServiceCall) -> None:
         patch = call.data.get("config", {})
         deep_merge(cfg, patch)
@@ -76,7 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _push_state(hass, cfg)
 
     async def handle_add_room(call: ServiceCall) -> None:
-        room_id    = call.data.get("room_id") or f"room_{uuid.uuid4().hex[:8]}"
+        room_id = call.data.get("room_id") or f"room_{uuid.uuid4().hex[:8]}"
         room_label = call.data.get("label", "Neuer Raum")
         if room_id not in cfg.get(CONF_ROOMS, {}):
             cfg.setdefault(CONF_ROOMS, {})[room_id] = {
@@ -91,7 +106,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.config_entries.async_update_entry(entry, data=dict(cfg))
         controller.update_config(cfg)
         _push_state(hass, cfg)
-        _LOGGER.info("Smart Heating: Raum '%s' hinzugefügt", room_label)
 
     async def handle_remove_room(call: ServiceCall) -> None:
         room_id = call.data.get("room_id")
@@ -102,60 +116,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _push_state(hass, cfg)
 
     async def handle_reload(call: ServiceCall) -> None:
-        """Räume neu erkennen und fehlende ergänzen."""
         new_rooms = await async_discover_rooms(hass)
         rooms = cfg.setdefault(CONF_ROOMS, {})
-        added = 0
-        for room_id, room in new_rooms.items():
-            if room_id not in rooms:
-                rooms[room_id] = room
-                added += 1
+        for r_id, r_data in new_rooms.items():
+            if r_id not in rooms:
+                rooms[r_id] = r_data
         hass.config_entries.async_update_entry(entry, data=dict(cfg))
         controller.update_config(cfg)
         _push_state(hass, cfg)
-        _LOGGER.info("Smart Heating: %d neue Räume erkannt", added)
 
-    hass.services.async_register(DOMAIN, SERVICE_UPDATE_CONFIG, handle_update_config,
-        schema=vol.Schema({vol.Required("config"): dict}))
-    hass.services.async_register(DOMAIN, SERVICE_ADD_ROOM, handle_add_room,
-        schema=vol.Schema({
-            vol.Optional("room_id"):      str,
-            vol.Optional("label"):        str,
-            vol.Optional("area_id"):      str,
-            vol.Optional("thermostat"):   str,
-            vol.Optional("sensor"):       str,
-            vol.Optional("target_day"):   float,
-            vol.Optional("target_night"): float,
-        }))
-    hass.services.async_register(DOMAIN, SERVICE_REMOVE_ROOM, handle_remove_room,
-        schema=vol.Schema({vol.Required("room_id"): str}))
-    hass.services.async_register(DOMAIN, SERVICE_RELOAD, handle_reload,
-        schema=vol.Schema({}))
+    hass.services.async_register(DOMAIN, SERVICE_UPDATE_CONFIG, handle_update_config, schema=vol.Schema({vol.Required("config"): dict}))
+    hass.services.async_register(DOMAIN, SERVICE_ADD_ROOM, handle_add_room)
+    hass.services.async_register(DOMAIN, SERVICE_REMOVE_ROOM, handle_remove_room, schema=vol.Schema({vol.Required("room_id"): str}))
+    hass.services.async_register(DOMAIN, SERVICE_RELOAD, handle_reload)
 
-    # Config Entry Update Listener (Options Flow)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-
     return True
 
-
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Wird aufgerufen wenn der Options Flow Änderungen speichert."""
+    """Reload bei Änderungen im Options Flow."""
     await hass.config_entries.async_reload(entry.entry_id)
 
-
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Integration deaktivieren."""
+    """Integration entladen."""
+    # Sidebar Panel entfernen
+    frontend.async_remove_panel(hass, "smartdome_control")
+    
     data = hass.data[DOMAIN].pop(entry.entry_id, {})
-    controller: SmartHeatingController = data.get("controller")
+    controller = data.get("controller")
     if controller:
         await controller.async_stop()
 
-    for service in (SERVICE_UPDATE_CONFIG, SERVICE_ADD_ROOM, SERVICE_REMOVE_ROOM, SERVICE_RELOAD):
-        hass.services.async_remove(DOMAIN, service)
-
     return True
 
-
 def _push_state(hass: HomeAssistant, cfg: dict) -> None:
-    """Schreibt Konfiguration als HA-State → Lovelace-Karte kann ihn lesen."""
+    """Aktualisiert den globalen State für die UI."""
     hass.states.async_set(f"{DOMAIN}.config", "active", attributes=cfg)
