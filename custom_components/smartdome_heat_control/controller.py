@@ -1,4 +1,4 @@
-"""Smart Heating Controller – Kernlogik mit harter Sicherheits-Abschaltung."""
+"""Smart Heating Controller – Kernlogik mit UI-Anbindung."""
 from __future__ import annotations
 
 import logging
@@ -19,20 +19,18 @@ from .const import (
     CONF_MORNING_BOOST_END,
     CONF_NIGHT_START,
     CONF_ROOMS,
-    CONF_TOLERANCE,
     DEFAULT_BOOST_DELTA,
     DEFAULT_MORNING_BOOST_END,
     DEFAULT_NIGHT_START,
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
-    DEFAULT_TOLERANCE,
     DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 class SmartHeatingController:
-    """Kernlogik: Verhindert Überheizen durch strikte Zielwert-Prüfung."""
+    """Kernlogik: Reagiert auf UI-Eingaben und Sensorwerte."""
 
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]) -> None:
         self.hass = hass
@@ -40,15 +38,21 @@ class SmartHeatingController:
         self._unsub: list = []
 
     async def async_start(self) -> None:
-        """Listener und Zeitsteuerung registrieren."""
+        """Listener für Sensoren, Thermostate (UI) und Zeitsteuerung registrieren."""
         self._unsubscribe_all()
 
         active_rooms = self._active_rooms()
-        sensors = [r["sensor"] for r in active_rooms.values() if r.get("sensor")]
         
-        if sensors:
+        # 1. Sensoren überwachen (Ist-Temperatur)
+        sensors = [r["sensor"] for r in active_rooms.values() if r.get("sensor")]
+        # 2. Thermostate überwachen (Soll-Temperatur aus der UI)
+        thermostats = [r["thermostat"] for r in active_rooms.values() if r.get("thermostat")]
+        
+        watch_list = list(set(sensors + thermostats))
+        
+        if watch_list:
             self._unsub.append(
-                async_track_state_change_event(self.hass, sensors, self._on_temp_change)
+                async_track_state_change_event(self.hass, watch_list, self._on_state_change)
             )
 
         # Prüft jede Minute auf Zeitplan-Wechsel
@@ -56,7 +60,7 @@ class SmartHeatingController:
             async_track_time_change(self.hass, self._on_minute_tick, second=0)
         )
 
-        _LOGGER.info("Smart Heating Controller aktiv: Sicherheits-Abschaltung bei Zieltemperatur")
+        _LOGGER.info("Smart Heating Controller aktiv: Überwachungskreis für %s Entitäten erstellt", len(watch_list))
 
     async def async_stop(self) -> None:
         self._unsubscribe_all()
@@ -70,34 +74,45 @@ class SmartHeatingController:
             unsub()
         self._unsub.clear()
 
-    # ── Zeit-Logik (Einzelraum) ───────────────────────────────────────────────
-
-    def _is_night_for_room(self, room: dict) -> bool:
-        """Prüft, ob für einen Raum gerade Nachtzeit ist."""
-        now = datetime.now().strftime("%H:%M")
-        ns = str(room.get("night_start", self.config.get(CONF_NIGHT_START, DEFAULT_NIGHT_START)))[:5]
-        ds = str(room.get("day_start", self.config.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END)))[:5]
-        
-        if ns > ds: # Nacht über Mitternacht
-            return now >= ns or now < ds
-        return ns <= now < ds
+    # ── Zielwert-Logik (Berücksichtigt UI) ──────────────────────────────────
 
     def _target_for_room(self, room: dict) -> float:
-        """Zieltemperatur basierend auf Zeitplan."""
+        """Ermittelt die Zieltemperatur (Priorität: UI-Einstellung)."""
+        t_id = room.get("thermostat")
+        state = self.hass.states.get(t_id) if t_id else None
+        
+        # Wenn in der UI ein Wert gesetzt wurde, nehmen wir diesen
+        if state and ATTR_TEMPERATURE in state.attributes:
+            try:
+                ui_temp = float(state.attributes[ATTR_TEMPERATURE])
+                if ui_temp > 0: # Plausibilitätscheck
+                    return ui_temp
+            except (ValueError, TypeError):
+                pass
+
+        # Fallback auf Zeitplan (Config)
         if self._is_night_for_room(room):
             return float(room.get("target_night", DEFAULT_TARGET_NIGHT))
         return float(room.get("target_day", DEFAULT_TARGET_DAY))
 
-    # ── Kern-Logik (Evaluate) ──────────────────────────────────────────────────
+    def _is_night_for_room(self, room: dict) -> bool:
+        now = datetime.now().strftime("%H:%M")
+        ns = str(room.get("night_start", self.config.get(CONF_NIGHT_START, DEFAULT_NIGHT_START)))[:5]
+        ds = str(room.get("day_start", self.config.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END)))[:5]
+        
+        if ns > ds:
+            return now >= ns or now < ds
+        return ns <= now < ds
+
+    # ── Kern-Logik (Evaluation) ───────────────────────────────────────────────
 
     def _evaluate(self) -> None:
         rooms = self._active_rooms()
         if not rooms:
             return
 
-        boost_delta = 2.0  # +2 Grad Erhöhung
-        hysterese = 0.5    # Einschalt-Puffer
-        
+        boost_delta = self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA)
+        hysterese = 0.5
         needs_heat = {}
 
         for rid, room in rooms.items():
@@ -108,27 +123,13 @@ class SmartHeatingController:
                 needs_heat[rid] = False
                 continue
 
-            # --- HARTE ABSCHALTUNG ---
-            # Wenn Ist-Temperatur >= Soll-Temperatur, dann Heizen SOFORT beenden
+            # Harte Abschaltung bei Erreichen der Zieltemperatur
             if temp >= target:
                 needs_heat[rid] = False
                 continue
 
-            # Hysterese-Logik für den Einschaltvorgang
-            t_id = room.get("thermostat")
-            state = self.hass.states.get(t_id) if t_id else None
-            is_currently_boosted = False
-            if state:
-                current_set = state.attributes.get(ATTR_TEMPERATURE, 0)
-                if current_set > target:
-                    is_currently_boosted = True
-
-            if is_currently_boosted:
-                # Wir heizen gerade -> weiterheizen bis Ziel erreicht (temp < target)
-                needs_heat[rid] = temp < target
-            else:
-                # Wir halten Temperatur -> erst einschalten wenn 0.5 Grad zu kalt
-                needs_heat[rid] = temp < (target - hysterese)
+            # Einschaltlogik mit Hysterese
+            needs_heat[rid] = temp < (target - hysterese)
 
         # ── Hauptthermostat Logik ──
         any_cold = any(needs_heat.values())
@@ -136,31 +137,24 @@ class SmartHeatingController:
         main_state = self.hass.states.get(main_id) if main_id else None
         
         if any_cold and main_state:
-            # BEDARF: Kessel auf Ist-Temperatur + 2 Grad
             main_current = main_state.attributes.get("current_temperature")
-            if main_current is not None:
-                final_main = float(main_current) + boost_delta
-            else:
-                final_main = 24.0 # Fallback
+            final_main = float(main_current) + boost_delta if main_current else 24.0
         else:
-            # KEIN BEDARF: Sofort auf 22 Grad zurück
             final_main = 22.0
 
         self._main_set_temp_if_new(final_main)
 
-        # ── Einzel-Thermostate setzen ──
+        # ── Einzel-Thermostate setzen (Boost-Logik) ──
         for rid, room in rooms.items():
             t_id = room.get("thermostat")
-            if not t_id:
-                continue
+            if not t_id: continue
 
             target = self._target_for_room(room)
             temp = self._room_temp(room)
             
-            # WICHTIG: Wenn Raum warm genug (>= target), dann Ventil auf Zielwert drosseln
-            if temp is not None and temp >= target:
-                new_val = target
-            elif needs_heat[rid]:
+            # Wenn Wärme gebraucht wird: Setze Ziel + Boost (damit das Ventil voll öffnet)
+            # Wenn warm genug: Setze exakten Zielwert (Ventil drosselt)
+            if needs_heat[rid]:
                 new_val = target + boost_delta
             else:
                 new_val = target
@@ -181,20 +175,16 @@ class SmartHeatingController:
         except ValueError: return None
 
     def _set_temp_if_new(self, entity_id: str, temp: float) -> None:
-        """Sende nur Befehle, wenn der Wert sich wirklich ändert."""
         state = self.hass.states.get(entity_id)
         if state:
             current = state.attributes.get(ATTR_TEMPERATURE)
-            if current is not None:
-                diff = abs(float(current) - float(temp))
-                if diff  None:
+            if current is not None and abs(float(current) - float(temp))  None:
         main = self.config.get(CONF_MAIN_THERMOSTAT)
         if main: self._set_temp_if_new(main, temp)
 
-    # ── Event-Handler ─────────────────────────────────────────────────────────
-
     @callback
-    def _on_temp_change(self, event) -> None:
+    def _on_state_change(self, event) -> None:
+        """Wird ausgelöst bei Sensor- ODER UI-Änderungen."""
         self._evaluate()
 
     @callback
