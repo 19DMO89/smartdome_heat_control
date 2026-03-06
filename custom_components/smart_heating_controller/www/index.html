@@ -4,72 +4,125 @@
     <meta charset="UTF-8">
     <title>Smartdome Heat Control Settings</title>
     <style>
-        body { font-family: Roboto, sans-serif; background-color: #111; color: white; padding: 20px; }
-        .room-card { background: #222; border-radius: 8px; padding: 15px; margin-bottom: 20px; border: 1px solid #444; }
-        .room-header { font-size: 1.5em; margin-bottom: 10px; color: #ff9800; border-bottom: 1px solid #444; padding-bottom: 5px; }
-        .setting-group { margin: 10px 0; display: flex; align-items: center; justify-content: space-between; }
-        select, input { background: #333; color: white; border: 1px solid #555; padding: 5px; border-radius: 4px; width: 200px; }
-        button { background: #ff9800; border: none; color: black; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        button:hover { background: #e68a00; }
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background-color: #1a1a1a; color: #e0e0e0; padding: 20px; line-height: 1.6; }
+        h1 { color: #ff9800; border-bottom: 2px solid #ff9800; padding-bottom: 10px; }
+        .room-card { background: #2c2c2c; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #3d3d3d; }
+        .room-header { font-size: 1.4em; font-weight: bold; margin-bottom: 15px; color: #ff9800; display: flex; justify-content: space-between; }
+        .setting-group { margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+        .setting-group label { flex: 1; font-weight: 500; }
+        select, input { background: #3d3d3d; color: white; border: 1px solid #555; padding: 8px; border-radius: 6px; width: 250px; outline: none; }
+        select:focus, input:focus { border-color: #ff9800; }
+        .actions { position: sticky; bottom: 20px; background: rgba(26, 26, 26, 0.9); padding: 15px; border-radius: 8px; text-align: right; }
+        button { background: #ff9800; border: none; color: #1a1a1a; padding: 12px 30px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; transition: transform 0.1s, background 0.2s; }
+        button:hover { background: #e68a00; transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+        .status-enabled { font-size: 0.6em; background: #4caf50; color: white; padding: 2px 8px; border-radius: 10px; vertical-align: middle; }
     </style>
 </head>
 <body>
 
-    <h1>Smartdome Heat Control - Einstellungen</h1>
-    <div id="room-container"></div>
+    <h1>Smartdome Heat Control</h1>
+    <div id="room-container">Lade Konfiguration...</div>
     
-    <button onclick="saveSettings()">Einstellungen Speichern</button>
+    <div class="actions">
+        <button onclick="saveToHA()">Konfiguration Speichern</button>
+    </div>
 
     <script>
-        // Beispiel-Datenstruktur für Räume
-        const rooms = ["Wohnzimmer", "Schlafzimmer", "Küche", "Bad"];
-        
-        // Diese Funktion würde normalerweise die echten Entitäten von HA abfragen
-        // Wenn als Panel geladen, ist window.parent.hass oft verfügbar
-        const mockEntities = ["climate.living_room", "sensor.room_temp", "switch.heater_pump", "input_number.target_temp"];
+        let currentConfig = {};
+        let allEntities = [];
 
-        function createRoomCards() {
+        // 1. Verbindung zu Home Assistant herstellen
+        const hass = window.parent.document.querySelector("home-assistant").hass;
+
+        function init() {
+            if (!hass) {
+                document.getElementById('room-container').innerHTML = "Fehler: Keine Verbindung zu Home Assistant.";
+                return;
+            }
+
+            // Entitäten filtern (Climate & Sensoren)
+            allEntities = Object.keys(hass.states).sort();
+            
+            // Konfiguration aus dem State lesen (wird von _push_state in __init__.py gesetzt)
+            const state = hass.states["smartdome_heat_control.config"];
+            if (state && state.attributes) {
+                currentConfig = JSON.parse(JSON.stringify(state.attributes)); // Deep Copy
+                renderRooms();
+            } else {
+                document.getElementById('room-container').innerHTML = "Keine Konfiguration gefunden. Bitte Integration zuerst einrichten.";
+            }
+        }
+
+        function renderRooms() {
             const container = document.getElementById('room-container');
-            rooms.forEach(room => {
+            container.innerHTML = "";
+            const rooms = currentConfig.rooms || {};
+
+            Object.entries(rooms).forEach(([roomId, data]) => {
                 const card = document.createElement('div');
                 card.className = 'room-card';
                 card.innerHTML = `
-                    <div class="room-header">${room}</div>
+                    <div class="room-header">
+                        ${data.label || roomId} 
+                        ${data.enabled ? '<span class="status-enabled">Aktiv</span>' : ''}
+                    </div>
                     <div class="setting-group">
-                        <label>Thermostat auswählen:</label>
-                        <select id="${room}-thermostat">${generateOptions()}</select>
+                        <label>Thermostat (Climate):</label>
+                        <select onchange="updateVal('${roomId}', 'thermostat', this.value)">
+                            ${generateOptions(data.thermostat, "climate.")}
+                        </select>
                     </div>
                     <div class="setting-group">
                         <label>Temperatursensor:</label>
-                        <select id="${room}-sensor">${generateOptions()}</select>
+                        <select onchange="updateVal('${roomId}', 'sensor', this.value)">
+                            ${generateOptions(data.sensor, "sensor.")}
+                        </select>
                     </div>
                     <div class="setting-group">
-                        <label>Ziel-Temperatur:</label>
-                        <input type="number" step="0.5" value="21.0" id="${room}-target">
+                        <label>Ziel-Temperatur Tag (°C):</label>
+                        <input type="number" step="0.5" value="${data.target_day || 21}" 
+                               onchange="updateVal('${roomId}', 'target_day', parseFloat(this.value))">
+                    </div>
+                    <div class="setting-group">
+                        <label>Ziel-Temperatur Nacht (°C):</label>
+                        <input type="number" step="0.5" value="${data.target_night || 18}" 
+                               onchange="updateVal('${roomId}', 'target_night', parseFloat(this.value))">
                     </div>
                 `;
                 container.appendChild(card);
             });
         }
 
-        function generateOptions() {
-            return mockEntities.map(e => `<option value="${e}">${e}</option>`).join('');
-        }
-
-        function saveSettings() {
-            const settings = {};
-            rooms.forEach(room => {
-                settings[room] = {
-                    thermostat: document.getElementById(`${room}-thermostat`).value,
-                    sensor: document.getElementById(`${room}-sensor`).value,
-                    target: document.getElementById(`${room}-target`).value
-                };
+        function generateOptions(currentValue, filter) {
+            let html = '<option value="">Nicht ausgewählt</option>';
+            const filtered = allEntities.filter(e => e.startsWith(filter) || !filter);
+            
+            filtered.forEach(ent => {
+                const selected = ent === currentValue ? "selected" : "";
+                html += `<option value="${ent}" ${selected}>${ent}</option>`;
             });
-            console.log("Speichere Einstellungen:", settings);
-            alert("Einstellungen wurden lokal (Konsole) gespeichert. Für echten HA-Sync ist ein Websocket-Call nötig!");
+            return html;
         }
 
-        window.onload = createRoomCards;
+        function updateVal(roomId, key, value) {
+            currentConfig.rooms[roomId][key] = value;
+        }
+
+        async function saveToHA() {
+            try {
+                await hass.callWS({
+                    type: "smartdome_heat_control/save_config",
+                    config: currentConfig
+                });
+                alert("Erfolgreich gespeichert!");
+            } catch (err) {
+                alert("Fehler beim Speichern: " + err.message);
+                console.error(err);
+            }
+        }
+
+        window.onload = init;
     </script>
 </body>
 </html>
