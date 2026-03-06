@@ -1,6 +1,6 @@
 """Konstanten für Smart Heating Controller."""
 
-DOMAIN = "smart_heating"
+DOMAIN = "smartdome_heat_control"
 STORAGE_KEY = "smart_heating.config"
 STORAGE_VERSION = 3
 
