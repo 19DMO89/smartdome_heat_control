@@ -171,10 +171,18 @@ class SmartHeatingController:
         state = self.hass.states.get(entity_id)
         if state:
             current = state.attributes.get(ATTR_TEMPERATURE)
-            # KORREKTUR DER ZEILE 174:
-            if current is not None and abs(float(current) - float(temp)) < 0.1:
-        main = self.config.get(CONF_MAIN_THERMOSTAT)
-        if main: self._set_temp_if_new(main, temp)
+            if current is not None:
+                # Wir berechnen die Differenz in zwei Schritten
+                diff = abs(float(current) - float(temp))
+                if diff < 0.1:
+                    return 
+        
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                CLIMATE_DOMAIN, "set_temperature",
+                {"entity_id": entity_id, ATTR_TEMPERATURE: round(temp, 1)},
+            )
+        )
 
     # ── Event-Handler ─────────────────────────────────────────────────────────
 
