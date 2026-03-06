@@ -52,15 +52,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Frontend Ordner 'www' nicht gefunden in %s", frontend_path)
 
     # Panel in der Seitenleiste (Iframe zeigt deine index.html)
+    # Korrekte Registrierung des Panels
     frontend.async_register_built_in_panel(
         hass,
         component_name="iframe",
         sidebar_title="Smartdome Heat",
         sidebar_icon="mdi:radiator",
-        url_path="smartdome_control",
+        frontend_url_path="smartdome_control", # Das Argument heißt jetzt frontend_url_path
         config={"url": "/smartdome_ui/index.html"},
         require_admin=False
     )
+
 
     # 2. WebSocket API zum Speichern aus der HTML-Oberfläche
     @websocket_api.websocket_command({
