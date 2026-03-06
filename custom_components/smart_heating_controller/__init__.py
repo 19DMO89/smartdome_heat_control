@@ -10,6 +10,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.storage import Store
+from homeassistant.components import frontend
 
 from .const import (
     CONF_ROOMS,
@@ -25,11 +26,27 @@ from .controller import SmartHeatingController
 from .helpers import async_discover_rooms, deep_merge
 
 _LOGGER = logging.getLogger(__name__)
+DOMAIN = "smartdome_heat_control"
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Basis-Setup (ohne config_entries noch nicht nötig)."""
-    hass.data.setdefault(DOMAIN, {})
+async def async_setup_entry(hass, entry):
+    # Bestehende Setup-Logik deiner Integration...
+    
+    # Registrierung des Seitenleisten-Eintrags
+    frontend.async_register_built_in_panel(
+        hass,
+        component_name="custom", 
+        sidebar_title="Smartdome Heat",
+        sidebar_icon="mdi:radiator",
+        url_path="smartdome-heat-settings",
+        config={
+            # Hier kannst du definieren, was angezeigt wird
+            # Beispiel: Link zu einer Lovelace-Ansicht oder einem Custom-Element
+            "_raw_config": {}, 
+        },
+        require_admin=True
+    )
+    
     return True
 
 
