@@ -171,9 +171,16 @@ class SmartHeatingController:
         state = self.hass.states.get(entity_id)
         if state:
             current = state.attributes.get(ATTR_TEMPERATURE)
-            if current is not None and abs(current - temp)  None:
-        main = self.config.get(CONF_MAIN_THERMOSTAT)
-        if main: self._set_temp_if_new(main, temp)
+            # Hier war der Fehler: Wir prüfen auf eine Differenz kleiner als 0.1
+            if current is not None and abs(current - temp) < 0.1:
+                return 
+        
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                CLIMATE_DOMAIN, "set_temperature",
+                {"entity_id": entity_id, ATTR_TEMPERATURE: round(temp, 1)},
+            )
+        )
 
     # ── Event-Handler ─────────────────────────────────────────────────────────
 
