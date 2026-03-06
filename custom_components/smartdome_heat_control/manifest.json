@@ -5,8 +5,6 @@
   "documentation": "https://github.com/your-repo/smart-heating",
   "issue_tracker": "https://github.com/your-repo/smart-heating/issues",
   "dependencies": ["frontend", "http"],
-  "requirements": [],
-  "dependencies": [],
   "iot_class": "local_push",
-  "config_flow": true
+
 }
