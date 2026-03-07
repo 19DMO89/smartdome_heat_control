@@ -10,7 +10,8 @@ import voluptuous as vol
 from homeassistant.components import frontend, websocket_api
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 
 from .const import (
     CONF_ROOMS,
@@ -41,7 +42,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     cfg = dict(entry.data)
-    cfg.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
+    cfg = _normalize_config(cfg)
 
     controller = SmartHeatingController(hass, dict(cfg))
     controller._enabled = bool(cfg.get(DATA_ENABLED, DEFAULT_ENABLED))
@@ -52,14 +53,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "entry": entry,
     }
 
-    await controller.async_start()
     await _async_register_frontend(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _async_register_ws_save_config(hass)
     _async_register_services(hass)
-
     _push_state(hass, cfg)
+
+    if hass.is_running:
+        await controller.async_start()
+    else:
+        @callback
+        def _start_when_ready(event) -> None:
+            hass.async_create_task(controller.async_start())
+
+        entry.async_on_unload(
+            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _start_when_ready)
+        )
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
