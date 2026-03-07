@@ -6,6 +6,8 @@ import os
 import uuid
 from typing import Any
 
+import json
+
 import voluptuous as vol
 from homeassistant.components import frontend, websocket_api
 from homeassistant.components.http import StaticPathConfig
@@ -29,7 +31,18 @@ from .helpers import async_discover_rooms, deep_merge
 
 _LOGGER = logging.getLogger(__name__)
 
+def _get_integration_version() -> str:
+    """Version aus manifest.json lesen."""
+    manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
 
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+        return str(manifest.get("version", "dev"))
+    except Exception:
+        _LOGGER.exception("Version aus manifest.json konnte nicht gelesen werden")
+        return "dev"
+        
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """YAML-Setup wird nicht verwendet."""
     return True
@@ -40,6 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .controller import SmartHeatingController
 
     hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["_version"] = _get_integration_version()
 
     cfg = dict(entry.data)
     cfg = _normalize_config(cfg)
@@ -110,6 +124,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def _async_register_frontend(hass: HomeAssistant) -> None:
     """Statisches Frontend und Sidebar-Panel registrieren."""
     frontend_path = os.path.join(os.path.dirname(__file__), "www")
+    version = hass.data.get(DOMAIN, {}).get("_version", "dev")
 
     if not hass.data[DOMAIN].get("_frontend_registered"):
         if os.path.exists(frontend_path):
@@ -126,7 +141,7 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
             sidebar_title="Smartdome Heat",
             sidebar_icon="mdi:radiator",
             frontend_url_path="smartdome_control",
-            config={"url": "/smartdome_ui/index.html"},
+            config={"url": f"/smartdome_ui/index.html?v={version}"},
             require_admin=False,
         )
 
