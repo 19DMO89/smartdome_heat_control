@@ -12,7 +12,10 @@
           "tolerance": "Toleranz",
           "night_start": "Nacht-Start",
           "morning_boost_start": "Morgen-Boost Start",
-          "morning_boost_end": "Morgen-Boost Ende"
+          "morning_boost_end": "Morgen-Boost Ende",
+          "vacation_enabled": "Urlaubsmodus aktiv",
+          "vacation_temperature": "Urlaubstemperatur",
+          "away_enabled": "Nicht Zuhause aktiv"
         }
       },
       "rooms": {
@@ -43,7 +46,10 @@
           "tolerance": "Toleranz",
           "night_start": "Nacht-Start",
           "morning_boost_start": "Morgen-Boost Start",
-          "morning_boost_end": "Morgen-Boost Ende"
+          "morning_boost_end": "Morgen-Boost Ende",
+          "vacation_enabled": "Urlaubsmodus aktiv",
+          "vacation_temperature": "Urlaubstemperatur",
+          "away_enabled": "Nicht Zuhause aktiv"
         }
       },
       "rooms_list": {
@@ -62,6 +68,9 @@
           "sensor": "Temperatursensor",
           "target_day": "Zieltemperatur Tag",
           "target_night": "Zieltemperatur Nacht",
+          "away_temperature": "Away-Temperatur",
+          "day_start": "Tag-Start",
+          "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
           "delete_room": "Raum löschen"
         }
@@ -75,6 +84,9 @@
           "sensor": "Temperatursensor",
           "target_day": "Zieltemperatur Tag",
           "target_night": "Zieltemperatur Nacht",
+          "away_temperature": "Away-Temperatur",
+          "day_start": "Tag-Start",
+          "night_start": "Nacht-Start",
           "enabled": "Raum aktiv"
         }
       }
