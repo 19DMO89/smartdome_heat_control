@@ -24,7 +24,6 @@ from .const import (
     SERVICE_REMOVE_ROOM,
     SERVICE_UPDATE_CONFIG,
 )
-from .controller import SmartHeatingController
 from .helpers import async_discover_rooms, deep_merge
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,6 +36,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Setup der Integration über Config Entry."""
+    from .controller import SmartHeatingController
+
     hass.data.setdefault(DOMAIN, {})
 
     cfg = dict(entry.data)
@@ -56,8 +57,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_register_frontend(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    _async_register_ws_save_config(hass, entry)
-    _async_register_services(hass, entry)
+    _async_register_ws_save_config(hass)
+    _async_register_services(hass)
 
     _push_state(hass, cfg)
 
@@ -70,11 +71,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     data = hass.data.get(DOMAIN, {}).pop(entry.entry_id, {})
-    controller: SmartHeatingController | None = data.get(DATA_CONTROLLER)
+    controller = data.get(DATA_CONTROLLER)
     if controller is not None:
         await controller.async_stop()
 
-    # Nur entfernen, wenn keine Instanzen mehr aktiv sind
     if not hass.data.get(DOMAIN):
         try:
             frontend.async_remove_panel(hass, "smartdome_control")
@@ -110,7 +110,6 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     else:
         _LOGGER.error("Frontend-Ordner 'www' nicht gefunden in %s", frontend_path)
 
-    # Falls Panel schon existiert, nicht doppelt registrieren
     try:
         frontend.async_remove_panel(hass, "smartdome_control")
     except Exception:
@@ -127,7 +126,7 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     )
 
 
-def _async_register_ws_save_config(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _async_register_ws_save_config(hass: HomeAssistant) -> None:
     """WebSocket-Command für direktes Speichern aus dem Web-Panel registrieren."""
     command_type = f"{DOMAIN}/save_config"
 
@@ -146,14 +145,13 @@ def _async_register_ws_save_config(hass: HomeAssistant, entry: ConfigEntry) -> N
         connection: websocket_api.ActiveConnection,
         msg: dict[str, Any],
     ) -> None:
-        """Komplette Konfiguration aus dem Panel speichern."""
         target_entry = _get_single_entry(hass)
         if target_entry is None:
             connection.send_error(msg["id"], "not_found", "Keine Config Entry gefunden")
             return
 
         data = hass.data[DOMAIN][target_entry.entry_id]
-        controller: SmartHeatingController = data[DATA_CONTROLLER]
+        controller = data[DATA_CONTROLLER]
         new_cfg = dict(msg["config"])
         new_cfg.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
 
@@ -170,7 +168,7 @@ def _async_register_ws_save_config(hass: HomeAssistant, entry: ConfigEntry) -> N
     hass.data[DOMAIN]["_ws_registered"] = True
 
 
-def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _async_register_services(hass: HomeAssistant) -> None:
     """Services für UI, Automationen und Abwärtskompatibilität registrieren."""
     if hass.data[DOMAIN].get("_services_registered"):
         return
@@ -191,7 +189,7 @@ def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
         hass.config_entries.async_update_entry(target_entry, data=dict(cfg))
         data["config"] = cfg
 
-        controller: SmartHeatingController = data[DATA_CONTROLLER]
+        controller = data[DATA_CONTROLLER]
         controller.update_config(cfg)
         controller.set_enabled(bool(cfg.get(DATA_ENABLED, DEFAULT_ENABLED)))
 
@@ -224,7 +222,7 @@ def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
         hass.config_entries.async_update_entry(target_entry, data=dict(cfg))
         data["config"] = cfg
 
-        controller: SmartHeatingController = data[DATA_CONTROLLER]
+        controller = data[DATA_CONTROLLER]
         controller.update_config(cfg)
 
         _push_state(hass, cfg)
@@ -245,7 +243,7 @@ def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
             hass.config_entries.async_update_entry(target_entry, data=dict(cfg))
             data["config"] = cfg
 
-            controller: SmartHeatingController = data[DATA_CONTROLLER]
+            controller = data[DATA_CONTROLLER]
             controller.update_config(cfg)
 
             _push_state(hass, cfg)
@@ -269,7 +267,7 @@ def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
         hass.config_entries.async_update_entry(target_entry, data=dict(cfg))
         data["config"] = cfg
 
-        controller: SmartHeatingController = data[DATA_CONTROLLER]
+        controller = data[DATA_CONTROLLER]
         controller.update_config(cfg)
 
         _push_state(hass, cfg)
