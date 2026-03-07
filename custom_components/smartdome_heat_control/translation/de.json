@@ -73,7 +73,7 @@
           "day_start": "Tag-Start",
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
-          "delete_room": "Raum löschen"
+          "delete_room": "Raum löschen",
           "window_sensor": "Fensterkontakt"
         }
       },
@@ -89,7 +89,7 @@
           "away_temperature": "Away-Temperatur",
           "day_start": "Tag-Start",
           "night_start": "Nacht-Start",
-          "enabled": "Raum aktiv"
+          "enabled": "Raum aktiv",
           "window_sensor": "Fensterkontakt"
         }
       }
