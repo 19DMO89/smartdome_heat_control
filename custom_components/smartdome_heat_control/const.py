@@ -1,14 +1,11 @@
-"""Konstanten für Smart Heating Controller."""
+"""Konstanten für Smartdome Heat Control."""
 
 DOMAIN = "smartdome_heat_control"
-STORAGE_KEY = "smart_heating.config"
-STORAGE_VERSION = 4
 
-# Services
-SERVICE_UPDATE_CONFIG = "update_config"
-SERVICE_ADD_ROOM = "add_room"
-SERVICE_REMOVE_ROOM = "remove_room"
-SERVICE_RELOAD = "reload"
+DATA_CONTROLLER = "controller"
+DATA_ENABLED = "enabled"
+
+PLATFORMS = ["switch"]
 
 # Config-Keys
 CONF_MAIN_THERMOSTAT = "main_thermostat"
@@ -30,6 +27,7 @@ CONF_ROOM_TARGET_NIGHT = "target_night"
 CONF_ROOM_ENABLED = "enabled"
 
 # Defaults
+DEFAULT_ENABLED = True
 DEFAULT_BOOST_DELTA = 2.0
 DEFAULT_TOLERANCE = 0.5
 DEFAULT_NIGHT_START = "22:00"
