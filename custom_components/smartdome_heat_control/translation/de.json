@@ -11,7 +11,7 @@
           "boost_delta": "Boost-Delta",
           "tolerance": "Toleranz",
           "night_start": "Nacht-Start",
-          "morning_boost_start": "Morgen-Boost Start",
+          "morning_boost_start": "Tag-Start / Morgen-Boost Start",
           "morning_boost_end": "Morgen-Boost Ende"
         }
       },
@@ -22,7 +22,8 @@
           "confirm": "Erkannte Räume übernehmen"
         }
       }
-    }
+    },
+    "error": {}
   },
   "options": {
     "step": {
@@ -41,8 +42,8 @@
           "main_sensor": "Temperatursensor Hauptthermostat",
           "boost_delta": "Boost-Delta",
           "tolerance": "Toleranz",
-          "night_start": "Nacht-Start",
-          "morning_boost_start": "Morgen-Boost Start",
+          "night_start": "Globale Nacht-Startzeit",
+          "morning_boost_start": "Globale Tag-Startzeit",
           "morning_boost_end": "Morgen-Boost Ende"
         }
       },
@@ -55,13 +56,15 @@
       },
       "edit_room": {
         "title": "Raum bearbeiten",
-        "description": "Bearbeite Thermostat, Sensor und Zieltemperaturen dieses Raums.",
+        "description": "Bearbeite Thermostat, Sensor, Temperaturen und Zeiten dieses Raums.",
         "data": {
           "label": "Bezeichnung",
           "thermostat": "Thermostat",
           "sensor": "Temperatursensor",
           "target_day": "Zieltemperatur Tag",
           "target_night": "Zieltemperatur Nacht",
+          "day_start": "Tag-Start",
+          "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
           "delete_room": "Raum löschen"
         }
@@ -75,10 +78,13 @@
           "sensor": "Temperatursensor",
           "target_day": "Zieltemperatur Tag",
           "target_night": "Zieltemperatur Nacht",
+          "day_start": "Tag-Start",
+          "night_start": "Nacht-Start",
           "enabled": "Raum aktiv"
         }
       }
-    }
+    },
+    "error": {}
   },
   "selector": {
     "action": {
