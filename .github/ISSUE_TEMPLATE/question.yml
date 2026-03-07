@@ -1,0 +1,13 @@
+name: Question
+description: Ask a question about Smartdome Heat Control
+title: "[QUESTION] "
+labels: ["question"]
+
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: Please describe your question.
+    validations:
+      required: true
