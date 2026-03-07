@@ -10,6 +10,9 @@ const DEFAULTS = {
   night_start: "22:00",
   morning_boost_start: "05:00",
   morning_boost_end: "05:30",
+  vacation_enabled: false,
+  vacation_temperature: 14.0,
+  away_enabled: false,
   rooms: {},
 };
 
@@ -35,6 +38,9 @@ const els = {
   nightStart: document.getElementById("night_start"),
   morningBoostStart: document.getElementById("morning_boost_start"),
   morningBoostEnd: document.getElementById("morning_boost_end"),
+  vacationEnabled: document.getElementById("vacation_enabled"),
+  vacationTemperature: document.getElementById("vacation_temperature"),
+  awayEnabled: document.getElementById("away_enabled"),
   roomsContainer: document.getElementById("roomsContainer"),
 };
 
@@ -120,6 +126,7 @@ function normalizeRoom(roomId, room) {
     sensor: typeof room?.sensor === "string" ? room.sensor : "",
     target_day: normalizeNumber(room?.target_day, 21.0),
     target_night: normalizeNumber(room?.target_night, 18.0),
+    away_temperature: normalizeNumber(room?.away_temperature, 17.0),
     day_start: normalizeTime(room?.day_start, ""),
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
@@ -140,6 +147,12 @@ function normalizeConfig(input) {
   cfg.night_start = normalizeTime(cfg.night_start, DEFAULTS.night_start);
   cfg.morning_boost_start = normalizeTime(cfg.morning_boost_start, DEFAULTS.morning_boost_start);
   cfg.morning_boost_end = normalizeTime(cfg.morning_boost_end, DEFAULTS.morning_boost_end);
+  cfg.vacation_enabled = cfg.vacation_enabled === true;
+  cfg.vacation_temperature = normalizeNumber(
+    cfg.vacation_temperature,
+    DEFAULTS.vacation_temperature
+  );
+  cfg.away_enabled = cfg.away_enabled === true;
 
   if (!cfg.rooms || typeof cfg.rooms !== "object") {
     cfg.rooms = {};
@@ -331,6 +344,18 @@ function renderGlobalSettings() {
   els.morningBoostStart.value = cfg.morning_boost_start;
   els.morningBoostEnd.value = cfg.morning_boost_end;
 
+  if (els.vacationEnabled) {
+    els.vacationEnabled.checked = cfg.vacation_enabled;
+  }
+
+  if (els.vacationTemperature) {
+    els.vacationTemperature.value = String(cfg.vacation_temperature);
+  }
+
+  if (els.awayEnabled) {
+    els.awayEnabled.checked = cfg.away_enabled;
+  }
+
   buildSelectOptions(
     els.mainThermostat,
     state.climates,
@@ -412,6 +437,11 @@ function createRoomCard(roomId, room) {
       </div>
 
       <div class="field">
+        <label>Away-Temperatur (°C)</label>
+        <input class="room-away-temperature" type="number" min="5" max="30" step="0.1" value="${escapeHtml(room.away_temperature)}" />
+      </div>
+
+      <div class="field">
         <label>Tag-Start</label>
         <input class="room-day-start" type="time" value="${escapeHtml(room.day_start || "")}" />
       </div>
@@ -483,6 +513,11 @@ function collectFormState() {
     els.morningBoostEnd.value,
     DEFAULTS.morning_boost_end
   );
+  cfg.vacation_enabled = els.vacationEnabled ? els.vacationEnabled.checked : false;
+  cfg.vacation_temperature = els.vacationTemperature
+    ? normalizeNumber(els.vacationTemperature.value, DEFAULTS.vacation_temperature)
+    : DEFAULTS.vacation_temperature;
+  cfg.away_enabled = els.awayEnabled ? els.awayEnabled.checked : false;
 
   const rooms = {};
   const roomNodes = els.roomsContainer.querySelectorAll(".room");
@@ -497,6 +532,7 @@ function collectFormState() {
       sensor: node.querySelector(".room-sensor").value || "",
       target_day: node.querySelector(".room-target-day").value,
       target_night: node.querySelector(".room-target-night").value,
+      away_temperature: node.querySelector(".room-away-temperature").value,
       day_start: node.querySelector(".room-day-start").value || "",
       night_start: node.querySelector(".room-night-start").value || "",
       enabled: node.querySelector(".room-enabled").checked,
@@ -520,6 +556,7 @@ function addRoom() {
     sensor: "",
     target_day: 21.0,
     target_night: 18.0,
+    away_temperature: 17.0,
     day_start: "",
     night_start: "",
     enabled: true,
