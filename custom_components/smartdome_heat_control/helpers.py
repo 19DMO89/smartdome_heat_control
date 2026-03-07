@@ -8,8 +8,14 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.area_registry import async_get as async_get_area_registry
-from homeassistant.helpers.device_registry import DeviceEntry, async_get as async_get_device_registry
-from homeassistant.helpers.entity_registry import EntityEntry, async_get as async_get_entity_registry
+from homeassistant.helpers.device_registry import (
+    DeviceEntry,
+    async_get as async_get_device_registry,
+)
+from homeassistant.helpers.entity_registry import (
+    EntityEntry,
+    async_get as async_get_entity_registry,
+)
 
 from .const import (
     CONF_ROOM_AREA_ID,
@@ -93,13 +99,7 @@ def _best_entity(
 
 
 def _sensor_score(hass: HomeAssistant, entity: EntityEntry) -> tuple[int, int]:
-    """Sensor bewerten.
-
-    Höherer Score = besserer Kandidat.
-    Score 1: device_class=temperature
-    Score 2: state ist numerisch
-    Score 3: entity_id enthält 'temp' oder 'temperature'
-    """
+    """Sensor bewerten."""
     score = 0
     state = hass.states.get(entity.entity_id)
 
@@ -115,7 +115,6 @@ def _sensor_score(hass: HomeAssistant, entity: EntityEntry) -> tuple[int, int]:
     elif "temp" in entity_id_lower:
         score += 2
 
-    # Zweites Sortierkriterium für stabile Reihenfolge
     return score, -len(entity.entity_id)
 
 
@@ -144,8 +143,6 @@ def _best_sensor(
     top = best[0]
     top_state = hass.states.get(top.entity_id)
 
-    # Falls selbst der "beste" Kandidat keinen brauchbaren Wert liefert,
-    # lieber None zurückgeben.
     if top_state is None:
         return None
 
@@ -159,21 +156,7 @@ def _best_sensor(
 
 
 async def async_discover_rooms(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
-    """HA-Areas analysieren und passende Räume automatisch erzeugen.
-
-    Ergebnisformat:
-    {
-        area_id: {
-            "label": str,
-            "area_id": str,
-            "thermostat": str,
-            "sensor": str,
-            "target_day": float,
-            "target_night": float,
-            "enabled": bool,
-        }
-    }
-    """
+    """HA-Areas analysieren und passende Räume automatisch erzeugen."""
     area_registry = async_get_area_registry(hass)
     entity_registry = async_get_entity_registry(hass)
     device_registry = async_get_device_registry(hass)
@@ -198,7 +181,6 @@ async def async_discover_rooms(hass: HomeAssistant) -> dict[str, dict[str, Any]]
         )
         sensor = _best_sensor(hass, area_entities)
 
-        # Nur sinnvolle Räume übernehmen
         if thermostat or sensor:
             rooms[area_id] = {
                 CONF_ROOM_LABEL: area_name,
@@ -247,10 +229,7 @@ async def async_get_all_sensors(hass: HomeAssistant) -> list[str]:
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """Zwei Dicts rekursiv zusammenführen.
-
-    `override` überschreibt Werte in `base`.
-    """
+    """Zwei Dicts rekursiv zusammenführen."""
     for key, value in override.items():
         if (
             key in base
