@@ -47,7 +47,7 @@ class SmartHeatingController:
         self.hass = hass
         self.config = config
         self._enabled = True
-        self._unsub: list[Callable] = []
+        self._unsub: list[Callable[[], None]] = []
 
     async def async_start(self) -> None:
         """Listener registrieren."""
@@ -58,21 +58,24 @@ class SmartHeatingController:
 
         watch_entities: set[str] = set()
 
-        main_t = self.config.get(CONF_MAIN_THERMOSTAT)
-        main_s = self.config.get(CONF_MAIN_SENSOR)
+        main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+        main_sensor = self._as_entity_id(self.config.get(CONF_MAIN_SENSOR))
 
-        if main_t:
-            watch_entities.add(main_t)
+        if main_thermostat:
+            watch_entities.add(main_thermostat)
 
-        if main_s:
-            watch_entities.add(main_s)
+        if main_sensor:
+            watch_entities.add(main_sensor)
 
         for room in self._active_rooms().values():
-            if room.get(CONF_ROOM_SENSOR):
-                watch_entities.add(room[CONF_ROOM_SENSOR])
+            room_sensor = self._as_entity_id(room.get(CONF_ROOM_SENSOR))
+            room_thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
 
-            if room.get(CONF_ROOM_THERMOSTAT):
-                watch_entities.add(room[CONF_ROOM_THERMOSTAT])
+            if room_sensor:
+                watch_entities.add(room_sensor)
+
+            if room_thermostat:
+                watch_entities.add(room_thermostat)
 
         if watch_entities:
             self._unsub.append(
@@ -92,7 +95,6 @@ class SmartHeatingController:
         )
 
         _LOGGER.debug("SmartHeatingController gestartet")
-
         self._evaluate()
 
     async def async_stop(self) -> None:
@@ -124,23 +126,31 @@ class SmartHeatingController:
             try:
                 unsub()
             except Exception:
-                pass
+                _LOGGER.exception("Fehler beim Entfernen eines Listeners")
 
         self._unsub.clear()
+
+    def _as_entity_id(self, value: Any) -> str | None:
+        """Entity-ID validieren."""
+        return value if isinstance(value, str) and value else None
 
     def _active_rooms(self) -> dict[str, dict[str, Any]]:
         """Aktive Räume zurückgeben."""
         rooms = self.config.get(CONF_ROOMS, {})
+        if not isinstance(rooms, dict):
+            return {}
 
         return {
             room_id: room
             for room_id, room in rooms.items()
-            if room.get(CONF_ROOM_ENABLED, True)
+            if isinstance(room, dict) and room.get(CONF_ROOM_ENABLED, True)
         }
 
     def _safe_float(self, value: Any) -> float | None:
         """Float robust parsen."""
         try:
+            if value is None:
+                return None
             return float(value)
         except (TypeError, ValueError):
             return None
@@ -151,7 +161,6 @@ class SmartHeatingController:
             return None
 
         state = self.hass.states.get(entity_id)
-
         if not state:
             return None
 
@@ -160,72 +169,91 @@ class SmartHeatingController:
 
         return self._safe_float(state.state)
 
-    def _get_attr_float(self, entity_id: str, attr: str) -> float | None:
+    def _get_attr_float(self, entity_id: str | None, attr: str) -> float | None:
         """Attribut als float lesen."""
-        state = self.hass.states.get(entity_id)
+        if not entity_id:
+            return None
 
+        state = self.hass.states.get(entity_id)
         if not state:
             return None
 
         return self._safe_float(state.attributes.get(attr))
 
-    def _in_morning_boost_window(self) -> bool:
-        """Morgen Boost aktiv?"""
+    def _is_night(self) -> bool:
+        """Nachtbetrieb aktiv?"""
         now = dt_util.now().strftime("%H:%M")
 
-        start = self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)
-        end = self.config.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END)
+        night = str(self.config.get(CONF_NIGHT_START, DEFAULT_NIGHT_START))[:5]
+        boost_start = str(
+            self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)
+        )[:5]
+
+        if night > boost_start:
+            return now >= night or now < boost_start
+
+        return night <= now < boost_start
+
+    def _in_morning_boost_window(self) -> bool:
+        """Morgen-Boost-Fenster aktiv?"""
+        now = dt_util.now().strftime("%H:%M")
+
+        start = str(
+            self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)
+        )[:5]
+        end = str(
+            self.config.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END)
+        )[:5]
 
         if start <= end:
             return start <= now < end
 
         return now >= start or now < end
 
-    def _is_night(self) -> bool:
-        """Nachtbetrieb aktiv?"""
-        now = dt_util.now().strftime("%H:%M")
-
-        night = self.config.get(CONF_NIGHT_START, DEFAULT_NIGHT_START)
-        boost = self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)
-
-        if night > boost:
-            return now >= night or now < boost
-
-        return night <= now < boost
-
     def _room_temp(self, room: dict[str, Any]) -> float | None:
         """Raumtemperatur lesen."""
-        return self._get_state_float(room.get(CONF_ROOM_SENSOR))
+        return self._get_state_float(self._as_entity_id(room.get(CONF_ROOM_SENSOR)))
 
     def _base_target_for_room(self, room: dict[str, Any]) -> float:
-        """Solltemperatur ohne Boost."""
+        """Basis-Solltemperatur eines Raums."""
         if self._is_night():
             return float(room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT))
-
         return float(room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY))
 
     def _main_reference_temp(self) -> float | None:
-        """Temperatur für Hauptthermostat."""
-        main_sensor = self.config.get(CONF_MAIN_SENSOR)
-
+        """Referenztemperatur für Hauptthermostat."""
+        main_sensor = self._as_entity_id(self.config.get(CONF_MAIN_SENSOR))
         if main_sensor:
-            val = self._get_state_float(main_sensor)
-            if val is not None:
-                return val
+            value = self._get_state_float(main_sensor)
+            if value is not None:
+                return value
 
-        main_thermostat = self.config.get(CONF_MAIN_THERMOSTAT)
-
+        main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
         if main_thermostat:
             return self._get_attr_float(main_thermostat, "current_temperature")
 
         return None
 
+    def _thermostat_min_temp(self, entity_id: str) -> float:
+        """Minimale Temperatur eines Thermostats."""
+        state = self.hass.states.get(entity_id)
+        if state:
+            min_temp = self._safe_float(state.attributes.get("min_temp"))
+            if min_temp is not None:
+                return min_temp
+
+        return 5.0
+
     def _set_temp_if_new(self, entity_id: str, temp: float) -> None:
-        """Temperatur setzen wenn nötig."""
+        """Temperatur nur setzen, wenn Änderung nötig ist."""
         current = self._get_attr_float(entity_id, ATTR_TEMPERATURE)
 
-        if current is not None and abs(current - temp) < 0.1:
+        rounded = round(float(temp), 1)
+
+        if current is not None and abs(current - rounded) < 0.1:
             return
+
+        _LOGGER.debug("Setze %s auf %.1f °C", entity_id, rounded)
 
         self.hass.async_create_task(
             self.hass.services.async_call(
@@ -233,74 +261,109 @@ class SmartHeatingController:
                 "set_temperature",
                 {
                     "entity_id": entity_id,
-                    ATTR_TEMPERATURE: round(temp, 1),
+                    ATTR_TEMPERATURE: rounded,
                 },
                 blocking=True,
             )
         )
 
     def _evaluate(self) -> None:
-        """Heizbedarf berechnen."""
+        """Heizbedarf berechnen und Thermostate setzen."""
         if not self._enabled:
             return
 
         rooms = self._active_rooms()
-
         if not rooms:
             return
 
-        boost_delta = self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA)
-        tolerance = self.config.get(CONF_TOLERANCE, DEFAULT_TOLERANCE)
+        boost_delta = self._safe_float(
+            self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA)
+        )
+        tolerance = self._safe_float(
+            self.config.get(CONF_TOLERANCE, DEFAULT_TOLERANCE)
+        )
 
-        needs_heat: dict[str, bool] = {}
+        if boost_delta is None:
+            boost_delta = float(DEFAULT_BOOST_DELTA)
+        if tolerance is None:
+            tolerance = float(DEFAULT_TOLERANCE)
+
+        room_states: dict[str, dict[str, Any]] = {}
 
         for room_id, room in rooms.items():
-            temp = self._room_temp(room)
+            actual = self._room_temp(room)
             target = self._base_target_for_room(room)
 
-            needs_heat[room_id] = (
-                temp is not None and temp < (target - tolerance)
+            needs_heat = actual is not None and actual < (target - tolerance)
+            reached_target = actual is not None and actual >= target
+
+            room_states[room_id] = {
+                "actual": actual,
+                "target": target,
+                "needs_heat": needs_heat,
+                "reached_target": reached_target,
+            }
+
+            _LOGGER.debug(
+                "Raum %s: ist=%s ziel=%.1f needs_heat=%s reached_target=%s",
+                room_id,
+                f"{actual:.2f}" if actual is not None else "n/a",
+                target,
+                needs_heat,
+                reached_target,
             )
 
-        any_room_needs_heat = any(needs_heat.values())
+        any_room_needs_heat = any(
+            room_state["needs_heat"] for room_state in room_states.values()
+        )
 
-        main_t = self.config.get(CONF_MAIN_THERMOSTAT)
-
-        if main_t:
-            base_target = max(
-                self._base_target_for_room(room) for room in rooms.values()
+        # Hauptthermostat:
+        # Sobald irgendein Raum Wärme braucht, muss das Hauptthermostat heizen.
+        main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+        if main_thermostat:
+            main_base_target = max(
+                room_state["target"] for room_state in room_states.values()
             )
 
-            main_temp = self._main_reference_temp()
+            main_target = main_base_target
 
-            target = base_target
+            if any_room_needs_heat:
+                # Optional morgens etwas extra pushen
+                if self._in_morning_boost_window():
+                    main_target = main_base_target + boost_delta
+                else:
+                    # Auch tagsüber muss das Hauptthermostat hoch genug sein,
+                    # damit überhaupt Wärme erzeugt wird.
+                    main_target = main_base_target + boost_delta
 
-            if (
-                any_room_needs_heat
-                and main_temp is not None
-                and main_temp < base_target - tolerance
-                and self._in_morning_boost_window()
-            ):
-                target = base_target + boost_delta
+            self._set_temp_if_new(main_thermostat, main_target)
 
-            self._set_temp_if_new(main_t, target)
-
+        # Raumthermostate:
+        # - Bedarf: öffnen / boosten
+        # - Ziel erreicht oder überschritten: stark absenken
+        # - Dazwischen: auf Basisziel halten
         for room_id, room in rooms.items():
-            thermostat = room.get(CONF_ROOM_THERMOSTAT)
-
+            thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
             if not thermostat:
                 continue
 
-            base = self._base_target_for_room(room)
+            room_state = room_states[room_id]
+            target = room_state["target"]
+            needs_heat = room_state["needs_heat"]
+            reached_target = room_state["reached_target"]
 
-            if needs_heat[room_id] and self._in_morning_boost_window():
-                base += boost_delta
+            if needs_heat:
+                room_target = target + boost_delta
+            elif reached_target:
+                room_target = self._thermostat_min_temp(thermostat)
+            else:
+                room_target = target
 
-            self._set_temp_if_new(thermostat, base)
+            self._set_temp_if_new(thermostat, room_target)
 
     @callback
     def _on_state_change(self, event: Event) -> None:
-        """State Change Trigger."""
+        """State-Änderung."""
         self._evaluate()
 
     @callback
