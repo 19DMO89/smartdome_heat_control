@@ -833,26 +833,27 @@ async function init() {
   try {
     await refreshAll();
 
-    const conn = await getHassConnection();
-
-    conn.subscribeEvents((event) => {
-
-      const entity = event.data.new_state;
-      if (!entity) return;
-
-      const index = state.allStates.findIndex(
-        (e) => e.entity_id === entity.entity_id
-      );
-
-      if (index >= 0) {
-        state.allStates[index] = entity;
-      } else {
-        state.allStates.push(entity);
+      const haConn = await getHassConnection();
+      const ws = haConn?.conn || haConn;
+      
+      if (ws && typeof ws.subscribeEvents === "function") {
+        ws.subscribeEvents((event) => {
+          const entity = event.data?.new_state;
+          if (!entity) return;
+      
+          const index = state.allStates.findIndex(
+            (e) => e.entity_id === entity.entity_id
+          );
+      
+          if (index >= 0) {
+            state.allStates[index] = entity;
+          } else {
+            state.allStates.push(entity);
+          }
+      
+          renderRooms();
+        }, "state_changed");
       }
-
-      renderRooms();
-
-    }, "state_changed");
 
     setStatus("Konfiguration geladen.", "ok");
 
