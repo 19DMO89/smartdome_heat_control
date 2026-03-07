@@ -13,12 +13,10 @@
       --muted: #9fb0c3;
       --line: #2b3848;
       --accent: #4da3ff;
-      --accent-2: #7bb8ff;
       --success: #2ecc71;
       --danger: #ff6b6b;
       --warning: #f5b942;
       --radius: 16px;
-      --radius-sm: 12px;
       --shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
     }
 
@@ -26,25 +24,31 @@
       box-sizing: border-box;
     }
 
+    html,
     body {
       margin: 0;
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 0;
       background: linear-gradient(180deg, #0b0f14 0%, #101721 100%);
       color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
     }
 
     .wrap {
-      max-width: 1200px;
+      max-width: 1450px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 20px;
     }
 
     .header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       gap: 16px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       flex-wrap: wrap;
     }
 
@@ -52,7 +56,6 @@
       margin: 0 0 6px;
       font-size: 28px;
       font-weight: 700;
-      letter-spacing: 0.2px;
     }
 
     .title-block p {
@@ -105,30 +108,6 @@
       cursor: not-allowed;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: 1.1fr 1fr;
-      gap: 20px;
-    }
-
-    .card {
-      background: rgba(20, 26, 34, 0.92);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 20px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-    }
-
-    .card h2 {
-      margin: 0 0 16px;
-      font-size: 18px;
-    }
-
-    .muted {
-      color: var(--muted);
-    }
-
     .status {
       margin-bottom: 18px;
       padding: 12px 14px;
@@ -153,9 +132,40 @@
       color: #ffc1c1;
     }
 
+    .layout {
+      display: grid;
+      grid-template-columns: 430px minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .sticky-col {
+      position: sticky;
+      top: 16px;
+      align-self: start;
+    }
+
+    .card {
+      background: rgba(20, 26, 34, 0.94);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .card h2 {
+      margin: 0 0 16px;
+      font-size: 18px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
     .fields {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr 1fr;
       gap: 14px;
     }
 
@@ -219,6 +229,25 @@
       font-size: 12px;
     }
 
+    .sub-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .rooms-card {
+      min-height: 70vh;
+      display: flex;
+      flex-direction: column;
+    }
+
     .rooms-header {
       display: flex;
       align-items: center;
@@ -226,6 +255,12 @@
       gap: 12px;
       margin-bottom: 14px;
       flex-wrap: wrap;
+    }
+
+    .rooms-scroll {
+      overflow-y: auto;
+      max-height: calc(100vh - 170px);
+      padding-right: 6px;
     }
 
     .rooms {
@@ -277,23 +312,23 @@
       font-size: 12px;
     }
 
-    .footer-note {
-      margin-top: 18px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    @media (max-width: 920px) {
-      .grid {
+    @media (max-width: 1100px) {
+      .layout {
         grid-template-columns: 1fr;
+      }
+
+      .sticky-col {
+        position: static;
+      }
+
+      .rooms-scroll {
+        max-height: none;
+        overflow: visible;
+        padding-right: 0;
       }
     }
 
-    @media (max-width: 680px) {
+    @media (max-width: 700px) {
       .fields,
       .room-grid {
         grid-template-columns: 1fr;
@@ -301,10 +336,6 @@
 
       .wrap {
         padding: 16px;
-      }
-
-      .header {
-        margin-bottom: 18px;
       }
     }
   </style>
@@ -314,7 +345,7 @@
     <div class="header">
       <div class="title-block">
         <h1>Smartdome Heat Control</h1>
-        <p>Heizungssteuerung, Hauptsensor und Räume direkt im Panel verwalten.</p>
+        <p>Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.</p>
       </div>
 
       <div class="actions">
@@ -326,73 +357,83 @@
 
     <div id="statusBox" class="status warn">Lade Konfiguration …</div>
 
-    <div class="grid">
-      <section class="card">
-        <h2>Globale Einstellungen</h2>
+    <div class="layout">
+      <div class="sticky-col">
+        <section class="card">
+          <h2>Globale Einstellungen</h2>
 
-        <div class="field full" style="margin-bottom: 14px;">
-          <div class="toggle">
-            <div class="toggle-text">
-              <strong>Steuerung aktiv</strong>
-              <span>Wenn ausgeschaltet, greift die Integration nicht mehr in Thermostate ein.</span>
+          <div class="field full" style="margin-bottom: 14px;">
+            <div class="toggle">
+              <div class="toggle-text">
+                <strong>Steuerung aktiv</strong>
+                <span>Wenn ausgeschaltet, greift die Integration nicht mehr in Thermostate ein.</span>
+              </div>
+              <input id="enabled" type="checkbox" />
             </div>
-            <input id="enabled" type="checkbox" />
-          </div>
-        </div>
-
-        <div class="fields">
-          <div class="field">
-            <label for="main_thermostat">Hauptthermostat</label>
-            <select id="main_thermostat"></select>
           </div>
 
-          <div class="field">
-            <label for="main_sensor">Temperatursensor Hauptthermostat</label>
-            <select id="main_sensor"></select>
+          <div class="fields">
+            <div class="field">
+              <label for="main_thermostat">Hauptthermostat</label>
+              <select id="main_thermostat"></select>
+            </div>
+
+            <div class="field">
+              <label for="main_sensor">Temperatursensor Hauptthermostat</label>
+              <select id="main_sensor"></select>
+            </div>
+
+            <div class="field">
+              <label for="boost_delta">Boost-Delta (°C)</label>
+              <input id="boost_delta" type="number" min="0" step="0.1" />
+            </div>
+
+            <div class="field">
+              <label for="tolerance">Toleranz (°C)</label>
+              <input id="tolerance" type="number" min="0" step="0.1" />
+            </div>
+
+            <div class="field">
+              <label for="night_start">Globale Nacht-Startzeit</label>
+              <input id="night_start" type="time" />
+            </div>
+
+            <div class="field">
+              <label for="morning_boost_start">Globale Tag-Startzeit</label>
+              <input id="morning_boost_start" type="time" />
+            </div>
+
+            <div class="field">
+              <label for="morning_boost_end">Morgen-Boost Ende</label>
+              <input id="morning_boost_end" type="time" />
+            </div>
           </div>
 
-          <div class="field">
-            <label for="boost_delta">Boost-Delta (°C)</label>
-            <input id="boost_delta" type="number" min="0" step="0.1" />
+          <div class="sub-actions">
+            <button id="applyTimesToRoomsBtn" class="ghost">Globale Zeiten in alle Räume übernehmen</button>
           </div>
 
-          <div class="field">
-            <label for="tolerance">Toleranz (°C)</label>
-            <input id="tolerance" type="number" min="0" step="0.1" />
+          <div class="footer-note">
+            Der Übernehmen-Button setzt für alle Räume:
+            <strong>Tag-Start = globale Tag-Startzeit</strong> und
+            <strong>Nacht-Start = globale Nacht-Startzeit</strong>.
           </div>
+        </section>
+      </div>
 
-          <div class="field">
-            <label for="night_start">Nacht-Start</label>
-            <input id="night_start" type="time" />
-          </div>
-
-          <div class="field">
-            <label for="morning_boost_start">Morgen-Boost Start</label>
-            <input id="morning_boost_start" type="time" />
-          </div>
-
-          <div class="field">
-            <label for="morning_boost_end">Morgen-Boost Ende</label>
-            <input id="morning_boost_end" type="time" />
-          </div>
-        </div>
-
-        <div class="footer-note">
-          Der Hauptsensor ist optional. Wenn keiner gesetzt ist, kann das Backend auf die Temperatur des Hauptthermostats zurückfallen.
-        </div>
-      </section>
-
-      <section class="card">
+      <section class="card rooms-card">
         <div class="rooms-header">
           <div>
             <h2 style="margin-bottom: 6px;">Räume</h2>
-            <div class="muted">Thermostate, Sensoren und Zieltemperaturen pro Raum.</div>
+            <div class="muted">Rechts scrollbar, damit die Haupteinstellungen sichtbar bleiben.</div>
           </div>
 
           <button id="addRoomBtn" class="success">Raum hinzufügen</button>
         </div>
 
-        <div id="roomsContainer" class="rooms"></div>
+        <div class="rooms-scroll">
+          <div id="roomsContainer" class="rooms"></div>
+        </div>
       </section>
     </div>
   </div>
