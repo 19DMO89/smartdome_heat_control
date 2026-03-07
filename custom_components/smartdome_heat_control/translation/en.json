@@ -73,7 +73,8 @@
           "day_start": "Day start",
           "night_start": "Night start",
           "enabled": "Room enabled",
-          "delete_room": "Delete room"
+          "delete_room": "Delete room",
+          "window_sensor": "Window sensor"
         }
       },
       "add_room": {
@@ -88,7 +89,8 @@
           "away_temperature": "Away temperature",
           "day_start": "Day start",
           "night_start": "Night start",
-          "enabled": "Room enabled"
+          "enabled": "Room enabled",
+          "window_sensor": "Window sensor"
         }
       }
     },
