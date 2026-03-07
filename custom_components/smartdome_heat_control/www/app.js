@@ -1,6 +1,13 @@
 const DOMAIN = "smartdome_heat_control";
 const CONFIG_ENTITY_ID = `${DOMAIN}.config`;
 
+function getPanelVersion() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("v") || "dev";
+}
+
+const PANEL_VERSION = getPanelVersion();
+
 const DEFAULTS = {
   enabled: true,
   main_thermostat: "",
@@ -42,6 +49,7 @@ const els = {
   vacationTemperature: document.getElementById("vacation_temperature"),
   awayEnabled: document.getElementById("away_enabled"),
   roomsContainer: document.getElementById("roomsContainer"),
+  versionBadge: document.getElementById("versionBadge"),
 };
 
 function setStatus(message, type = "warn") {
@@ -55,6 +63,12 @@ function setButtonsDisabled(disabled) {
   els.reloadRoomsBtn.disabled = disabled;
   els.addRoomBtn.disabled = disabled;
   els.applyTimesToRoomsBtn.disabled = disabled;
+}
+
+function renderVersion() {
+  if (els.versionBadge) {
+    els.versionBadge.textContent = `Version ${PANEL_VERSION}`;
+  }
 }
 
 function escapeHtml(value) {
@@ -662,6 +676,7 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
+  renderVersion();
   setButtonsDisabled(true);
   setStatus("Initialisiere Panel …", "warn");
 
