@@ -11,6 +11,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_AWAY_ENABLED,
     CONF_BOOST_DELTA,
     CONF_MAIN_SENSOR,
     CONF_MAIN_THERMOSTAT,
@@ -18,6 +19,7 @@ from .const import (
     CONF_MORNING_BOOST_START,
     CONF_NIGHT_START,
     CONF_ROOMS,
+    CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_DAY_START,
     CONF_ROOM_ENABLED,
     CONF_ROOM_LABEL,
@@ -27,13 +29,19 @@ from .const import (
     CONF_ROOM_TARGET_NIGHT,
     CONF_ROOM_THERMOSTAT,
     CONF_TOLERANCE,
+    CONF_VACATION_ENABLED,
+    CONF_VACATION_TEMPERATURE,
+    DEFAULT_AWAY_ENABLED,
     DEFAULT_BOOST_DELTA,
     DEFAULT_MORNING_BOOST_END,
     DEFAULT_MORNING_BOOST_START,
     DEFAULT_NIGHT_START,
+    DEFAULT_ROOM_AWAY_TEMPERATURE,
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
     DEFAULT_TOLERANCE,
+    DEFAULT_VACATION_ENABLED,
+    DEFAULT_VACATION_TEMPERATURE,
     DOMAIN,
 )
 from .helpers import async_discover_rooms
@@ -88,13 +96,24 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._data.update(user_input)
             self._discovered_rooms = await async_discover_rooms(self.hass)
+
+            for room_id, room_data in self._discovered_rooms.items():
+                if isinstance(room_data, dict):
+                    room_data.setdefault(
+                        CONF_ROOM_AWAY_TEMPERATURE,
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    )
+
             return await self.async_step_rooms()
 
         schema = vol.Schema(
             {
                 vol.Required(CONF_MAIN_THERMOSTAT): _climate_selector(),
                 vol.Optional(CONF_MAIN_SENSOR): _temperature_sensor_selector(),
-                vol.Optional(CONF_BOOST_DELTA, default=DEFAULT_BOOST_DELTA): selector.NumberSelector(
+                vol.Optional(
+                    CONF_BOOST_DELTA,
+                    default=DEFAULT_BOOST_DELTA,
+                ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.5,
                         max=5.0,
@@ -103,7 +122,10 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode="slider",
                     )
                 ),
-                vol.Optional(CONF_TOLERANCE, default=DEFAULT_TOLERANCE): selector.NumberSelector(
+                vol.Optional(
+                    CONF_TOLERANCE,
+                    default=DEFAULT_TOLERANCE,
+                ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.1,
                         max=2.0,
@@ -112,7 +134,10 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         mode="slider",
                     )
                 ),
-                vol.Optional(CONF_NIGHT_START, default=DEFAULT_NIGHT_START): selector.TimeSelector(),
+                vol.Optional(
+                    CONF_NIGHT_START,
+                    default=DEFAULT_NIGHT_START,
+                ): selector.TimeSelector(),
                 vol.Optional(
                     CONF_MORNING_BOOST_START,
                     default=DEFAULT_MORNING_BOOST_START,
@@ -121,6 +146,18 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_MORNING_BOOST_END,
                     default=DEFAULT_MORNING_BOOST_END,
                 ): selector.TimeSelector(),
+                vol.Optional(
+                    CONF_VACATION_ENABLED,
+                    default=DEFAULT_VACATION_ENABLED,
+                ): bool,
+                vol.Optional(
+                    CONF_VACATION_TEMPERATURE,
+                    default=DEFAULT_VACATION_TEMPERATURE,
+                ): _temp_number_selector(5.0, 20.0, 0.5),
+                vol.Optional(
+                    CONF_AWAY_ENABLED,
+                    default=DEFAULT_AWAY_ENABLED,
+                ): bool,
             }
         )
 
@@ -162,8 +199,17 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class SmartdomeOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._entry = config_entry
-        self._rooms: dict[str, dict[str, Any]] = dict(config_entry.data.get(CONF_ROOMS, {}))
+        self._rooms: dict[str, dict[str, Any]] = dict(
+            config_entry.data.get(CONF_ROOMS, {})
+        )
         self._edit_room_id: str | None = None
+
+        for room_id, room_data in self._rooms.items():
+            if isinstance(room_data, dict):
+                room_data.setdefault(
+                    CONF_ROOM_AWAY_TEMPERATURE,
+                    DEFAULT_ROOM_AWAY_TEMPERATURE,
+                )
 
     async def async_step_init(
         self,
@@ -248,12 +294,39 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 ): selector.TimeSelector(),
                 vol.Optional(
                     CONF_MORNING_BOOST_START,
-                    default=data.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START),
+                    default=data.get(
+                        CONF_MORNING_BOOST_START,
+                        DEFAULT_MORNING_BOOST_START,
+                    ),
                 ): selector.TimeSelector(),
                 vol.Optional(
                     CONF_MORNING_BOOST_END,
-                    default=data.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END),
+                    default=data.get(
+                        CONF_MORNING_BOOST_END,
+                        DEFAULT_MORNING_BOOST_END,
+                    ),
                 ): selector.TimeSelector(),
+                vol.Optional(
+                    CONF_VACATION_ENABLED,
+                    default=data.get(
+                        CONF_VACATION_ENABLED,
+                        DEFAULT_VACATION_ENABLED,
+                    ),
+                ): bool,
+                vol.Optional(
+                    CONF_VACATION_TEMPERATURE,
+                    default=data.get(
+                        CONF_VACATION_TEMPERATURE,
+                        DEFAULT_VACATION_TEMPERATURE,
+                    ),
+                ): _temp_number_selector(5.0, 20.0, 0.5),
+                vol.Optional(
+                    CONF_AWAY_ENABLED,
+                    default=data.get(
+                        CONF_AWAY_ENABLED,
+                        DEFAULT_AWAY_ENABLED,
+                    ),
+                ): bool,
             }
         )
 
@@ -309,8 +382,18 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     CONF_ROOM_LABEL: user_input[CONF_ROOM_LABEL],
                     CONF_ROOM_THERMOSTAT: user_input.get(CONF_ROOM_THERMOSTAT),
                     CONF_ROOM_SENSOR: user_input.get(CONF_ROOM_SENSOR),
-                    CONF_ROOM_TARGET_DAY: user_input.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
-                    CONF_ROOM_TARGET_NIGHT: user_input.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT),
+                    CONF_ROOM_TARGET_DAY: user_input.get(
+                        CONF_ROOM_TARGET_DAY,
+                        DEFAULT_TARGET_DAY,
+                    ),
+                    CONF_ROOM_TARGET_NIGHT: user_input.get(
+                        CONF_ROOM_TARGET_NIGHT,
+                        DEFAULT_TARGET_NIGHT,
+                    ),
+                    CONF_ROOM_AWAY_TEMPERATURE: user_input.get(
+                        CONF_ROOM_AWAY_TEMPERATURE,
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    ),
                     CONF_ROOM_DAY_START: user_input.get(CONF_ROOM_DAY_START, ""),
                     CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                     CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
@@ -322,7 +405,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_ROOM_LABEL, default=room.get(CONF_ROOM_LABEL, "")): str,
+                vol.Required(
+                    CONF_ROOM_LABEL,
+                    default=room.get(CONF_ROOM_LABEL, ""),
+                ): str,
                 vol.Optional(
                     CONF_ROOM_THERMOSTAT,
                     default=room.get(CONF_ROOM_THERMOSTAT, ""),
@@ -338,6 +424,13 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_ROOM_TARGET_NIGHT,
                     default=room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT),
+                ): _temp_number_selector(5.0, 30.0, 0.5),
+                vol.Optional(
+                    CONF_ROOM_AWAY_TEMPERATURE,
+                    default=room.get(
+                        CONF_ROOM_AWAY_TEMPERATURE,
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    ),
                 ): _temp_number_selector(5.0, 30.0, 0.5),
                 vol.Optional(
                     CONF_ROOM_DAY_START,
@@ -367,8 +460,18 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 CONF_ROOM_LABEL: user_input[CONF_ROOM_LABEL],
                 CONF_ROOM_THERMOSTAT: user_input.get(CONF_ROOM_THERMOSTAT),
                 CONF_ROOM_SENSOR: user_input.get(CONF_ROOM_SENSOR),
-                CONF_ROOM_TARGET_DAY: user_input.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
-                CONF_ROOM_TARGET_NIGHT: user_input.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT),
+                CONF_ROOM_TARGET_DAY: user_input.get(
+                    CONF_ROOM_TARGET_DAY,
+                    DEFAULT_TARGET_DAY,
+                ),
+                CONF_ROOM_TARGET_NIGHT: user_input.get(
+                    CONF_ROOM_TARGET_NIGHT,
+                    DEFAULT_TARGET_NIGHT,
+                ),
+                CONF_ROOM_AWAY_TEMPERATURE: user_input.get(
+                    CONF_ROOM_AWAY_TEMPERATURE,
+                    DEFAULT_ROOM_AWAY_TEMPERATURE,
+                ),
                 CONF_ROOM_DAY_START: user_input.get(CONF_ROOM_DAY_START, ""),
                 CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                 CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
@@ -385,8 +488,18 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(CONF_ROOM_LABEL): str,
                     vol.Optional(CONF_ROOM_THERMOSTAT): _climate_selector(),
                     vol.Optional(CONF_ROOM_SENSOR): _temperature_sensor_selector(),
-                    vol.Optional(CONF_ROOM_TARGET_DAY, default=DEFAULT_TARGET_DAY): _temp_number_selector(5.0, 30.0, 0.5),
-                    vol.Optional(CONF_ROOM_TARGET_NIGHT, default=DEFAULT_TARGET_NIGHT): _temp_number_selector(5.0, 30.0, 0.5),
+                    vol.Optional(
+                        CONF_ROOM_TARGET_DAY,
+                        default=DEFAULT_TARGET_DAY,
+                    ): _temp_number_selector(5.0, 30.0, 0.5),
+                    vol.Optional(
+                        CONF_ROOM_TARGET_NIGHT,
+                        default=DEFAULT_TARGET_NIGHT,
+                    ): _temp_number_selector(5.0, 30.0, 0.5),
+                    vol.Optional(
+                        CONF_ROOM_AWAY_TEMPERATURE,
+                        default=DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    ): _temp_number_selector(5.0, 30.0, 0.5),
                     vol.Optional(CONF_ROOM_DAY_START, default=""): selector.TimeSelector(),
                     vol.Optional(CONF_ROOM_NIGHT_START, default=""): selector.TimeSelector(),
                     vol.Optional(CONF_ROOM_ENABLED, default=True): bool,
@@ -402,6 +515,11 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
 
         for room_id, room_data in discovered.items():
             if room_id not in self._rooms:
+                if isinstance(room_data, dict):
+                    room_data.setdefault(
+                        CONF_ROOM_AWAY_TEMPERATURE,
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    )
                 self._rooms[room_id] = room_data
 
         new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
