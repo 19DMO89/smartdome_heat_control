@@ -18,7 +18,6 @@ const state = {
   climates: [],
   sensors: [],
   allStates: [],
-  initialized: false,
 };
 
 const els = {
@@ -41,6 +40,13 @@ const els = {
 function setStatus(message, type = "warn") {
   els.statusBox.textContent = message;
   els.statusBox.className = `status ${type}`;
+}
+
+function setButtonsDisabled(disabled) {
+  els.saveBtn.disabled = disabled;
+  els.reloadConfigBtn.disabled = disabled;
+  els.reloadRoomsBtn.disabled = disabled;
+  els.addRoomBtn.disabled = disabled;
 }
 
 function escapeHtml(value) {
@@ -78,7 +84,7 @@ function isTemperatureSensor(entity) {
   return looksLikeTemperature && numericState;
 }
 
-function normalizeTime(value, fallback) {
+function normalizeTime(value, fallback = "") {
   if (typeof value !== "string" || !value.includes(":")) {
     return fallback;
   }
@@ -88,6 +94,20 @@ function normalizeTime(value, fallback) {
 function normalizeNumber(value, fallback) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
+}
+
+function normalizeRoom(roomId, room) {
+  return {
+    label: typeof room?.label === "string" && room.label.trim() ? room.label.trim() : roomId,
+    area_id: typeof room?.area_id === "string" ? room.area_id : "",
+    thermostat: typeof room?.thermostat === "string" ? room.thermostat : "",
+    sensor: typeof room?.sensor === "string" ? room.sensor : "",
+    target_day: normalizeNumber(room?.target_day, 21.0),
+    target_night: normalizeNumber(room?.target_night, 18.0),
+    day_start: normalizeTime(room?.day_start, ""),
+    night_start: normalizeTime(room?.night_start, ""),
+    enabled: room?.enabled !== false,
+  };
 }
 
 function normalizeConfig(input) {
@@ -111,15 +131,7 @@ function normalizeConfig(input) {
 
   const normalizedRooms = {};
   for (const [roomId, room] of Object.entries(cfg.rooms)) {
-    normalizedRooms[roomId] = {
-      label: typeof room?.label === "string" && room.label.trim() ? room.label.trim() : roomId,
-      area_id: typeof room?.area_id === "string" ? room.area_id : "",
-      thermostat: typeof room?.thermostat === "string" ? room.thermostat : "",
-      sensor: typeof room?.sensor === "string" ? room.sensor : "",
-      target_day: normalizeNumber(room?.target_day, 21.0),
-      target_night: normalizeNumber(room?.target_night, 18.0),
-      enabled: room?.enabled !== false,
-    };
+    normalizedRooms[roomId] = normalizeRoom(roomId, room);
   }
 
   cfg.rooms = normalizedRooms;
@@ -139,8 +151,8 @@ async function getHassConnection() {
 }
 
 async function getAccessToken() {
-  const connWrapper = await getHassConnection();
-  const token = connWrapper?.auth?.data?.access_token;
+  const conn = await getHassConnection();
+  const token = conn?.auth?.data?.access_token;
 
   if (!token) {
     throw new Error("Kein Zugriffstoken verfügbar");
@@ -312,6 +324,16 @@ function createRoomCard(roomId, room) {
         <label>Zieltemperatur Nacht (°C)</label>
         <input class="room-target-night" type="number" min="5" max="30" step="0.1" value="${escapeHtml(room.target_night)}" />
       </div>
+
+      <div class="field">
+        <label>Tag-Start</label>
+        <input class="room-day-start" type="time" value="${escapeHtml(room.day_start || "")}" />
+      </div>
+
+      <div class="field">
+        <label>Nacht-Start</label>
+        <input class="room-night-start" type="time" value="${escapeHtml(room.night_start || "")}" />
+      </div>
     </div>
   `;
 
@@ -381,15 +403,18 @@ function collectFormState() {
 
   for (const node of roomNodes) {
     const roomId = node.dataset.roomId;
-    rooms[roomId] = {
+
+    rooms[roomId] = normalizeRoom(roomId, {
       label: node.querySelector(".room-label").value.trim() || roomId,
       area_id: node.querySelector(".room-area-id").value.trim(),
       thermostat: node.querySelector(".room-thermostat").value || "",
       sensor: node.querySelector(".room-sensor").value || "",
-      target_day: normalizeNumber(node.querySelector(".room-target-day").value, 21.0),
-      target_night: normalizeNumber(node.querySelector(".room-target-night").value, 18.0),
+      target_day: node.querySelector(".room-target-day").value,
+      target_night: node.querySelector(".room-target-night").value,
+      day_start: node.querySelector(".room-day-start").value || "",
+      night_start: node.querySelector(".room-night-start").value || "",
       enabled: node.querySelector(".room-enabled").checked,
-    };
+    });
   }
 
   cfg.rooms = rooms;
@@ -409,6 +434,8 @@ function addRoom() {
     sensor: "",
     target_day: 21.0,
     target_night: 18.0,
+    day_start: "",
+    night_start: "",
     enabled: true,
   };
   renderRooms();
@@ -460,7 +487,6 @@ async function reloadConfig() {
     setStatus("Lade Konfiguration neu …", "warn");
 
     await refreshAll();
-
     setStatus("Konfiguration neu geladen.", "ok");
   } catch (error) {
     console.error(error);
@@ -477,13 +503,6 @@ async function refreshAll() {
   renderRooms();
 }
 
-function setButtonsDisabled(disabled) {
-  els.saveBtn.disabled = disabled;
-  els.reloadConfigBtn.disabled = disabled;
-  els.reloadRoomsBtn.disabled = disabled;
-  els.addRoomBtn.disabled = disabled;
-}
-
 function bindEvents() {
   els.saveBtn.addEventListener("click", saveConfig);
   els.reloadRoomsBtn.addEventListener("click", reloadRooms);
@@ -498,14 +517,10 @@ async function init() {
 
   try {
     await refreshAll();
-    state.initialized = true;
     setStatus("Konfiguration geladen.", "ok");
   } catch (error) {
     console.error(error);
-    setStatus(
-      `Initialisierung fehlgeschlagen: ${error.message}`,
-      "err"
-    );
+    setStatus(`Initialisierung fehlgeschlagen: ${error.message}`, "err");
   } finally {
     setButtonsDisabled(false);
   }
