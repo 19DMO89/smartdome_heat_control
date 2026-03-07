@@ -26,6 +26,7 @@ const els = {
   reloadConfigBtn: document.getElementById("reloadConfigBtn"),
   reloadRoomsBtn: document.getElementById("reloadRoomsBtn"),
   addRoomBtn: document.getElementById("addRoomBtn"),
+  applyTimesToRoomsBtn: document.getElementById("applyTimesToRoomsBtn"),
   enabled: document.getElementById("enabled"),
   mainThermostat: document.getElementById("main_thermostat"),
   mainSensor: document.getElementById("main_sensor"),
@@ -47,6 +48,7 @@ function setButtonsDisabled(disabled) {
   els.reloadConfigBtn.disabled = disabled;
   els.reloadRoomsBtn.disabled = disabled;
   els.addRoomBtn.disabled = disabled;
+  els.applyTimesToRoomsBtn.disabled = disabled;
 }
 
 function escapeHtml(value) {
@@ -441,6 +443,31 @@ function addRoom() {
   renderRooms();
 }
 
+function applyGlobalTimesToAllRooms() {
+  const globalNight = normalizeTime(els.nightStart.value, DEFAULTS.night_start);
+  const globalDay = normalizeTime(
+    els.morningBoostStart.value,
+    DEFAULTS.morning_boost_start
+  );
+
+  const roomNodes = els.roomsContainer.querySelectorAll(".room");
+  if (!roomNodes.length) {
+    setStatus("Keine Räume vorhanden, auf die Zeiten angewendet werden können.", "warn");
+    return;
+  }
+
+  for (const node of roomNodes) {
+    const dayInput = node.querySelector(".room-day-start");
+    const nightInput = node.querySelector(".room-night-start");
+
+    dayInput.value = globalDay;
+    nightInput.value = globalNight;
+  }
+
+  state.config = collectFormState();
+  setStatus("Globale Zeiten wurden in alle Räume übernommen.", "ok");
+}
+
 async function saveConfig() {
   try {
     setButtonsDisabled(true);
@@ -508,6 +535,7 @@ function bindEvents() {
   els.reloadRoomsBtn.addEventListener("click", reloadRooms);
   els.reloadConfigBtn.addEventListener("click", reloadConfig);
   els.addRoomBtn.addEventListener("click", addRoom);
+  els.applyTimesToRoomsBtn.addEventListener("click", applyGlobalTimesToAllRooms);
 }
 
 async function init() {
