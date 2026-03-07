@@ -26,6 +26,49 @@ um effizient zu heizen und gleichzeitig Energie zu sparen.
 Verwalte alle Räume und Einstellungen direkt über einen neuen Eintrag in
 der Home‑Assistant‑Seitenleiste.
 
+---
+
+## 📸 Dashboard
+
+### Grundansicht
+
+<p align="center">
+<img src="images/Grundansicht.png" width="900">
+</p>
+
+Übersicht über alle Räume, aktuelle Temperaturen und Heizstatus.  
+Hier kannst du Räume aktivieren/deaktivieren und schnell erkennen, welcher Raum gerade heizt 🔥.
+
+---
+
+### Raum Einstellungen
+
+<p align="center">
+<img src="images/raum.png" width="900">
+</p>
+
+Konfiguration eines einzelnen Raums:
+
+- Thermostat auswählen
+- Temperatursensor wählen
+- Zieltemperaturen für Tag und Nacht
+- individuelle Zeitsteuerung
+
+---
+
+### Globale Einstellungen
+
+<p align="center">
+<img src="images/Maineinstellung.png" width="900">
+</p>
+
+Globale Parameter für die Heizungssteuerung:
+
+- Hauptthermostat
+- Hauptsensor
+- Boost-Delta
+- Temperaturtoleranz
+- globale Tag- und Nachtzeiten
 ------------------------------------------------------------------------
 
 ## 🏠 Automatische Raumerkennung
