@@ -15,6 +15,7 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_AWAY_ENABLED,
     CONF_BOOST_DELTA,
     CONF_MAIN_SENSOR,
     CONF_MAIN_THERMOSTAT,
@@ -22,6 +23,7 @@ from .const import (
     CONF_MORNING_BOOST_START,
     CONF_NIGHT_START,
     CONF_ROOMS,
+    CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_DAY_START,
     CONF_ROOM_ENABLED,
     CONF_ROOM_NIGHT_START,
@@ -30,13 +32,19 @@ from .const import (
     CONF_ROOM_TARGET_NIGHT,
     CONF_ROOM_THERMOSTAT,
     CONF_TOLERANCE,
+    CONF_VACATION_ENABLED,
+    CONF_VACATION_TEMPERATURE,
+    DEFAULT_AWAY_ENABLED,
     DEFAULT_BOOST_DELTA,
     DEFAULT_MORNING_BOOST_END,
     DEFAULT_MORNING_BOOST_START,
     DEFAULT_NIGHT_START,
+    DEFAULT_ROOM_AWAY_TEMPERATURE,
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
     DEFAULT_TOLERANCE,
+    DEFAULT_VACATION_ENABLED,
+    DEFAULT_VACATION_TEMPERATURE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,6 +58,7 @@ class SmartHeatingController:
         self.config = config
         self._enabled = True
         self._unsub: list[Callable[[], None]] = []
+        self._apply_config_defaults()
 
     async def async_start(self) -> None:
         """Listener registrieren."""
@@ -57,6 +66,8 @@ class SmartHeatingController:
 
         if not self._enabled:
             return
+
+        self._apply_config_defaults()
 
         watch_entities: set[str] = set()
 
@@ -112,8 +123,21 @@ class SmartHeatingController:
 
     def update_config(self, config: dict[str, Any]) -> None:
         self.config = config
+        self._apply_config_defaults()
         if self._enabled:
             self.hass.async_create_task(self.async_start())
+
+    def _apply_config_defaults(self) -> None:
+        """Fehlende Werte für alte Konfigurationen ergänzen."""
+        self.config.setdefault(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
+        self.config.setdefault(CONF_VACATION_TEMPERATURE, DEFAULT_VACATION_TEMPERATURE)
+        self.config.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
+
+        rooms = self.config.get(CONF_ROOMS, {})
+        if isinstance(rooms, dict):
+            for room in rooms.values():
+                if isinstance(room, dict):
+                    room.setdefault(CONF_ROOM_AWAY_TEMPERATURE, DEFAULT_ROOM_AWAY_TEMPERATURE)
 
     def _unsubscribe_all(self) -> None:
         for unsub in self._unsub:
@@ -166,7 +190,17 @@ class SmartHeatingController:
         return self._safe_float(state.attributes.get(attr))
 
     def _room_temp(self, room: dict[str, Any]) -> float | None:
-        return self._get_state_float(self._as_entity_id(room.get(CONF_ROOM_SENSOR)))
+        sensor_entity = self._as_entity_id(room.get(CONF_ROOM_SENSOR))
+        if sensor_entity:
+            temp = self._get_state_float(sensor_entity)
+            if temp is not None:
+                return temp
+
+        thermostat_entity = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
+        if thermostat_entity:
+            return self._get_attr_float(thermostat_entity, "current_temperature")
+
+        return None
 
     def _time_hhmm(self) -> str:
         return dt_util.now().strftime("%H:%M")
@@ -199,6 +233,45 @@ class SmartHeatingController:
             return float(room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT))
         return float(room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY))
 
+    def _effective_target_for_room(self, room: dict[str, Any]) -> float:
+        """Ermittelt die gültige Zieltemperatur.
+
+        Priorität:
+        1. Urlaub
+        2. Away / Nicht Zuhause
+        3. Normale Tag-/Nacht-Logik
+        """
+        vacation_enabled = bool(
+            self.config.get(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
+        )
+        away_enabled = bool(
+            self.config.get(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
+        )
+
+        if vacation_enabled:
+            vacation_temp = self._safe_float(
+                self.config.get(
+                    CONF_VACATION_TEMPERATURE,
+                    DEFAULT_VACATION_TEMPERATURE,
+                )
+            )
+            if vacation_temp is not None:
+                return vacation_temp
+            return float(DEFAULT_VACATION_TEMPERATURE)
+
+        if away_enabled:
+            away_temp = self._safe_float(
+                room.get(
+                    CONF_ROOM_AWAY_TEMPERATURE,
+                    DEFAULT_ROOM_AWAY_TEMPERATURE,
+                )
+            )
+            if away_temp is not None:
+                return away_temp
+            return float(DEFAULT_ROOM_AWAY_TEMPERATURE)
+
+        return self._base_target_for_room(room)
+
     def _main_reference_temp(self) -> float | None:
         main_sensor = self._as_entity_id(self.config.get(CONF_MAIN_SENSOR))
         if main_sensor:
@@ -222,8 +295,12 @@ class SmartHeatingController:
 
     def _in_morning_boost_window(self) -> bool:
         now = self._time_hhmm()
-        start = str(self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START))[:5]
-        end = str(self.config.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END))[:5]
+        start = str(
+            self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START)
+        )[:5]
+        end = str(
+            self.config.get(CONF_MORNING_BOOST_END, DEFAULT_MORNING_BOOST_END)
+        )[:5]
 
         if start <= end:
             return start <= now < end
@@ -256,8 +333,12 @@ class SmartHeatingController:
         if not rooms:
             return
 
-        boost_delta = self._safe_float(self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA))
-        tolerance = self._safe_float(self.config.get(CONF_TOLERANCE, DEFAULT_TOLERANCE))
+        boost_delta = self._safe_float(
+            self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA)
+        )
+        tolerance = self._safe_float(
+            self.config.get(CONF_TOLERANCE, DEFAULT_TOLERANCE)
+        )
 
         if boost_delta is None:
             boost_delta = float(DEFAULT_BOOST_DELTA)
@@ -268,7 +349,7 @@ class SmartHeatingController:
 
         for room_id, room in rooms.items():
             actual = self._room_temp(room)
-            target = self._base_target_for_room(room)
+            target = self._effective_target_for_room(room)
 
             needs_heat = actual is not None and actual < (target - tolerance)
             reached_target = actual is not None and actual >= target
@@ -286,8 +367,14 @@ class SmartHeatingController:
 
         main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
         if main_thermostat:
-            main_base_target = max(room_state["target"] for room_state in room_states.values())
-            main_target = main_base_target + boost_delta if any_room_needs_heat else main_base_target
+            main_base_target = max(
+                room_state["target"] for room_state in room_states.values()
+            )
+            main_target = (
+                main_base_target + boost_delta
+                if any_room_needs_heat
+                else main_base_target
+            )
             self._set_temp_if_new(main_thermostat, main_target)
 
         for room_id, room in rooms.items():
