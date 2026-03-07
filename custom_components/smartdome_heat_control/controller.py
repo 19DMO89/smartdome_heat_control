@@ -57,6 +57,9 @@ class SmartHeatingController:
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]) -> None:
         self.hass = hass
         self.config = config
+        self._window_open_since: dict[str, float] = {}
+        self._window_closed_since: dict[str, float] = {}
+        self._window_paused_rooms: set[str] = set()
         self._enabled = True
         self._unsub: list[Callable[[], None]] = []
         self._apply_config_defaults()
@@ -204,19 +207,61 @@ class SmartHeatingController:
 
         return self._safe_float(state.attributes.get(attr))
 
-    def _room_temp(self, room: dict[str, Any]) -> float | None:
-        """Raumtemperatur lesen, bevorzugt Sensor, sonst Thermostat current_temperature."""
-        sensor_entity = self._as_entity_id(room.get(CONF_ROOM_SENSOR))
-        if sensor_entity:
-            temp = self._get_state_float(sensor_entity)
-            if temp is not None:
-                return temp
+def _room_temp(self, room: dict[str, Any]) -> float | None:
+    return self._get_state_float(self._as_entity_id(room.get(CONF_ROOM_SENSOR)))
 
-        thermostat_entity = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
-        if thermostat_entity:
-            return self._get_attr_float(thermostat_entity, "current_temperature")
 
-        return None
+def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
+    """Fensterlogik mit Delay."""
+
+    sensor = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
+    if not sensor:
+        return False
+
+    state = self.hass.states.get(sensor)
+    if not state:
+        return False
+
+    now = dt_util.now().timestamp()
+
+    open_delay = int(self.config.get(CONF_WINDOW_OPEN_DELAY, 120))
+    close_delay = int(self.config.get(CONF_WINDOW_CLOSE_DELAY, 60))
+
+    raw = str(state.state).lower()
+    window_open = raw in {"on", "open", "true"}
+
+    if window_open:
+
+        self._window_closed_since.pop(room_id, None)
+
+        if room_id not in self._window_open_since:
+            self._window_open_since[room_id] = now
+            return False
+
+        if now - self._window_open_since[room_id] >= open_delay:
+            self._window_paused_rooms.add(room_id)
+            return True
+
+        return False
+
+    else:
+
+        self._window_open_since.pop(room_id, None)
+
+        if room_id in self._window_paused_rooms:
+
+            if room_id not in self._window_closed_since:
+                self._window_closed_since[room_id] = now
+                return True
+
+            if now - self._window_closed_since[room_id] >= close_delay:
+                self._window_paused_rooms.discard(room_id)
+                self._window_closed_since.pop(room_id, None)
+                return False
+
+            return True
+
+    return False
 
     def _time_hhmm(self) -> str:
         """Aktuelle Uhrzeit als HH:MM."""
@@ -386,7 +431,7 @@ class SmartHeatingController:
         for room_id, room in rooms.items():
             actual = self._room_temp(room)
             target = self._effective_target_for_room(room)
-            window_open = self._is_window_open(room)
+            window_open = self._window_pause_active(room_id, room)
 
             needs_heat = (
                 not window_open
