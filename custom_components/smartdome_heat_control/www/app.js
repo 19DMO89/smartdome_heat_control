@@ -87,10 +87,29 @@ function isTemperatureSensor(entity) {
 }
 
 function normalizeTime(value, fallback = "") {
-  if (typeof value !== "string" || !value.includes(":")) {
+  if (typeof value !== "string") {
     return fallback;
   }
-  return value.slice(0, 5);
+
+  const raw = value.trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  // akzeptiert z. B.:
+  // 6:00
+  // 06:00
+  // 6:00:00
+  // 06:00:00
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) {
+    return fallback;
+  }
+
+  const hours = match[1].padStart(2, "0");
+  const minutes = match[2];
+
+  return `${hours}:${minutes}`;
 }
 
 function normalizeNumber(value, fallback) {
