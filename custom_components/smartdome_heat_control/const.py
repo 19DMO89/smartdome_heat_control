@@ -5,7 +5,7 @@ DOMAIN = "smartdome_heat_control"
 DATA_CONTROLLER = "controller"
 DATA_ENABLED = "enabled"
 
-PLATFORMS = ["switch"]
+PLATFORMS: list[str] = ["switch", "number"]
 
 # Services
 SERVICE_UPDATE_CONFIG = "update_config"
