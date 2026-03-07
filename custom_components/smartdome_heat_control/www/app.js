@@ -96,11 +96,6 @@ function normalizeTime(value, fallback = "") {
     return fallback;
   }
 
-  // akzeptiert z. B.:
-  // 6:00
-  // 06:00
-  // 6:00:00
-  // 06:00:00
   const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
   if (!match) {
     return fallback;
@@ -157,6 +152,70 @@ function normalizeConfig(input) {
 
   cfg.rooms = normalizedRooms;
   return cfg;
+}
+
+function findState(entityId) {
+  if (!entityId) {
+    return null;
+  }
+  return state.allStates.find((item) => item.entity_id === entityId) || null;
+}
+
+function getSensorTemperature(sensorId) {
+  const sensor = findState(sensorId);
+  if (!sensor) {
+    return null;
+  }
+
+  const value = Number(sensor.state);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function formatTemperature(temp) {
+  if (!Number.isFinite(temp)) {
+    return "—";
+  }
+
+  return `${temp.toFixed(1)} °C`;
+}
+
+function isRoomHeating(thermostatId) {
+  const thermostat = findState(thermostatId);
+  if (!thermostat) {
+    return false;
+  }
+
+  const hvacAction = thermostat.attributes?.hvac_action;
+  if (hvacAction === "heating") {
+    return true;
+  }
+
+  if (thermostat.state === "heat") {
+    return false;
+  }
+
+  return false;
+}
+
+function roomTitleMeta(room) {
+  const temp = getSensorTemperature(room.sensor);
+  const heating = isRoomHeating(room.thermostat);
+
+  let metaParts = [];
+
+  if (temp !== null) {
+    metaParts.push(`<span class="room-live-temp">${escapeHtml(formatTemperature(temp))}</span>`);
+  }
+
+  if (heating) {
+    metaParts.push(`<span class="room-heating" title="Raum heizt gerade">🔥</span>`);
+  }
+
+  return metaParts.join(" ");
 }
 
 async function getHassConnection() {
@@ -299,11 +358,17 @@ function createRoomCard(roomId, room) {
   wrapper.dataset.roomId = roomId;
 
   const areaText = room.area_id ? `Area: ${room.area_id}` : "Manuell angelegt";
+  const roomMeta = roomTitleMeta(room);
 
   wrapper.innerHTML = `
     <div class="room-top">
       <div>
-        <div class="room-title">${escapeHtml(room.label || roomId)}</div>
+        <div class="room-title-row" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <div class="room-title">${escapeHtml(room.label || roomId)}</div>
+          <div class="room-title-meta" style="display:flex; align-items:center; gap:8px; font-size:14px;">
+            ${roomMeta}
+          </div>
+        </div>
         <div class="room-subtitle">${escapeHtml(areaText)}</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -499,6 +564,7 @@ async function saveConfig() {
     });
 
     state.config = cfg;
+    await loadAllStates();
     renderGlobalSettings();
     renderRooms();
     setStatus("Konfiguration erfolgreich gespeichert.", "ok");
