@@ -929,12 +929,12 @@ async function setupLiveUpdates() {
 
       updateStateInMemory(entity);
 
+      // Nur bei echter Config-Änderung komplett neu rendern
       if (entity.entity_id === CONFIG_ENTITY_ID) {
         state.config = normalizeConfig(entity.attributes || {});
         renderGlobalSettings();
+        renderRooms();
       }
-
-      renderRooms();
     }, "state_changed");
   } catch (error) {
     console.warn("Live-Updates konnten nicht initialisiert werden:", error);
