@@ -315,6 +315,20 @@ function prettyEntityLabel(item) {
   return `${friendlyName} (${item.entity_id})`;
 }
 
+function applyTranslations() {
+  document.documentElement.lang = UI_LANG;
+
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.dataset.i18n;
+    el.innerHTML = t(key);
+  });
+
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    const key = el.dataset.i18nPlaceholder;
+    el.placeholder = t(key);
+  });
+}
+
 function sortByEntityId(items) {
   return [...items].sort((a, b) => a.entity_id.localeCompare(b.entity_id));
 }
@@ -531,14 +545,14 @@ function renderVersion() {
 function renderModeButtons() {
   if (els.toggleVacationBtn) {
     els.toggleVacationBtn.textContent = state.config.vacation_enabled
-      ? "🏖 Urlaub deaktivieren"
-      : "🏖 Urlaub aktivieren";
+      ? t("🏖 btn_vacation_disable")
+      : t("🏖 btn_vacation_enable");
   }
 
   if (els.toggleAwayBtn) {
     els.toggleAwayBtn.textContent = state.config.away_enabled
-      ? "🚪 Nicht Zuhause deaktivieren"
-      : "🚪 Nicht Zuhause aktivieren";
+      ? t("🚪 btn_away_disable")
+      : t("🚪 btn_away_enable");
   }
 }
 
@@ -551,10 +565,10 @@ function renderHeatingMode() {
   els.heatingMode.innerHTML = "";
 
   const options = [
-    { value: "comfort", label: "Comfort" },
-    { value: "balanced", label: "Balanced" },
-    { value: "energy", label: "Energy" },
-    { value: "adaptive", label: "Adaptive" },
+    { value: "comfort", label: t("mode_comfort") },
+    { value: "balanced", label: t("mode_balanced") },
+    { value: "energy", label: t("mode_energy") },
+    { value: "adaptive", label: t("mode_adaptive") },
   ];
 
   for (const item of options) {
@@ -803,12 +817,12 @@ function createRoomCard(roomId, room) {
 
   buildSelectOptions(thermostatSelect, state.climates, room.thermostat || "", {
     includeEmpty: true,
-    emptyLabel: "— Nicht gesetzt —",
+    emptyLabel: t("— not set —"),
   });
 
   buildSelectOptions(sensorSelect, state.sensors, room.sensor || "", {
     includeEmpty: true,
-    emptyLabel: "— Nicht gesetzt —",
+    emptyLabel: t("— not set —"),
   });
 
   buildSelectOptions(
@@ -817,7 +831,7 @@ function createRoomCard(roomId, room) {
     room.window_sensor || "",
     {
       includeEmpty: true,
-      emptyLabel: "— Nicht gesetzt —",
+      emptyLabel: t("— not set —"),
     }
   );
 
@@ -836,7 +850,7 @@ function renderRooms() {
   if (!entries.length) {
     const empty = document.createElement("div");
     empty.className = "muted";
-    empty.textContent = "Noch keine Räume vorhanden.";
+    empty.textContent = t("No Rooms here.");
     els.roomsContainer.appendChild(empty);
     return;
   }
@@ -935,7 +949,7 @@ function generateRoomId() {
 function addRoom() {
   const roomId = generateRoomId();
   state.config.rooms[roomId] = {
-    label: "Neuer Raum",
+    label: t("New Room"),
     area_id: "",
     thermostat: "",
     sensor: "",
@@ -960,8 +974,8 @@ function applyGlobalTimesToAllRooms() {
 
   const roomNodes = els.roomsContainer.querySelectorAll(".room");
   if (!roomNodes.length) {
-    setStatus(
-      "Keine Räume vorhanden, auf die Zeiten angewendet werden können.",
+    setStatus(t(
+      "No avaliable rooms, for time changes."),
       "warn"
     );
     return;
@@ -976,7 +990,7 @@ function applyGlobalTimesToAllRooms() {
   }
 
   state.config = collectFormState();
-  setStatus("Globale Zeiten wurden in alle Räume übernommen.", "ok");
+  setStatus(t("Global time set in all rooms."), "ok");
 }
 
 async function toggleVacationMode() {
@@ -994,8 +1008,8 @@ async function toggleVacationMode() {
     await refreshAll();
     setStatus(
       newValue
-        ? "Urlaubsmodus aktiviert."
-        : "Urlaubsmodus deaktiviert.",
+        ? t("Vacation on.")
+        : t("Vacation off."),
       "ok"
     );
   } catch (error) {
@@ -1024,8 +1038,8 @@ async function toggleAwayMode() {
     await refreshAll();
     setStatus(
       newValue
-        ? "Nicht-Zuhause-Modus aktiviert."
-        : "Nicht-Zuhause-Modus deaktiviert.",
+        ? t("awaymode activated.")
+        : t("awaymode deactivated."),
       "ok"
     );
   } catch (error) {
@@ -1043,7 +1057,7 @@ async function saveConfig() {
   try {
     isEditing = false;
     setButtonsDisabled(true);
-    setStatus("Speichere Konfiguration …", "warn");
+    setStatus(t("status_save_loading"), "warn");
 
     const cfg = collectFormState();
 
@@ -1055,7 +1069,7 @@ async function saveConfig() {
     await loadAllStates();
     renderGlobalSettings();
     renderRooms();
-    setStatus("Konfiguration erfolgreich gespeichert.", "ok");
+    setStatus(t("status_save_ok"), "ok");
   } catch (error) {
     console.error(error);
     setStatus(`Speichern fehlgeschlagen: ${error.message}`, "err");
@@ -1067,12 +1081,12 @@ async function saveConfig() {
 async function reloadRooms() {
   try {
     setButtonsDisabled(true);
-    setStatus("Erkenne Räume neu …", "warn");
+    setStatus(t("scanning new rooms..."), "warn");
 
     await callService(DOMAIN, "reload", {});
     await refreshAll();
 
-    setStatus("Räume wurden neu erkannt.", "ok");
+    setStatus(t("New rooms scanned."), "ok");
   } catch (error) {
     console.error(error);
     setStatus(`Neu-Erkennung fehlgeschlagen: ${error.message}`, "err");
@@ -1084,10 +1098,10 @@ async function reloadRooms() {
 async function reloadConfig() {
   try {
     setButtonsDisabled(true);
-    setStatus("Lade Konfiguration neu …", "warn");
+    setStatus(t("loading config …"), "warn");
 
     await refreshAll();
-    setStatus("Konfiguration neu geladen.", "ok");
+    setStatus(t("config updatet."), "ok");
   } catch (error) {
     console.error(error);
     setStatus(`Neu laden fehlgeschlagen: ${error.message}`, "err");
@@ -1204,7 +1218,7 @@ async function setupLiveUpdates() {
       updateRoomLiveState();
     }, "state_changed");
   } catch (error) {
-    console.warn("Live-Updates konnten nicht initialisiert werden:", error);
+    console.warn(t("Unable to initalize live-update:"), error);
   }
 }
 
@@ -1218,7 +1232,7 @@ async function init() {
   try {
     await refreshAll();
     await setupLiveUpdates();
-    setStatus("Konfiguration geladen.", "ok");
+    setStatus(t("config loaded."), "ok");
   } catch (error) {
     console.error(error);
     setStatus(`Initialisierung fehlgeschlagen: ${error.message}`, "err");
