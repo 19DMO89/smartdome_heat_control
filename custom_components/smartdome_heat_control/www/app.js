@@ -8,12 +8,15 @@ function getPanelVersion() {
 
 const PANEL_VERSION = getPanelVersion();
 
+const HEATING_MODES = ["comfort", "balanced", "energy", "adaptive"];
+
 const DEFAULTS = {
   enabled: true,
   main_thermostat: "",
   main_sensor: "",
   boost_delta: 2.0,
   tolerance: 0.5,
+  heating_mode: "balanced",
   night_start: "22:00",
   morning_boost_start: "05:00",
   morning_boost_end: "05:30",
@@ -45,6 +48,7 @@ const els = {
   mainSensor: document.getElementById("main_sensor"),
   boostDelta: document.getElementById("boost_delta"),
   tolerance: document.getElementById("tolerance"),
+  heatingMode: document.getElementById("heating_mode"),
   nightStart: document.getElementById("night_start"),
   morningBoostStart: document.getElementById("morning_boost_start"),
   morningBoostEnd: document.getElementById("morning_boost_end"),
@@ -54,6 +58,8 @@ const els = {
   roomsContainer: document.getElementById("roomsContainer"),
   versionBadge: document.getElementById("versionBadge"),
 };
+
+let unsubscribeStateChanged = null;
 
 function setStatus(message, type = "warn") {
   els.statusBox.textContent = message;
@@ -73,6 +79,10 @@ function setButtonsDisabled(disabled) {
 
   if (els.toggleAwayBtn) {
     els.toggleAwayBtn.disabled = disabled;
+  }
+
+  if (els.heatingMode) {
+    els.heatingMode.disabled = disabled;
   }
 }
 
@@ -138,6 +148,17 @@ function normalizeNumber(value, fallback) {
   return Number.isFinite(num) ? num : fallback;
 }
 
+function normalizeHeatingMode(value) {
+  if (typeof value !== "string") {
+    return DEFAULTS.heating_mode;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return HEATING_MODES.includes(normalized)
+    ? normalized
+    : DEFAULTS.heating_mode;
+}
+
 function normalizeRoom(roomId, room) {
   return {
     label:
@@ -155,6 +176,7 @@ function normalizeRoom(roomId, room) {
     day_start: normalizeTime(room?.day_start, ""),
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
+    learned_overshoot: normalizeNumber(room?.learned_overshoot, 0.3),
   };
 }
 
@@ -170,6 +192,7 @@ function normalizeConfig(input) {
   cfg.main_sensor = typeof cfg.main_sensor === "string" ? cfg.main_sensor : "";
   cfg.boost_delta = normalizeNumber(cfg.boost_delta, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(cfg.tolerance, DEFAULTS.tolerance);
+  cfg.heating_mode = normalizeHeatingMode(cfg.heating_mode);
   cfg.night_start = normalizeTime(cfg.night_start, DEFAULTS.night_start);
   cfg.morning_boost_start = normalizeTime(
     cfg.morning_boost_start,
@@ -301,6 +324,30 @@ function renderModeButtons() {
     els.toggleAwayBtn.textContent = state.config.away_enabled
       ? "🚪 Nicht Zuhause deaktivieren"
       : "🚪 Nicht Zuhause aktivieren";
+  }
+}
+
+function renderHeatingMode() {
+  if (!els.heatingMode) {
+    return;
+  }
+
+  const current = normalizeHeatingMode(state.config.heating_mode);
+  els.heatingMode.innerHTML = "";
+
+  const options = [
+    { value: "comfort", label: "Comfort" },
+    { value: "balanced", label: "Balanced" },
+    { value: "energy", label: "Energy" },
+    { value: "adaptive", label: "Adaptive" },
+  ];
+
+  for (const item of options) {
+    const option = document.createElement("option");
+    option.value = item.value;
+    option.textContent = item.label;
+    option.selected = item.value === current;
+    els.heatingMode.appendChild(option);
   }
 }
 
@@ -445,6 +492,7 @@ function renderGlobalSettings() {
     emptyLabel: "— Automatisch / keiner —",
   });
 
+  renderHeatingMode();
   renderModeButtons();
 }
 
@@ -455,6 +503,7 @@ function createRoomCard(roomId, room) {
 
   const areaText = room.area_id ? `Area: ${room.area_id}` : "Manuell angelegt";
   const roomMeta = roomTitleMeta(room);
+  const learnedOvershoot = normalizeNumber(room.learned_overshoot, 0.3);
 
   wrapper.innerHTML = `
     <div class="room-top">
@@ -466,6 +515,9 @@ function createRoomCard(roomId, room) {
           </div>
         </div>
         <div class="room-subtitle">${escapeHtml(areaText)}</div>
+        <div class="room-subtitle">Adaptive overshoot: ${escapeHtml(
+          learnedOvershoot.toFixed(1)
+        )} °C</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <span class="pill">
@@ -587,6 +639,9 @@ function collectFormState() {
   cfg.main_sensor = els.mainSensor.value || "";
   cfg.boost_delta = normalizeNumber(els.boostDelta.value, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(els.tolerance.value, DEFAULTS.tolerance);
+  cfg.heating_mode = els.heatingMode
+    ? normalizeHeatingMode(els.heatingMode.value)
+    : DEFAULTS.heating_mode;
   cfg.night_start = normalizeTime(els.nightStart.value, DEFAULTS.night_start);
   cfg.morning_boost_start = normalizeTime(
     els.morningBoostStart.value,
@@ -612,6 +667,7 @@ function collectFormState() {
 
   for (const node of roomNodes) {
     const roomId = node.dataset.roomId;
+    const existingRoom = state.config.rooms[roomId] || {};
 
     rooms[roomId] = normalizeRoom(roomId, {
       label: node.querySelector(".room-label").value.trim() || roomId,
@@ -625,6 +681,7 @@ function collectFormState() {
       day_start: node.querySelector(".room-day-start").value || "",
       night_start: node.querySelector(".room-night-start").value || "",
       enabled: node.querySelector(".room-enabled").checked,
+      learned_overshoot: existingRoom.learned_overshoot,
     });
   }
 
@@ -650,6 +707,7 @@ function addRoom() {
     day_start: "",
     night_start: "",
     enabled: true,
+    learned_overshoot: 0.3,
   };
   renderRooms();
 }
@@ -824,6 +882,65 @@ function bindEvents() {
   }
 }
 
+function updateStateInMemory(entity) {
+  const index = state.allStates.findIndex(
+    (item) => item.entity_id === entity.entity_id
+  );
+
+  if (index >= 0) {
+    state.allStates[index] = entity;
+  } else {
+    state.allStates.push(entity);
+  }
+
+  state.climates = sortByEntityId(
+    state.allStates.filter((item) => item.entity_id?.startsWith("climate."))
+  );
+
+  state.sensors = sortByEntityId(
+    state.allStates.filter((item) => isTemperatureSensor(item))
+  );
+
+  state.binarySensors = sortByEntityId(
+    state.allStates.filter((item) => item.entity_id?.startsWith("binary_sensor."))
+  );
+}
+
+async function setupLiveUpdates() {
+  try {
+    const haConn = await getHassConnection();
+    const ws = haConn?.conn || haConn;
+
+    if (!ws || typeof ws.subscribeEvents !== "function") {
+      console.warn("WebSocket subscribeEvents ist nicht verfügbar");
+      return;
+    }
+
+    if (typeof unsubscribeStateChanged === "function") {
+      unsubscribeStateChanged();
+      unsubscribeStateChanged = null;
+    }
+
+    unsubscribeStateChanged = await ws.subscribeEvents((event) => {
+      const entity = event?.data?.new_state;
+      if (!entity?.entity_id) {
+        return;
+      }
+
+      updateStateInMemory(entity);
+
+      if (entity.entity_id === CONFIG_ENTITY_ID) {
+        state.config = normalizeConfig(entity.attributes || {});
+        renderGlobalSettings();
+      }
+
+      renderRooms();
+    }, "state_changed");
+  } catch (error) {
+    console.warn("Live-Updates konnten nicht initialisiert werden:", error);
+  }
+}
+
 async function init() {
   bindEvents();
   renderVersion();
@@ -832,31 +949,8 @@ async function init() {
 
   try {
     await refreshAll();
-
-      const haConn = await getHassConnection();
-      const ws = haConn?.conn || haConn;
-      
-      if (ws && typeof ws.subscribeEvents === "function") {
-        ws.subscribeEvents((event) => {
-          const entity = event.data?.new_state;
-          if (!entity) return;
-      
-          const index = state.allStates.findIndex(
-            (e) => e.entity_id === entity.entity_id
-          );
-      
-          if (index >= 0) {
-            state.allStates[index] = entity;
-          } else {
-            state.allStates.push(entity);
-          }
-      
-          renderRooms();
-        }, "state_changed");
-      }
-
+    await setupLiveUpdates();
     setStatus("Konfiguration geladen.", "ok");
-
   } catch (error) {
     console.error(error);
     setStatus(`Initialisierung fehlgeschlagen: ${error.message}`, "err");
