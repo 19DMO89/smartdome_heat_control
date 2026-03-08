@@ -5,7 +5,7 @@ DOMAIN = "smartdome_heat_control"
 DATA_CONTROLLER = "controller"
 DATA_ENABLED = "enabled"
 
-PLATFORMS: list[str] = ["switch", "number"]
+PLATFORMS: list[str] = ["switch", "number", "select"]
 
 # Services
 SERVICE_UPDATE_CONFIG = "update_config"
@@ -42,6 +42,35 @@ CONF_AWAY_ENABLED = "away_enabled"
 CONF_ROOM_AWAY_TEMPERATURE = "away_temperature"
 CONF_WINDOW_OPEN_DELAY = "window_open_delay"
 CONF_WINDOW_CLOSE_DELAY = "window_close_delay"
+
+# Global config
+CONF_HEATING_MODE = "heating_mode"
+
+# Room learning keys
+CONF_ROOM_LEARNED_OVERSHOOT = "learned_overshoot"
+CONF_ROOM_HEATING_CYCLE_ACTIVE = "heating_cycle_active"
+CONF_ROOM_CYCLE_TARGET_TEMP = "cycle_target_temp"
+CONF_ROOM_CYCLE_PEAK_TEMP = "cycle_peak_temp"
+
+# Heating modes
+HEATING_MODE_COMFORT = "comfort"
+HEATING_MODE_BALANCED = "balanced"
+HEATING_MODE_ENERGY = "energy"
+HEATING_MODE_ADAPTIVE = "adaptive"
+
+HEATING_MODES = [
+    HEATING_MODE_COMFORT,
+    HEATING_MODE_BALANCED,
+    HEATING_MODE_ENERGY,
+    HEATING_MODE_ADAPTIVE,
+]
+
+DEFAULT_HEATING_MODE = HEATING_MODE_BALANCED
+
+# Adaptive defaults
+DEFAULT_ADAPTIVE_OVERSHOOT = 0.3
+MIN_ADAPTIVE_OVERSHOOT = 0.0
+MAX_ADAPTIVE_OVERSHOOT = 1.5
 
 DEFAULT_WINDOW_OPEN_DELAY = 120
 DEFAULT_WINDOW_CLOSE_DELAY = 60
