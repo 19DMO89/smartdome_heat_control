@@ -60,6 +60,7 @@ const els = {
 };
 
 let unsubscribeStateChanged = null;
+let isEditing = false;
 
 function setStatus(message, type = "warn") {
   els.statusBox.textContent = message;
@@ -882,6 +883,23 @@ function bindEvents() {
   }
 }
 
+function enableEditTracking() {
+  document.addEventListener("focusin", (e) => {
+    if (e.target.closest(".room") || e.target.closest(".fields")) {
+      isEditing = true;
+    }
+  });
+
+  document.addEventListener("focusout", () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (!active || (!active.closest(".room") && !active.closest(".fields"))) {
+        isEditing = false;
+      }
+    }, 0);
+  });
+}
+
 function updateStateInMemory(entity) {
   const index = state.allStates.findIndex(
     (item) => item.entity_id === entity.entity_id
@@ -923,19 +941,28 @@ async function setupLiveUpdates() {
 
     unsubscribeStateChanged = await ws.subscribeEvents((event) => {
       const entity = event?.data?.new_state;
-      if (!entity?.entity_id) {
-        return;
-      }
+      if (!entity?.entity_id) return;
 
       updateStateInMemory(entity);
 
-      // Nur bei echter Config-Änderung komplett neu rendern
+      // Config Änderung → immer rendern
       if (entity.entity_id === CONFIG_ENTITY_ID) {
         state.config = normalizeConfig(entity.attributes || {});
         renderGlobalSettings();
+
+        if (!isEditing) {
+          renderRooms();
+        }
+
+        return;
+      }
+
+      // Normale State Updates
+      if (!isEditing) {
         renderRooms();
       }
     }, "state_changed");
+
   } catch (error) {
     console.warn("Live-Updates konnten nicht initialisiert werden:", error);
   }
@@ -946,6 +973,7 @@ async function init() {
   renderVersion();
   setButtonsDisabled(true);
   setStatus("Initialisiere Panel …", "warn");
+  enableEditTracking();
 
   try {
     await refreshAll();
