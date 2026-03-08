@@ -33,6 +33,13 @@ from .const import (
     SERVICE_RELOAD,
     SERVICE_REMOVE_ROOM,
     SERVICE_UPDATE_CONFIG,
+    CONF_HEATING_MODE,
+    CONF_ROOM_LEARNED_OVERSHOOT,
+    CONF_ROOM_HEATING_CYCLE_ACTIVE,
+    CONF_ROOM_CYCLE_TARGET_TEMP,
+    CONF_ROOM_CYCLE_PEAK_TEMP,
+    DEFAULT_HEATING_MODE,
+    DEFAULT_ADAPTIVE_OVERSHOOT,
 )
 from .helpers import async_discover_rooms, deep_merge
 
@@ -184,6 +191,10 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "day_start": room.get("day_start", ""),
             "night_start": room.get("night_start", ""),
             "enabled": room.get("enabled", True),
+            "learned_overshoot": room.get("learned_overshoot", DEFAULT_ADAPTIVE_OVERSHOOT),
+            "heating_cycle_active": room.get("heating_cycle_active", False),
+            "cycle_target_temp": room.get("cycle_target_temp"),
+            "cycle_peak_temp": room.get("cycle_peak_temp"),
         }
 
     return normalized
@@ -200,6 +211,7 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     )
     normalized.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
     normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
+    normalized.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
     return normalized
 
 
