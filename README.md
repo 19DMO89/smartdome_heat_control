@@ -256,6 +256,62 @@ Das integrierte Dashboard ermöglicht:
 
 ------------------------------------------------------------------------
 
+✨ New Features
+Heating Modes
+A new global heating strategy has been introduced.
+You can now choose how the system behaves when a room reaches its target temperature.
+Available modes:
+Comfort
+Radiator valves remain open longer
+Reduces temperature fluctuations
+Focus on comfort
+Balanced (default)
+Recommended standard mode
+Good balance between comfort and energy efficiency
+Energy
+Valves close earlier
+Reduces overheating
+Focus on energy saving
+Adaptive
+Smartdome learns how rooms behave
+Automatically compensates temperature overshoot
+Adjusts heating dynamically
+🧠 Adaptive Heating
+Smartdome now learns how rooms behave after heating cycles.
+The system measures temperature overshoot and automatically adjusts future heating behavior.
+Example:
+Code kopieren
+
+Target temperature: 21°C
+Actual peak temperature: 21.5°C
+Overshoot learned: 0.5°C
+Next heating cycle the system will reduce heating earlier to avoid overshooting.
+This improves:
+comfort
+energy efficiency
+temperature stability
+🖥 UI Improvements
+The dashboard now includes a Heating Mode selector in the global settings.
+Users can easily switch between:
+Code kopieren
+
+Comfort
+Balanced
+Energy
+Adaptive
+Additional improvements:
+improved room status display
+adaptive overshoot value shown per room
+better live temperature indicators
+improved layout responsiveness
+⚙ Internal Improvements
+improved heating logic
+adaptive overshoot learning
+improved controller structure
+better UI state synchronization
+improved WebSocket live updates
+more robust configuration normalization
+
 # License
 
 MIT License
