@@ -382,24 +382,24 @@
   <div class="wrap">
     <div class="header">
       <div class="title-block">
-        <h1>Smartdome Heat Control</h1>
-        <p>Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.</p>
-        <div class="version-badge" id="versionBadge">Version</div>
+        <h1 data-i18n="title">Smartdome Heat Control</h1>
+        <p data-i18n="subtitle">Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.</p>
+        <div class="version-badge" id="versionBadge" data-i18n="version">Version</div>
       </div>
 
       <div class="actions">
-        <button id="reloadRoomsBtn" class="ghost">Räume neu erkennen</button>
-        <button id="reloadConfigBtn" class="ghost">Neu laden</button>
-        <button id="saveBtn" class="primary">Konfiguration speichern</button>
+        <button id="reloadRoomsBtn" class="ghost" data-i18n="reload_rooms">Räume neu erkennen</button>
+        <button id="reloadConfigBtn" class="ghost" data-i18n="reload_config">Neu laden</button>
+        <button id="saveBtn" class="primary" data-i18n="save_config">Konfiguration speichern</button>
       </div>
     </div>
 
-    <div id="statusBox" class="status warn">Lade Konfiguration …</div>
+    <div id="statusBox" class="status warn" data-i18n="status_loading">Lade Konfiguration …</div>
 
     <div class="layout">
       <div class="sticky-col">
         <section class="card">
-          <h2>Globale Einstellungen</h2>
+          <h2 data-i18n="global_settings">Globale Einstellungen</h2>
 
           <div class="field full" style="margin-bottom: 14px;">
             <div class="toggle">
