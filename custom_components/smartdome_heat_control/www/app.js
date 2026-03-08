@@ -632,6 +632,30 @@ function renderRooms() {
   }
 }
 
+function updateRoomLiveState() {
+  const roomNodes = els.roomsContainer.querySelectorAll(".room");
+
+  for (const node of roomNodes) {
+    const roomId = node.dataset.roomId;
+    const room = state.config.rooms?.[roomId];
+
+    if (!room) {
+      continue;
+    }
+
+    const titleMeta = node.querySelector(".room-title-meta");
+    if (titleMeta) {
+      titleMeta.innerHTML = roomTitleMeta(room);
+    }
+
+    const subtitleNodes = node.querySelectorAll(".room-subtitle");
+    if (subtitleNodes.length >= 2) {
+      const learnedOvershoot = normalizeNumber(room.learned_overshoot, 0.3);
+      subtitleNodes[1].textContent = `Adaptive overshoot: ${learnedOvershoot.toFixed(1)} °C`;
+    }
+  }
+}
+
 function collectFormState() {
   const cfg = structuredClone(state.config);
 
@@ -803,6 +827,7 @@ async function toggleAwayMode() {
 
 async function saveConfig() {
   try {
+    isEditing = false;
     setButtonsDisabled(true);
     setStatus("Speichere Konfiguration …", "warn");
 
@@ -941,11 +966,12 @@ async function setupLiveUpdates() {
 
     unsubscribeStateChanged = await ws.subscribeEvents((event) => {
       const entity = event?.data?.new_state;
-      if (!entity?.entity_id) return;
+      if (!entity?.entity_id) {
+        return;
+      }
 
       updateStateInMemory(entity);
 
-      // Config Änderung → immer rendern
       if (entity.entity_id === CONFIG_ENTITY_ID) {
         state.config = normalizeConfig(entity.attributes || {});
         renderGlobalSettings();
@@ -957,12 +983,12 @@ async function setupLiveUpdates() {
         return;
       }
 
-      // Normale State Updates
-      if (!isEditing) {
-        renderRooms();
+      if (isEditing) {
+        return;
       }
-    }, "state_changed");
 
+      updateRoomLiveState();
+    }, "state_changed");
   } catch (error) {
     console.warn("Live-Updates konnten nicht initialisiert werden:", error);
   }
