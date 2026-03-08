@@ -1,4 +1,5 @@
 """Smart Heating Controller – Kernlogik."""
+
 from __future__ import annotations
 
 import logging
@@ -17,6 +18,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_AWAY_ENABLED,
     CONF_BOOST_DELTA,
+    CONF_HEATING_MODE,
     CONF_MAIN_SENSOR,
     CONF_MAIN_THERMOSTAT,
     CONF_MORNING_BOOST_END,
@@ -24,8 +26,12 @@ from .const import (
     CONF_NIGHT_START,
     CONF_ROOMS,
     CONF_ROOM_AWAY_TEMPERATURE,
+    CONF_ROOM_CYCLE_PEAK_TEMP,
+    CONF_ROOM_CYCLE_TARGET_TEMP,
     CONF_ROOM_DAY_START,
     CONF_ROOM_ENABLED,
+    CONF_ROOM_HEATING_CYCLE_ACTIVE,
+    CONF_ROOM_LEARNED_OVERSHOOT,
     CONF_ROOM_NIGHT_START,
     CONF_ROOM_SENSOR,
     CONF_ROOM_TARGET_DAY,
@@ -35,8 +41,12 @@ from .const import (
     CONF_TOLERANCE,
     CONF_VACATION_ENABLED,
     CONF_VACATION_TEMPERATURE,
+    CONF_WINDOW_CLOSE_DELAY,
+    CONF_WINDOW_OPEN_DELAY,
+    DEFAULT_ADAPTIVE_OVERSHOOT,
     DEFAULT_AWAY_ENABLED,
     DEFAULT_BOOST_DELTA,
+    DEFAULT_HEATING_MODE,
     DEFAULT_MORNING_BOOST_END,
     DEFAULT_MORNING_BOOST_START,
     DEFAULT_NIGHT_START,
@@ -46,6 +56,14 @@ from .const import (
     DEFAULT_TOLERANCE,
     DEFAULT_VACATION_ENABLED,
     DEFAULT_VACATION_TEMPERATURE,
+    DEFAULT_WINDOW_CLOSE_DELAY,
+    DEFAULT_WINDOW_OPEN_DELAY,
+    HEATING_MODE_ADAPTIVE,
+    HEATING_MODE_BALANCED,
+    HEATING_MODE_COMFORT,
+    HEATING_MODE_ENERGY,
+    MAX_ADAPTIVE_OVERSHOOT,
+    MIN_ADAPTIVE_OVERSHOOT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,7 +98,6 @@ class SmartHeatingController:
 
         if main_thermostat:
             watch_entities.add(main_thermostat)
-
         if main_sensor:
             watch_entities.add(main_sensor)
 
@@ -91,10 +108,8 @@ class SmartHeatingController:
 
             if room_sensor:
                 watch_entities.add(room_sensor)
-
             if room_thermostat:
                 watch_entities.add(room_thermostat)
-
             if room_window_sensor:
                 watch_entities.add(room_window_sensor)
 
@@ -124,11 +139,9 @@ class SmartHeatingController:
     def set_enabled(self, enabled: bool) -> None:
         """Controller aktivieren/deaktivieren."""
         self._enabled = enabled
-
         if not enabled:
             self._unsubscribe_all()
             return
-
         self.hass.async_create_task(self.async_start())
 
     def update_config(self, config: dict[str, Any]) -> None:
@@ -143,6 +156,9 @@ class SmartHeatingController:
         self.config.setdefault(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
         self.config.setdefault(CONF_VACATION_TEMPERATURE, DEFAULT_VACATION_TEMPERATURE)
         self.config.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
+        self.config.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
+        self.config.setdefault(CONF_WINDOW_OPEN_DELAY, DEFAULT_WINDOW_OPEN_DELAY)
+        self.config.setdefault(CONF_WINDOW_CLOSE_DELAY, DEFAULT_WINDOW_CLOSE_DELAY)
 
         rooms = self.config.get(CONF_ROOMS, {})
         if isinstance(rooms, dict):
@@ -150,6 +166,13 @@ class SmartHeatingController:
                 if isinstance(room, dict):
                     room.setdefault(CONF_ROOM_AWAY_TEMPERATURE, DEFAULT_ROOM_AWAY_TEMPERATURE)
                     room.setdefault(CONF_ROOM_WINDOW_SENSOR, "")
+                    room.setdefault(
+                        CONF_ROOM_LEARNED_OVERSHOOT,
+                        DEFAULT_ADAPTIVE_OVERSHOOT,
+                    )
+                    room.setdefault(CONF_ROOM_HEATING_CYCLE_ACTIVE, False)
+                    room.setdefault(CONF_ROOM_CYCLE_TARGET_TEMP, None)
+                    room.setdefault(CONF_ROOM_CYCLE_PEAK_TEMP, None)
 
     def _unsubscribe_all(self) -> None:
         """Alle Listener entfernen."""
@@ -169,7 +192,6 @@ class SmartHeatingController:
         rooms = self.config.get(CONF_ROOMS, {})
         if not isinstance(rooms, dict):
             return {}
-
         return {
             room_id: room
             for room_id, room in rooms.items()
@@ -189,67 +211,60 @@ class SmartHeatingController:
         """Numerischen Zustand einer Entity lesen."""
         if not entity_id:
             return None
-
         state = self.hass.states.get(entity_id)
         if not state or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return None
-
         return self._safe_float(state.state)
 
     def _get_attr_float(self, entity_id: str | None, attr: str) -> float | None:
         """Numerisches Attribut einer Entity lesen."""
         if not entity_id:
             return None
-
         state = self.hass.states.get(entity_id)
         if not state:
             return None
-
         return self._safe_float(state.attributes.get(attr))
 
-def _room_temp(self, room: dict[str, Any]) -> float | None:
-    return self._get_state_float(self._as_entity_id(room.get(CONF_ROOM_SENSOR)))
+    def _room_temp(self, room: dict[str, Any]) -> float | None:
+        return self._get_state_float(self._as_entity_id(room.get(CONF_ROOM_SENSOR)))
 
-
-def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
-    """Fensterlogik mit Delay."""
-
-    sensor = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
-    if not sensor:
-        return False
-
-    state = self.hass.states.get(sensor)
-    if not state:
-        return False
-
-    now = dt_util.now().timestamp()
-
-    open_delay = int(self.config.get(CONF_WINDOW_OPEN_DELAY, 120))
-    close_delay = int(self.config.get(CONF_WINDOW_CLOSE_DELAY, 60))
-
-    raw = str(state.state).lower()
-    window_open = raw in {"on", "open", "true"}
-
-    if window_open:
-
-        self._window_closed_since.pop(room_id, None)
-
-        if room_id not in self._window_open_since:
-            self._window_open_since[room_id] = now
+    def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
+        """Fensterlogik mit Delay."""
+        sensor = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
+        if not sensor:
             return False
 
-        if now - self._window_open_since[room_id] >= open_delay:
-            self._window_paused_rooms.add(room_id)
-            return True
+        state = self.hass.states.get(sensor)
+        if not state:
+            return False
 
-        return False
+        now = dt_util.now().timestamp()
+        open_delay = int(
+            self.config.get(CONF_WINDOW_OPEN_DELAY, DEFAULT_WINDOW_OPEN_DELAY)
+        )
+        close_delay = int(
+            self.config.get(CONF_WINDOW_CLOSE_DELAY, DEFAULT_WINDOW_CLOSE_DELAY)
+        )
 
-    else:
+        raw = str(state.state).lower()
+        window_open = raw in {"on", "open", "true"}
+
+        if window_open:
+            self._window_closed_since.pop(room_id, None)
+
+            if room_id not in self._window_open_since:
+                self._window_open_since[room_id] = now
+                return False
+
+            if now - self._window_open_since[room_id] >= open_delay:
+                self._window_paused_rooms.add(room_id)
+                return True
+
+            return False
 
         self._window_open_since.pop(room_id, None)
 
         if room_id in self._window_paused_rooms:
-
             if room_id not in self._window_closed_since:
                 self._window_closed_since[room_id] = now
                 return True
@@ -261,7 +276,7 @@ def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
 
             return True
 
-    return False
+        return False
 
     def _time_hhmm(self) -> str:
         """Aktuelle Uhrzeit als HH:MM."""
@@ -281,7 +296,10 @@ def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
         room_day_start = str(
             room.get(
                 CONF_ROOM_DAY_START,
-                self.config.get(CONF_MORNING_BOOST_START, DEFAULT_MORNING_BOOST_START),
+                self.config.get(
+                    CONF_MORNING_BOOST_START,
+                    DEFAULT_MORNING_BOOST_START,
+                ),
             )
         )[:5]
 
@@ -307,9 +325,7 @@ def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
         vacation_enabled = bool(
             self.config.get(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
         )
-        away_enabled = bool(
-            self.config.get(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
-        )
+        away_enabled = bool(self.config.get(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED))
 
         if vacation_enabled:
             vacation_temp = self._safe_float(
@@ -405,6 +421,103 @@ def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
             )
         )
 
+    def _get_heating_mode(self) -> str:
+        """Aktuellen Heizmodus lesen."""
+        return str(self.config.get(CONF_HEATING_MODE, DEFAULT_HEATING_MODE))
+
+    def _get_room_min_temp(self, room: dict[str, Any], thermostat_id: str) -> float:
+        """Minimale Zieltemperatur für inaktive Räume."""
+        thermostat_min = self._thermostat_min_temp(thermostat_id)
+        room_night = self._safe_float(room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT))
+        if room_night is None:
+            room_night = float(DEFAULT_TARGET_NIGHT)
+        return min(thermostat_min, room_night)
+
+    def _get_idle_target_for_room(
+        self,
+        room: dict[str, Any],
+        thermostat_id: str,
+        target_temp: float,
+    ) -> float:
+        """Zieltemperatur für Räume ohne akuten Heizbedarf je nach Modus."""
+        mode = self._get_heating_mode()
+        min_temp = self._get_room_min_temp(room, thermostat_id)
+
+        if mode == HEATING_MODE_COMFORT:
+            return max(min_temp, target_temp)
+
+        if mode == HEATING_MODE_BALANCED:
+            return max(min_temp, target_temp - 0.5)
+
+        if mode == HEATING_MODE_ENERGY:
+            return min_temp
+
+        if mode == HEATING_MODE_ADAPTIVE:
+            learned = float(
+                room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT)
+            )
+            learned = max(MIN_ADAPTIVE_OVERSHOOT, min(MAX_ADAPTIVE_OVERSHOOT, learned))
+            return max(min_temp, target_temp - learned)
+
+        return max(min_temp, target_temp - 0.5)
+
+    def _start_room_heating_cycle(
+        self,
+        room: dict[str, Any],
+        target_temp: float,
+        current_temp: float | None,
+    ) -> None:
+        """Heizzyklus für Lernlogik starten oder fortführen."""
+        if current_temp is None:
+            return
+
+        if room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE):
+            peak = room.get(CONF_ROOM_CYCLE_PEAK_TEMP)
+            if peak is None or current_temp > peak:
+                room[CONF_ROOM_CYCLE_PEAK_TEMP] = current_temp
+            return
+
+        room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = True
+        room[CONF_ROOM_CYCLE_TARGET_TEMP] = target_temp
+        room[CONF_ROOM_CYCLE_PEAK_TEMP] = current_temp
+
+    def _update_room_cycle_peak(
+        self,
+        room: dict[str, Any],
+        current_temp: float | None,
+    ) -> None:
+        """Maximale Temperatur während/kurz nach Heizphase nachführen."""
+        if current_temp is None:
+            return
+
+        if not room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE):
+            return
+
+        peak = room.get(CONF_ROOM_CYCLE_PEAK_TEMP)
+        if peak is None or current_temp > peak:
+            room[CONF_ROOM_CYCLE_PEAK_TEMP] = current_temp
+
+    def _finish_room_heating_cycle(self, room: dict[str, Any]) -> None:
+        """Overshoot berechnen und gelernt abspeichern."""
+        if not room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE):
+            return
+
+        target = room.get(CONF_ROOM_CYCLE_TARGET_TEMP)
+        peak = room.get(CONF_ROOM_CYCLE_PEAK_TEMP)
+
+        if target is not None and peak is not None:
+            overshoot = max(0.0, float(peak) - float(target))
+            old_value = float(
+                room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT)
+            )
+            new_value = (old_value * 0.7) + (overshoot * 0.3)
+            new_value = max(MIN_ADAPTIVE_OVERSHOOT, min(MAX_ADAPTIVE_OVERSHOOT, new_value))
+            room[CONF_ROOM_LEARNED_OVERSHOOT] = round(new_value, 2)
+
+        room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = False
+        room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
+        room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
+
     def _evaluate(self) -> None:
         """Heizlogik auswerten."""
         if not self._enabled:
@@ -448,6 +561,13 @@ def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
                 "window_open": window_open,
             }
 
+            if needs_heat:
+                self._start_room_heating_cycle(room, target, actual)
+            else:
+                self._update_room_cycle_peak(room, actual)
+                if room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE):
+                    self._finish_room_heating_cycle(room)
+
         any_room_needs_heat = any(
             room_state["needs_heat"] for room_state in room_states.values()
         )
@@ -477,7 +597,11 @@ def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
             elif room_state["needs_heat"]:
                 room_target = target + boost_delta
             elif room_state["reached_target"]:
-                room_target = self._thermostat_min_temp(thermostat)
+                room_target = self._get_idle_target_for_room(
+                    room,
+                    thermostat,
+                    target,
+                )
             else:
                 room_target = target
 
