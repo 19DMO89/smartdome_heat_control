@@ -538,7 +538,7 @@ function roomTitleMeta(room) {
 
 function renderVersion() {
   if (els.versionBadge) {
-    els.versionBadge.textContent = `Version ${PANEL_VERSION}`;
+    els.versionBadge.textContent = `${t("version")} ${PANEL_VERSION}`;
   }
 }
 
@@ -1223,11 +1223,12 @@ async function setupLiveUpdates() {
 }
 
 async function init() {
+  applyTranslations();
   bindEvents();
+  enableEditTracking();
   renderVersion();
   setButtonsDisabled(true);
-  setStatus("Initialisiere Panel …", "warn");
-  enableEditTracking();
+  setStatus(t("status_initializing"), "warn");
 
   try {
     await refreshAll();
