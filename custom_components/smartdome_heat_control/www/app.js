@@ -1,6 +1,220 @@
 const DOMAIN = "smartdome_heat_control";
 const CONFIG_ENTITY_ID = `${DOMAIN}.config`;
 
+function getUiLanguage() {
+  const lang =
+    document.documentElement.lang ||
+    navigator.language ||
+    navigator.userLanguage ||
+    "en";
+
+  const normalized = String(lang).toLowerCase();
+
+  if (normalized.startsWith("de")) {
+    return "de";
+  }
+
+  return "en";
+}
+
+const UI_LANG = getUiLanguage();
+
+const I18N = {
+  en: {
+    title: "Smartdome Heat Control",
+    subtitle:
+      "Global settings on the left, rooms on the right. Rooms can use their own schedules.",
+    version: "Version",
+
+    reload_rooms: "Reload rooms",
+    reload_config: "Reload",
+    save_config: "Save configuration",
+
+    status_loading: "Loading configuration …",
+    status_initializing: "Initializing panel …",
+    status_loaded: "Configuration loaded.",
+    status_save_loading: "Saving configuration …",
+    status_save_ok: "Configuration saved successfully.",
+    status_reload_ok: "Configuration reloaded.",
+    status_rooms_reload_loading: "Reloading rooms …",
+    status_rooms_reload_ok: "Rooms reloaded.",
+    status_apply_times_ok: "Global times were applied to all rooms.",
+    status_no_rooms_apply:
+      "No rooms available to apply the times to.",
+    status_vacation_on: "Vacation mode enabled.",
+    status_vacation_off: "Vacation mode disabled.",
+    status_away_on: "Away mode enabled.",
+    status_away_off: "Away mode disabled.",
+
+    global_settings: "Global settings",
+    control_enabled: "Control enabled",
+    control_enabled_hint:
+      "If disabled, the integration no longer changes thermostat targets.",
+
+    vacation_mode: "Vacation mode",
+    vacation_mode_hint:
+      "Sets all rooms to the global vacation temperature.",
+
+    away_mode: "Away mode",
+    away_mode_hint:
+      "Uses the configured away temperature for each room.",
+
+    btn_vacation_enable: "🏖 Enable vacation",
+    btn_vacation_disable: "🏖 Disable vacation",
+    btn_away_enable: "🚪 Enable away",
+    btn_away_disable: "🚪 Disable away",
+
+    main_thermostat: "Main thermostat",
+    main_sensor: "Main thermostat temperature sensor",
+    boost_delta: "Boost delta (°C)",
+    tolerance: "Tolerance (°C)",
+    heating_mode: "Heating mode",
+    vacation_temperature: "Vacation temperature (°C)",
+    night_start: "Global night start",
+    morning_boost_start: "Global day start",
+    morning_boost_end: "Morning boost end",
+
+    mode_hint:
+      "<strong>Comfort</strong> keeps valves open longer, <strong>Balanced</strong> is the recommended default, <strong>Energy</strong> closes earlier, <strong>Adaptive</strong> uses learned room behavior.",
+
+    apply_times: "Apply global times to all rooms",
+    footer_note:
+      'The apply button sets for all rooms: <strong>Day start = global day start</strong> and <strong>Night start = global night start</strong>.',
+
+    rooms_title: "Rooms",
+    rooms_subtitle:
+      "Scrollable on the right so the global settings remain visible.",
+    add_room: "Add room",
+    no_rooms: "No rooms configured yet.",
+
+    room_active: "Active",
+    room_delete: "Delete",
+    room_label: "Label",
+    room_area_id: "Area ID",
+    room_thermostat: "Thermostat",
+    room_sensor: "Temperature sensor",
+    room_window_sensor: "Window sensor",
+    room_target_day: "Day target temperature (°C)",
+    room_target_night: "Night target temperature (°C)",
+    room_away_temperature: "Away temperature (°C)",
+    room_day_start: "Day start",
+    room_night_start: "Night start",
+    room_manual: "Manually created",
+    room_overshoot: "Adaptive overshoot",
+    room_heating_now: "Room is currently heating",
+    room_window_open: "Window open",
+    room_new: "New room",
+
+    select_not_set: "— Not set —",
+    select_choose: "— Please choose —",
+    select_auto_none: "— Automatic / none —",
+
+    mode_comfort: "Comfort",
+    mode_balanced: "Balanced",
+    mode_energy: "Energy",
+    mode_adaptive: "Adaptive",
+  },
+
+  de: {
+    title: "Smartdome Heat Control",
+    subtitle:
+      "Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.",
+    version: "Version",
+
+    reload_rooms: "Räume neu erkennen",
+    reload_config: "Neu laden",
+    save_config: "Konfiguration speichern",
+
+    status_loading: "Lade Konfiguration …",
+    status_initializing: "Initialisiere Panel …",
+    status_loaded: "Konfiguration geladen.",
+    status_save_loading: "Speichere Konfiguration …",
+    status_save_ok: "Konfiguration erfolgreich gespeichert.",
+    status_reload_ok: "Konfiguration neu geladen.",
+    status_rooms_reload_loading: "Erkenne Räume neu …",
+    status_rooms_reload_ok: "Räume wurden neu erkannt.",
+    status_apply_times_ok: "Globale Zeiten wurden in alle Räume übernommen.",
+    status_no_rooms_apply:
+      "Keine Räume vorhanden, auf die Zeiten angewendet werden können.",
+    status_vacation_on: "Urlaubsmodus aktiviert.",
+    status_vacation_off: "Urlaubsmodus deaktiviert.",
+    status_away_on: "Nicht-Zuhause-Modus aktiviert.",
+    status_away_off: "Nicht-Zuhause-Modus deaktiviert.",
+
+    global_settings: "Globale Einstellungen",
+    control_enabled: "Steuerung aktiv",
+    control_enabled_hint:
+      "Wenn ausgeschaltet, greift die Integration nicht mehr in Thermostate ein.",
+
+    vacation_mode: "Urlaubsmodus",
+    vacation_mode_hint:
+      "Setzt alle Räume auf die globale Urlaubstemperatur.",
+
+    away_mode: "Nicht Zuhause",
+    away_mode_hint:
+      "Verwendet pro Raum die konfigurierte Away-Temperatur.",
+
+    btn_vacation_enable: "🏖 Urlaub aktivieren",
+    btn_vacation_disable: "🏖 Urlaub deaktivieren",
+    btn_away_enable: "🚪 Nicht Zuhause aktivieren",
+    btn_away_disable: "🚪 Nicht Zuhause deaktivieren",
+
+    main_thermostat: "Hauptthermostat",
+    main_sensor: "Temperatursensor Hauptthermostat",
+    boost_delta: "Boost-Delta (°C)",
+    tolerance: "Toleranz (°C)",
+    heating_mode: "Heizmodus",
+    vacation_temperature: "Urlaubstemperatur (°C)",
+    night_start: "Globale Nacht-Startzeit",
+    morning_boost_start: "Globale Tag-Startzeit",
+    morning_boost_end: "Morgen-Boost Ende",
+
+    mode_hint:
+      "<strong>Comfort</strong> hält Ventile länger offen, <strong>Balanced</strong> ist der empfohlene Standard, <strong>Energy</strong> schließt früher, <strong>Adaptive</strong> nutzt das gelernte Raumverhalten.",
+
+    apply_times: "Globale Zeiten in alle Räume übernehmen",
+    footer_note:
+      'Der Übernehmen-Button setzt für alle Räume: <strong>Tag-Start = globale Tag-Startzeit</strong> und <strong>Nacht-Start = globale Nacht-Startzeit</strong>.',
+
+    rooms_title: "Räume",
+    rooms_subtitle:
+      "Rechts scrollbar, damit die Haupteinstellungen sichtbar bleiben.",
+    add_room: "Raum hinzufügen",
+    no_rooms: "Noch keine Räume vorhanden.",
+
+    room_active: "Aktiv",
+    room_delete: "Löschen",
+    room_label: "Bezeichnung",
+    room_area_id: "Area-ID",
+    room_thermostat: "Thermostat",
+    room_sensor: "Temperatursensor",
+    room_window_sensor: "Fensterkontakt",
+    room_target_day: "Zieltemperatur Tag (°C)",
+    room_target_night: "Zieltemperatur Nacht (°C)",
+    room_away_temperature: "Away-Temperatur (°C)",
+    room_day_start: "Tag-Start",
+    room_night_start: "Nacht-Start",
+    room_manual: "Manuell angelegt",
+    room_overshoot: "Adaptive Overshoot",
+    room_heating_now: "Raum heizt gerade",
+    room_window_open: "Fenster offen",
+    room_new: "Neuer Raum",
+
+    select_not_set: "— Nicht gesetzt —",
+    select_choose: "— Bitte wählen —",
+    select_auto_none: "— Automatisch / keiner —",
+
+    mode_comfort: "Comfort",
+    mode_balanced: "Balanced",
+    mode_energy: "Energy",
+    mode_adaptive: "Adaptive",
+  },
+};
+
+function t(key) {
+  return I18N[UI_LANG]?.[key] ?? I18N.en[key] ?? key;
+}
+
 function getPanelVersion() {
   const params = new URLSearchParams(window.location.search);
   return params.get("v") || "dev";
