@@ -563,119 +563,127 @@ class SmartHeatingController:
         room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
         room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
 
-def _evaluate(self) -> None:
-    """Heizlogik auswerten."""
-    if not self._enabled:
-        _LOGGER.debug("SmartHeatingController deaktiviert - Evaluation übersprungen")
-        return
+    def _evaluate(self) -> None:
+        """Heizlogik auswerten."""
+        if not self._enabled:
+            _LOGGER.debug("SmartHeatingController deaktiviert - Evaluation übersprungen")
+            return
 
-    rooms = self._active_rooms()
-    if not rooms:
-        _LOGGER.debug("Keine aktiven Räume gefunden")
-        return
+        rooms = self._active_rooms()
+        if not rooms:
+            _LOGGER.debug("Keine aktiven Räume gefunden")
+            return
 
-    boost_delta = self._safe_float(self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA))
-    tolerance = self._safe_float(self.config.get(CONF_TOLERANCE, DEFAULT_TOLERANCE))
+        boost_delta = self._safe_float(self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA))
+        tolerance = self._safe_float(self.config.get(CONF_TOLERANCE, DEFAULT_TOLERANCE))
 
-    if boost_delta is None:
-        boost_delta = float(DEFAULT_BOOST_DELTA)
-    if tolerance is None:
-        tolerance = float(DEFAULT_TOLERANCE)
+        if boost_delta is None:
+            boost_delta = float(DEFAULT_BOOST_DELTA)
+        if tolerance is None:
+            tolerance = float(DEFAULT_TOLERANCE)
 
-    room_states: dict[str, dict[str, Any]] = {}
+        room_states: dict[str, dict[str, Any]] = {}
 
-    for room_id, room in rooms.items():
-        actual = self._room_temp(room)
-        target = self._effective_target_for_room(room)
-        window_open = self._window_pause_active(room_id, room)
+        for room_id, room in rooms.items():
+            actual = self._room_temp(room)
+            target = self._effective_target_for_room(room)
+            window_open = self._window_pause_active(room_id, room)
 
-        needs_heat = self._room_needs_heat_latched(
-            room=room,
-            actual=actual,
-            target=target,
-            window_open=window_open,
-            tolerance=tolerance,
-        )
-        reached_target = actual is not None and actual >= target
+            needs_heat = self._room_needs_heat_latched(
+                room=room,
+                actual=actual,
+                target=target,
+                window_open=window_open,
+                tolerance=tolerance,
+            )
+            reached_target = actual is not None and actual >= target
 
-        room_states[room_id] = {
-            "actual": actual,
-            "target": target,
-            "needs_heat": needs_heat,
-            "reached_target": reached_target,
-            "window_open": window_open,
-        }
+            room_states[room_id] = {
+                "actual": actual,
+                "target": target,
+                "needs_heat": needs_heat,
+                "reached_target": reached_target,
+                "window_open": window_open,
+            }
 
-        _LOGGER.warning(
-            "ROOM[%s] actual=%s target=%s needs_heat=%s reached_target=%s "
-            "window_open=%s calling_for_heat=%s away=%s vacation=%s mode=%s",
-            room_id,
-            actual,
-            target,
-            needs_heat,
-            reached_target,
-            window_open,
-            room.get(CONF_ROOM_CALLING_FOR_HEAT),
-            self.config.get(CONF_AWAY_ENABLED),
-            self.config.get(CONF_VACATION_ENABLED),
-            self.config.get(CONF_HEATING_MODE),
-        )
+            _LOGGER.warning(
+                "ROOM[%s] actual=%s target=%s needs_heat=%s reached_target=%s "
+                "window_open=%s calling_for_heat=%s away=%s vacation=%s mode=%s",
+                room_id,
+                actual,
+                target,
+                needs_heat,
+                reached_target,
+                window_open,
+                room.get(CONF_ROOM_CALLING_FOR_HEAT),
+                self.config.get(CONF_AWAY_ENABLED),
+                self.config.get(CONF_VACATION_ENABLED),
+                self.config.get(CONF_HEATING_MODE),
+            )
 
-        if needs_heat:
-            self._start_room_heating_cycle(room, target, actual)
-        else:
-            self._update_room_cycle_peak(room, actual)
-            if room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE):
-                self._finish_room_heating_cycle(room)
+            if needs_heat:
+                self._start_room_heating_cycle(room, target, actual)
+            else:
+                self._update_room_cycle_peak(room, actual)
+                if room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE):
+                    self._finish_room_heating_cycle(room)
 
-    any_room_needs_heat = any(room_state["needs_heat"] for room_state in room_states.values())
-
-    main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
-    if main_thermostat:
-        main_base_target = max(room_state["target"] for room_state in room_states.values())
-        main_target = main_base_target + boost_delta if any_room_needs_heat else main_base_target
-
-        _LOGGER.warning(
-            "MAIN thermostat=%s target=%s any_room_needs_heat=%s",
-            main_thermostat,
-            main_target,
-            any_room_needs_heat,
+        any_room_needs_heat = any(
+            room_state["needs_heat"] for room_state in room_states.values()
         )
 
-        self._set_temp_if_new(main_thermostat, main_target)
+        main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+        if main_thermostat:
+            main_base_target = max(
+                room_state["target"] for room_state in room_states.values()
+            )
+            main_target = (
+                main_base_target + boost_delta
+                if any_room_needs_heat
+                else main_base_target
+            )
 
-    for room_id, room in rooms.items():
-        thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
-        if not thermostat:
-            continue
+            _LOGGER.warning(
+                "MAIN thermostat=%s target=%s any_room_needs_heat=%s",
+                main_thermostat,
+                main_target,
+                any_room_needs_heat,
+            )
 
-        room_state = room_states[room_id]
-        target = room_state["target"]
+            self._set_temp_if_new(main_thermostat, main_target)
 
-        if room_state["window_open"]:
-            room_target = self._thermostat_min_temp(thermostat)
-            reason = "window_open"
-        elif room_state["needs_heat"]:
-            room_target = target + boost_delta
-            reason = "needs_heat"
-        elif room_state["reached_target"]:
-            room_target = self._get_idle_target_for_room(room, thermostat, target)
-            reason = "reached_target_idle"
-        else:
-            room_target = target
-            reason = "hold_target"
+        for room_id, room in rooms.items():
+            thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
+            if not thermostat:
+                continue
 
-        _LOGGER.warning(
-            "SET ROOM[%s] thermostat=%s room_target=%s reason=%s actual=%s target=%s",
-            room_id,
-            thermostat,
-            room_target,
-            reason,
-            room_state["actual"],
-            target,
-        )
+            room_state = room_states[room_id]
+            target = room_state["target"]
 
-        self._set_temp_if_new(thermostat, room_target)
+            if room_state["window_open"]:
+                room_target = self._thermostat_min_temp(thermostat)
+                reason = "window_open"
+            elif room_state["needs_heat"]:
+                room_target = target + boost_delta
+                reason = "needs_heat"
+            elif room_state["reached_target"]:
+                room_target = self._get_idle_target_for_room(room, thermostat, target)
+                reason = "reached_target_idle"
+            else:
+                room_target = target
+                reason = "hold_target"
+
+            _LOGGER.warning(
+                "SET ROOM[%s] thermostat=%s room_target=%s reason=%s actual=%s target=%s",
+                room_id,
+                thermostat,
+                room_target,
+                reason,
+                room_state["actual"],
+                target,
+            )
+
+            self._set_temp_if_new(thermostat, room_target)
 
     @callback
     def _on_state_change(self, event: Event) -> None:
