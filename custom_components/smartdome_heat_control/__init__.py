@@ -94,14 +94,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if hass.is_running:
         await controller.async_start()
     else:
+        start_listener = None
 
         @callback
         def _start_when_ready(event) -> None:
+            nonlocal start_listener
+            start_listener = None
             hass.async_create_task(controller.async_start())
 
-        entry.async_on_unload(
-            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _start_when_ready)
+        start_listener = hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            _start_when_ready,
         )
+
+        def _cleanup_start_listener():
+            nonlocal start_listener
+            if start_listener is not None:
+                start_listener()
+                start_listener = None
+
+        entry.async_on_unload(_cleanup_start_listener)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
@@ -167,7 +179,7 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
 
 
 def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
-    """Räume normalisieren, damit keine Felder verloren gehen."""
+    """Räume normalisieren."""
     if not isinstance(rooms, dict):
         return {}
 
@@ -223,225 +235,8 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def _async_register_ws_save_config(hass: HomeAssistant) -> None:
-    """WebSocket-Command für direktes Speichern aus dem Web-Panel registrieren."""
-    command_type = f"{DOMAIN}/save_config"
-
-    if hass.data[DOMAIN].get("_ws_registered"):
-        return
-
-    @websocket_api.websocket_command(
-        {
-            vol.Required("type"): command_type,
-            vol.Required("config"): dict,
-        }
-    )
-    @websocket_api.async_response
-    async def ws_save_config(
-        hass: HomeAssistant,
-        connection: websocket_api.ActiveConnection,
-        msg: dict[str, Any],
-    ) -> None:
-        target_entry = _get_single_entry(hass)
-        if target_entry is None:
-            connection.send_error(msg["id"], "not_found", "Keine Config Entry gefunden")
-            return
-
-        data = hass.data[DOMAIN][target_entry.entry_id]
-        controller = data[DATA_CONTROLLER]
-
-        new_cfg = _normalize_config(dict(msg["config"]))
-
-        hass.config_entries.async_update_entry(target_entry, data=new_cfg)
-        data["config"] = new_cfg
-
-        controller.update_config(new_cfg)
-        controller.set_enabled(bool(new_cfg.get(DATA_ENABLED, DEFAULT_ENABLED)))
-
-        _push_state(hass, new_cfg)
-        connection.send_result(msg["id"], {"success": True})
-
-    websocket_api.async_register_command(hass, ws_save_config)
-    hass.data[DOMAIN]["_ws_registered"] = True
-
-
-def _async_register_services(hass: HomeAssistant) -> None:
-    """Services für UI, Automationen und Abwärtskompatibilität registrieren."""
-    if hass.data[DOMAIN].get("_services_registered"):
-        return
-
-    async def handle_update_config(call: ServiceCall) -> None:
-        target_entry = _get_single_entry(hass)
-        if target_entry is None:
-            _LOGGER.warning("Kein Config Entry für update_config gefunden")
-            return
-
-        data = hass.data[DOMAIN][target_entry.entry_id]
-        current_cfg = dict(data["config"])
-        patch = dict(call.data.get("config", {}))
-
-        deep_merge(current_cfg, patch)
-        current_cfg = _normalize_config(current_cfg)
-
-        hass.config_entries.async_update_entry(target_entry, data=current_cfg)
-        data["config"] = current_cfg
-
-        controller = data[DATA_CONTROLLER]
-        controller.update_config(current_cfg)
-        controller.set_enabled(bool(current_cfg.get(DATA_ENABLED, DEFAULT_ENABLED)))
-
-        _push_state(hass, current_cfg)
-
-    async def handle_add_room(call: ServiceCall) -> None:
-        target_entry = _get_single_entry(hass)
-        if target_entry is None:
-            _LOGGER.warning("Kein Config Entry für add_room gefunden")
-            return
-
-        data = hass.data[DOMAIN][target_entry.entry_id]
-        cfg = dict(data["config"])
-
-        room_id = call.data.get("room_id") or f"room_{uuid.uuid4().hex[:8]}"
-        room_label = call.data.get("label", "Neuer Raum")
-
-        rooms = cfg.setdefault(CONF_ROOMS, {})
-        if room_id not in rooms:
-            rooms[room_id] = {
-                "label": room_label,
-                "area_id": call.data.get("area_id", ""),
-                "thermostat": call.data.get("thermostat", ""),
-                "sensor": call.data.get("sensor", ""),
-                "window_sensor": call.data.get("window_sensor", ""),
-                "target_day": call.data.get("target_day", 21.0),
-                "target_night": call.data.get("target_night", 18.0),
-                "away_temperature": call.data.get(
-                    "away_temperature",
-                    DEFAULT_ROOM_AWAY_TEMPERATURE,
-                ),
-                "day_start": call.data.get("day_start", ""),
-                "night_start": call.data.get("night_start", ""),
-                "enabled": call.data.get("enabled", True),
-            }
-
-        cfg = _normalize_config(cfg)
-
-        hass.config_entries.async_update_entry(target_entry, data=cfg)
-        data["config"] = cfg
-
-        controller = data[DATA_CONTROLLER]
-        controller.update_config(cfg)
-
-        _push_state(hass, cfg)
-
-    async def handle_remove_room(call: ServiceCall) -> None:
-        target_entry = _get_single_entry(hass)
-        if target_entry is None:
-            _LOGGER.warning("Kein Config Entry für remove_room gefunden")
-            return
-
-        data = hass.data[DOMAIN][target_entry.entry_id]
-        cfg = dict(data["config"])
-
-        room_id = call.data.get("room_id")
-        if room_id and room_id in cfg.get(CONF_ROOMS, {}):
-            del cfg[CONF_ROOMS][room_id]
-
-            cfg = _normalize_config(cfg)
-
-            hass.config_entries.async_update_entry(target_entry, data=cfg)
-            data["config"] = cfg
-
-            controller = data[DATA_CONTROLLER]
-            controller.update_config(cfg)
-
-            _push_state(hass, cfg)
-
-    async def handle_reload(call: ServiceCall) -> None:
-        target_entry = _get_single_entry(hass)
-        if target_entry is None:
-            _LOGGER.warning("Kein Config Entry für reload gefunden")
-            return
-
-        data = hass.data[DOMAIN][target_entry.entry_id]
-        cfg = dict(data["config"])
-
-        discovered_rooms = await async_discover_rooms(hass)
-        existing_rooms = cfg.setdefault(CONF_ROOMS, {})
-
-        for room_id, discovered_room in discovered_rooms.items():
-            if room_id not in existing_rooms:
-                existing_rooms[room_id] = {
-                    **discovered_room,
-                    "away_temperature": discovered_room.get(
-                        "away_temperature",
-                        DEFAULT_ROOM_AWAY_TEMPERATURE,
-                    ),
-                }
-                continue
-
-            existing = existing_rooms[room_id]
-            existing_rooms[room_id] = {
-                "label": existing.get("label", discovered_room.get("label", room_id)),
-                "area_id": existing.get("area_id", discovered_room.get("area_id", "")),
-                "thermostat": existing.get(
-                    "thermostat",
-                    discovered_room.get("thermostat", ""),
-                ),
-                "sensor": existing.get("sensor", discovered_room.get("sensor", "")),
-                "window_sensor": existing.get(
-                    "window_sensor",
-                    discovered_room.get("window_sensor", ""),
-                ),
-                "target_day": existing.get(
-                    "target_day",
-                    discovered_room.get("target_day", 21.0),
-                ),
-                "target_night": existing.get(
-                    "target_night",
-                    discovered_room.get("target_night", 18.0),
-                ),
-                "away_temperature": existing.get(
-                    "away_temperature",
-                    discovered_room.get(
-                        "away_temperature",
-                        DEFAULT_ROOM_AWAY_TEMPERATURE,
-                    ),
-                ),
-                "day_start": existing.get("day_start", ""),
-                "night_start": existing.get("night_start", ""),
-                "enabled": existing.get("enabled", True),
-            }
-
-        cfg = _normalize_config(cfg)
-
-        hass.config_entries.async_update_entry(target_entry, data=cfg)
-        data["config"] = cfg
-
-        controller = data[DATA_CONTROLLER]
-        controller.update_config(cfg)
-
-        _push_state(hass, cfg)
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_UPDATE_CONFIG,
-        handle_update_config,
-        schema=vol.Schema({vol.Required("config"): dict}),
-    )
-    hass.services.async_register(DOMAIN, SERVICE_ADD_ROOM, handle_add_room)
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_REMOVE_ROOM,
-        handle_remove_room,
-        schema=vol.Schema({vol.Required("room_id"): str}),
-    )
-    hass.services.async_register(DOMAIN, SERVICE_RELOAD, handle_reload)
-
-    hass.data[DOMAIN]["_services_registered"] = True
-
-
 def _get_single_entry(hass: HomeAssistant) -> ConfigEntry | None:
-    """Die erste verfügbare Config Entry der Integration holen."""
+    """Die erste verfügbare Config Entry holen."""
     domain_data = hass.data.get(DOMAIN, {})
     for key, value in domain_data.items():
         if key.startswith("_"):
