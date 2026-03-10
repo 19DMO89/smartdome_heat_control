@@ -460,52 +460,41 @@ class SmartHeatingController:
         window_open: bool,
         tolerance: float,
     ) -> bool:
-        """Heizbedarf mit Hysterese + Stop-Verzögerung.
-
+        """Heizbedarf mit Hysterese.
+    
         Start:
             actual < target - tolerance
-
+    
         Stop:
-            actual >= target für eine gewisse Zeit stabil
+            sobald actual >= target
+    
+        Wichtig:
+            Wenn der Raum bereits am Ziel oder darüber ist, wird sofort gestoppt.
+            Keine Hold-Zeit mehr, weil sie beim manuellen Absenken zu Springen führen kann.
         """
-        now_ts = dt_util.now().timestamp()
-        stop_hold_seconds = 120
-
         if window_open or actual is None:
             room[CONF_ROOM_CALLING_FOR_HEAT] = False
             room["_target_reached_since"] = None
             return False
-
+    
         currently_calling = bool(room.get(CONF_ROOM_CALLING_FOR_HEAT, False))
-
-        # Wenn der Raum schon am Ziel oder darüber ist, darf keine neue
-        # Heizanforderung gestartet werden.
+    
+        # Sofort stoppen, wenn Ziel erreicht oder überschritten ist
         if actual >= target:
-            if currently_calling:
-                reached_since = room.get("_target_reached_since")
-                if reached_since is None:
-                    room["_target_reached_since"] = now_ts
-                    return True
-
-                if now_ts - float(reached_since) < stop_hold_seconds:
-                    return True
-
             room[CONF_ROOM_CALLING_FOR_HEAT] = False
             room["_target_reached_since"] = None
             return False
-
-        # Unter Ziel -> Stop-Timer zurücksetzen
+    
+        # Unter Ziel -> ggf. weiterheizen
         room["_target_reached_since"] = None
-
-        # Wenn bereits aktiv, weiter heizen bis Stop-Bedingung erfüllt ist
+    
         if currently_calling:
             return True
-
-        # Neue Heizanforderung nur unter target - tolerance starten
+    
         if actual < (target - tolerance):
             room[CONF_ROOM_CALLING_FOR_HEAT] = True
             return True
-
+    
         return False
 
     def _start_room_heating_cycle(
