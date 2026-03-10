@@ -15,16 +15,23 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 
 from .const import (
-    CONF_ROOM_CALLING_FOR_HEAT,
     CONF_AWAY_ENABLED,
+    CONF_HEATING_MODE,
     CONF_ROOMS,
     CONF_ROOM_AWAY_TEMPERATURE,
+    CONF_ROOM_CALLING_FOR_HEAT,
+    CONF_ROOM_CYCLE_PEAK_TEMP,
+    CONF_ROOM_CYCLE_TARGET_TEMP,
+    CONF_ROOM_HEATING_CYCLE_ACTIVE,
+    CONF_ROOM_LEARNED_OVERSHOOT,
     CONF_VACATION_ENABLED,
     CONF_VACATION_TEMPERATURE,
     DATA_CONTROLLER,
     DATA_ENABLED,
+    DEFAULT_ADAPTIVE_OVERSHOOT,
     DEFAULT_AWAY_ENABLED,
     DEFAULT_ENABLED,
+    DEFAULT_HEATING_MODE,
     DEFAULT_ROOM_AWAY_TEMPERATURE,
     DEFAULT_VACATION_ENABLED,
     DEFAULT_VACATION_TEMPERATURE,
@@ -34,13 +41,6 @@ from .const import (
     SERVICE_RELOAD,
     SERVICE_REMOVE_ROOM,
     SERVICE_UPDATE_CONFIG,
-    CONF_HEATING_MODE,
-    CONF_ROOM_LEARNED_OVERSHOOT,
-    CONF_ROOM_HEATING_CYCLE_ACTIVE,
-    CONF_ROOM_CYCLE_TARGET_TEMP,
-    CONF_ROOM_CYCLE_PEAK_TEMP,
-    DEFAULT_HEATING_MODE,
-    DEFAULT_ADAPTIVE_OVERSHOOT,
 )
 from .helpers import async_discover_rooms, deep_merge
 
@@ -75,8 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["_version"] = await _get_integration_version(hass)
 
-    cfg = dict(entry.data)
-    cfg = _normalize_config(cfg)
+    cfg = _normalize_config(dict(entry.data))
 
     controller = SmartHeatingController(hass, dict(cfg))
     controller._enabled = bool(cfg.get(DATA_ENABLED, DEFAULT_ENABLED))
@@ -110,7 +109,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _start_when_ready,
         )
 
-        def _cleanup_start_listener():
+        def _cleanup_start_listener() -> None:
             nonlocal start_listener
             if start_listener is not None:
                 start_listener()
@@ -159,26 +158,28 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     frontend_path = os.path.join(os.path.dirname(__file__), "www")
     version = hass.data.get(DOMAIN, {}).get("_version", "dev")
 
-    if not hass.data[DOMAIN].get("_frontend_registered"):
-        if os.path.exists(frontend_path):
-            await hass.http.async_register_static_paths(
-                [StaticPathConfig("/smartdome_ui", frontend_path, False)]
-            )
-        else:
-            _LOGGER.error("Frontend-Ordner 'www' nicht gefunden in %s", frontend_path)
-            return
+    if hass.data[DOMAIN].get("_frontend_registered"):
+        return
 
-        frontend.async_register_built_in_panel(
-            hass,
-            component_name="iframe",
-            sidebar_title="Smartdome Heat",
-            sidebar_icon="mdi:radiator",
-            frontend_url_path="smartdome_control",
-            config={"url": f"/smartdome_ui/index.html?v={version}"},
-            require_admin=False,
+    if os.path.exists(frontend_path):
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig("/smartdome_ui", frontend_path, False)]
         )
+    else:
+        _LOGGER.error("Frontend-Ordner 'www' nicht gefunden in %s", frontend_path)
+        return
 
-        hass.data[DOMAIN]["_frontend_registered"] = True
+    frontend.async_register_built_in_panel(
+        hass,
+        component_name="iframe",
+        sidebar_title="Smartdome Heat",
+        sidebar_icon="mdi:radiator",
+        frontend_url_path="smartdome_control",
+        config={"url": f"/smartdome_ui/index.html?v={version}"},
+        require_admin=False,
+    )
+
+    hass.data[DOMAIN]["_frontend_registered"] = True
 
 
 def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
@@ -228,14 +229,228 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(cfg)
     normalized.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
     normalized.setdefault(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
-    normalized.setdefault(
-        CONF_VACATION_TEMPERATURE,
-        DEFAULT_VACATION_TEMPERATURE,
-    )
+    normalized.setdefault(CONF_VACATION_TEMPERATURE, DEFAULT_VACATION_TEMPERATURE)
     normalized.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
-    normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
     normalized.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
+    normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
     return normalized
+
+
+def _async_register_ws_save_config(hass: HomeAssistant) -> None:
+    """WebSocket-Command für direktes Speichern aus dem Web-Panel registrieren."""
+    command_type = f"{DOMAIN}/save_config"
+
+    if hass.data[DOMAIN].get("_ws_registered"):
+        return
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): command_type,
+            vol.Required("config"): dict,
+        }
+    )
+    @websocket_api.async_response
+    async def ws_save_config(
+        hass: HomeAssistant,
+        connection: websocket_api.ActiveConnection,
+        msg: dict[str, Any],
+    ) -> None:
+        target_entry = _get_single_entry(hass)
+        if target_entry is None:
+            connection.send_error(msg["id"], "not_found", "Keine Config Entry gefunden")
+            return
+
+        data = hass.data[DOMAIN][target_entry.entry_id]
+        controller = data[DATA_CONTROLLER]
+
+        new_cfg = _normalize_config(dict(msg["config"]))
+
+        hass.config_entries.async_update_entry(target_entry, data=new_cfg)
+        data["config"] = new_cfg
+
+        controller.update_config(new_cfg)
+        controller.set_enabled(bool(new_cfg.get(DATA_ENABLED, DEFAULT_ENABLED)))
+
+        _push_state(hass, new_cfg)
+        connection.send_result(msg["id"], {"success": True})
+
+    websocket_api.async_register_command(hass, ws_save_config)
+    hass.data[DOMAIN]["_ws_registered"] = True
+
+
+def _async_register_services(hass: HomeAssistant) -> None:
+    """Services für UI, Automationen und Abwärtskompatibilität registrieren."""
+    if hass.data[DOMAIN].get("_services_registered"):
+        return
+
+    async def handle_update_config(call: ServiceCall) -> None:
+        target_entry = _get_single_entry(hass)
+        if target_entry is None:
+            _LOGGER.warning("Kein Config Entry für update_config gefunden")
+            return
+
+        data = hass.data[DOMAIN][target_entry.entry_id]
+        current_cfg = dict(data["config"])
+        patch = dict(call.data.get("config", {}))
+
+        deep_merge(current_cfg, patch)
+        current_cfg = _normalize_config(current_cfg)
+
+        hass.config_entries.async_update_entry(target_entry, data=current_cfg)
+        data["config"] = current_cfg
+
+        controller = data[DATA_CONTROLLER]
+        controller.update_config(current_cfg)
+        controller.set_enabled(bool(current_cfg.get(DATA_ENABLED, DEFAULT_ENABLED)))
+
+        _push_state(hass, current_cfg)
+
+    async def handle_add_room(call: ServiceCall) -> None:
+        target_entry = _get_single_entry(hass)
+        if target_entry is None:
+            _LOGGER.warning("Kein Config Entry für add_room gefunden")
+            return
+
+        data = hass.data[DOMAIN][target_entry.entry_id]
+        cfg = dict(data["config"])
+
+        room_id = call.data.get("room_id") or f"room_{uuid.uuid4().hex[:8]}"
+        room_label = call.data.get("label", "Neuer Raum")
+
+        rooms = cfg.setdefault(CONF_ROOMS, {})
+        if room_id not in rooms:
+            rooms[room_id] = {
+                "label": room_label,
+                "area_id": call.data.get("area_id", ""),
+                "thermostat": call.data.get("thermostat", ""),
+                "sensor": call.data.get("sensor", ""),
+                "window_sensor": call.data.get("window_sensor", ""),
+                "target_day": call.data.get("target_day", 21.0),
+                "target_night": call.data.get("target_night", 18.0),
+                "away_temperature": call.data.get(
+                    "away_temperature",
+                    DEFAULT_ROOM_AWAY_TEMPERATURE,
+                ),
+                "day_start": call.data.get("day_start", ""),
+                "night_start": call.data.get("night_start", ""),
+                "enabled": call.data.get("enabled", True),
+            }
+
+        cfg = _normalize_config(cfg)
+
+        hass.config_entries.async_update_entry(target_entry, data=cfg)
+        data["config"] = cfg
+
+        controller = data[DATA_CONTROLLER]
+        controller.update_config(cfg)
+
+        _push_state(hass, cfg)
+
+    async def handle_remove_room(call: ServiceCall) -> None:
+        target_entry = _get_single_entry(hass)
+        if target_entry is None:
+            _LOGGER.warning("Kein Config Entry für remove_room gefunden")
+            return
+
+        data = hass.data[DOMAIN][target_entry.entry_id]
+        cfg = dict(data["config"])
+
+        room_id = call.data.get("room_id")
+        if room_id and room_id in cfg.get(CONF_ROOMS, {}):
+            del cfg[CONF_ROOMS][room_id]
+
+            cfg = _normalize_config(cfg)
+
+            hass.config_entries.async_update_entry(target_entry, data=cfg)
+            data["config"] = cfg
+
+            controller = data[DATA_CONTROLLER]
+            controller.update_config(cfg)
+
+            _push_state(hass, cfg)
+
+    async def handle_reload(call: ServiceCall) -> None:
+        target_entry = _get_single_entry(hass)
+        if target_entry is None:
+            _LOGGER.warning("Kein Config Entry für reload gefunden")
+            return
+
+        data = hass.data[DOMAIN][target_entry.entry_id]
+        cfg = dict(data["config"])
+
+        discovered_rooms = await async_discover_rooms(hass)
+        existing_rooms = cfg.setdefault(CONF_ROOMS, {})
+
+        for room_id, discovered_room in discovered_rooms.items():
+            if room_id not in existing_rooms:
+                existing_rooms[room_id] = {
+                    **discovered_room,
+                    "away_temperature": discovered_room.get(
+                        "away_temperature",
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    ),
+                }
+                continue
+
+            existing = existing_rooms[room_id]
+            existing_rooms[room_id] = {
+                "label": existing.get("label", discovered_room.get("label", room_id)),
+                "area_id": existing.get("area_id", discovered_room.get("area_id", "")),
+                "thermostat": existing.get(
+                    "thermostat",
+                    discovered_room.get("thermostat", ""),
+                ),
+                "sensor": existing.get("sensor", discovered_room.get("sensor", "")),
+                "window_sensor": existing.get(
+                    "window_sensor",
+                    discovered_room.get("window_sensor", ""),
+                ),
+                "target_day": existing.get(
+                    "target_day",
+                    discovered_room.get("target_day", 21.0),
+                ),
+                "target_night": existing.get(
+                    "target_night",
+                    discovered_room.get("target_night", 18.0),
+                ),
+                "away_temperature": existing.get(
+                    "away_temperature",
+                    discovered_room.get(
+                        "away_temperature",
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    ),
+                ),
+                "day_start": existing.get("day_start", ""),
+                "night_start": existing.get("night_start", ""),
+                "enabled": existing.get("enabled", True),
+            }
+
+        cfg = _normalize_config(cfg)
+
+        hass.config_entries.async_update_entry(target_entry, data=cfg)
+        data["config"] = cfg
+
+        controller = data[DATA_CONTROLLER]
+        controller.update_config(cfg)
+
+        _push_state(hass, cfg)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_UPDATE_CONFIG,
+        handle_update_config,
+        schema=vol.Schema({vol.Required("config"): dict}),
+    )
+    hass.services.async_register(DOMAIN, SERVICE_ADD_ROOM, handle_add_room)
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REMOVE_ROOM,
+        handle_remove_room,
+        schema=vol.Schema({vol.Required("room_id"): str}),
+    )
+    hass.services.async_register(DOMAIN, SERVICE_RELOAD, handle_reload)
+
+    hass.data[DOMAIN]["_services_registered"] = True
 
 
 def _get_single_entry(hass: HomeAssistant) -> ConfigEntry | None:
