@@ -15,6 +15,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 
 from .const import (
+    CONF_ROOM_CALLING_FOR_HEAT,
     CONF_AWAY_ENABLED,
     CONF_ROOMS,
     CONF_ROOM_AWAY_TEMPERATURE,
@@ -191,10 +192,17 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "day_start": room.get("day_start", ""),
             "night_start": room.get("night_start", ""),
             "enabled": room.get("enabled", True),
-            "learned_overshoot": room.get("learned_overshoot", DEFAULT_ADAPTIVE_OVERSHOOT),
-            "heating_cycle_active": room.get("heating_cycle_active", False),
-            "cycle_target_temp": room.get("cycle_target_temp"),
-            "cycle_peak_temp": room.get("cycle_peak_temp"),
+            CONF_ROOM_CALLING_FOR_HEAT: room.get(CONF_ROOM_CALLING_FOR_HEAT, False),
+            CONF_ROOM_LEARNED_OVERSHOOT: room.get(
+                CONF_ROOM_LEARNED_OVERSHOOT,
+                DEFAULT_ADAPTIVE_OVERSHOOT,
+            ),
+            CONF_ROOM_HEATING_CYCLE_ACTIVE: room.get(
+                CONF_ROOM_HEATING_CYCLE_ACTIVE,
+                False,
+            ),
+            CONF_ROOM_CYCLE_TARGET_TEMP: room.get(CONF_ROOM_CYCLE_TARGET_TEMP),
+            CONF_ROOM_CYCLE_PEAK_TEMP: room.get(CONF_ROOM_CYCLE_PEAK_TEMP),
         }
 
     return normalized
