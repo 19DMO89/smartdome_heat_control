@@ -153,6 +153,7 @@ class SmartHeatingController:
         """Config aktualisieren."""
         self.config = config
         self._apply_config_defaults()
+        self._reset_runtime_states()
         if self._enabled:
             self.hass.async_create_task(self.async_start())
 
