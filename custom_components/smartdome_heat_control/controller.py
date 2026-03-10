@@ -577,7 +577,16 @@ class SmartHeatingController:
             actual = self._room_temp(room)
             target = self._effective_target_for_room(room)
             window_open = self._window_pause_active(room_id, room)
-
+        
+            # Reset wenn Ziel gesenkt wurde
+            previous_cycle_target = room.get(CONF_ROOM_CYCLE_TARGET_TEMP)
+            if previous_cycle_target is not None and target < float(previous_cycle_target):
+                room[CONF_ROOM_CALLING_FOR_HEAT] = False
+                room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = False
+                room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
+                room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
+                room["_target_reached_since"] = None
+        
             needs_heat = self._room_needs_heat_latched(
                 room=room,
                 actual=actual,
