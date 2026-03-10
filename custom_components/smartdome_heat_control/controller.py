@@ -73,6 +73,8 @@ class SmartHeatingController:
         self._window_paused_rooms: set[str] = set()
         self._enabled = True
         self._unsub: list[Callable[[], None]] = []
+        self._last_sent_targets: dict[str, float] = {}
+        self._last_sent_at: dict[str, float] = {}
         self._apply_config_defaults()
 
     async def async_start(self) -> None:
@@ -356,13 +358,46 @@ class SmartHeatingController:
                 return min_temp
         return 5.0
 
+    def _should_defer_target_change(self, entity_id: str, new_target: float) -> bool:
+        """Kurze Sperre gegen sofortiges Hin-und-Her-Schalten."""
+        now = dt_util.now().timestamp()
+        transition_lock_seconds = 15
+
+        last_target = self._last_sent_targets.get(entity_id)
+        last_sent_at = self._last_sent_at.get(entity_id)
+
+        if last_target is None or last_sent_at is None:
+            return False
+
+        if abs(last_target - new_target) < 0.2:
+            return False
+
+        return (now - last_sent_at) < transition_lock_seconds
+
     def _set_temp_if_new(self, entity_id: str, temp: float) -> None:
-        """Solltemperatur nur setzen, wenn sie sich wirklich geändert hat."""
-        current = self._get_attr_float(entity_id, ATTR_TEMPERATURE)
+        """Solltemperatur nur setzen, wenn sie sich wirklich geändert hat.
+
+        Zusätzlich mit kurzer Umschalt-Sperre, damit das Thermostat
+        nicht zwischen zwei Zuständen hin- und herspringt.
+        """
         rounded = round(float(temp), 1)
 
-        if current is not None and abs(current - rounded) < 0.2:
+        if self._should_defer_target_change(entity_id, rounded):
+            _LOGGER.debug(
+                "Zielwechsel für %s kurz gesperrt: neues Ziel=%s",
+                entity_id,
+                rounded,
+            )
             return
+
+        current = self._get_attr_float(entity_id, ATTR_TEMPERATURE)
+
+        if current is not None and abs(current - rounded) < 0.2:
+            self._last_sent_targets[entity_id] = rounded
+            return
+
+        self._last_sent_targets[entity_id] = rounded
+        self._last_sent_at[entity_id] = dt_util.now().timestamp()
 
         self.hass.async_create_task(
             self.hass.services.async_call(
@@ -382,11 +417,7 @@ class SmartHeatingController:
         thermostat_id: str,
         target_temp: float,
     ) -> float:
-        """Stabile Zielhaltung nach dem Heizen.
-
-        Absichtlich kein aggressives Absenken mehr,
-        damit das Thermostat nicht zwischen Boost und Idle flattert.
-        """
+        """Stabile Zielhaltung nach dem Heizen."""
         return target_temp
 
     def _reset_runtime_states(self) -> None:
@@ -396,6 +427,9 @@ class SmartHeatingController:
             room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = False
             room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
             room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
+
+        self._last_sent_targets.clear()
+        self._last_sent_at.clear()
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
@@ -583,7 +617,6 @@ class SmartHeatingController:
                 room_target = self._thermostat_min_temp(thermostat)
             else:
                 # Raumthermostat immer stabil auf dem echten Zielwert halten.
-                # Kein Boost mehr am Raumthermostat.
                 room_target = target
 
             self._set_temp_if_new(thermostat, room_target)
