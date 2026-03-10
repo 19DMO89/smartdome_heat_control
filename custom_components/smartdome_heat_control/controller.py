@@ -581,9 +581,9 @@ class SmartHeatingController:
 
             if room_state["pause_active"]:
                 room_target = self._thermostat_min_temp(thermostat)
-            elif room_state["needs_heat"]:
-                room_target = target + boost_delta
             else:
+                # Raumthermostat immer stabil auf dem echten Zielwert halten.
+                # Kein Boost mehr am Raumthermostat.
                 room_target = target
 
             self._set_temp_if_new(thermostat, room_target)
