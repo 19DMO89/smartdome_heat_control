@@ -34,6 +34,7 @@ CONF_ROOM_TARGET_NIGHT = "target_night"
 CONF_ROOM_DAY_START = "day_start"
 CONF_ROOM_NIGHT_START = "night_start"
 CONF_ROOM_ENABLED = "enabled"
+CONF_ROOM_CALLING_FOR_HEAT = "calling_for_heat"
 
 #Uralub und weg
 CONF_VACATION_ENABLED = "vacation_enabled"
