@@ -21,7 +21,6 @@ from .const import (
     CONF_HEATING_MODE,
     CONF_MAIN_SENSOR,
     CONF_MAIN_THERMOSTAT,
-    CONF_MORNING_BOOST_END,
     CONF_MORNING_BOOST_START,
     CONF_NIGHT_START,
     CONF_ROOMS,
@@ -48,7 +47,6 @@ from .const import (
     DEFAULT_AWAY_ENABLED,
     DEFAULT_BOOST_DELTA,
     DEFAULT_HEATING_MODE,
-    DEFAULT_MORNING_BOOST_END,
     DEFAULT_MORNING_BOOST_START,
     DEFAULT_NIGHT_START,
     DEFAULT_ROOM_AWAY_TEMPERATURE,
@@ -59,12 +57,6 @@ from .const import (
     DEFAULT_VACATION_TEMPERATURE,
     DEFAULT_WINDOW_CLOSE_DELAY,
     DEFAULT_WINDOW_OPEN_DELAY,
-    HEATING_MODE_ADAPTIVE,
-    HEATING_MODE_BALANCED,
-    HEATING_MODE_COMFORT,
-    HEATING_MODE_ENERGY,
-    MAX_ADAPTIVE_OVERSHOOT,
-    MIN_ADAPTIVE_OVERSHOOT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -154,6 +146,10 @@ class SmartHeatingController:
         self.config = config
         self._apply_config_defaults()
         self._reset_runtime_states()
+        self._window_open_since.clear()
+        self._window_closed_since.clear()
+        self._window_paused_rooms.clear()
+
         if self._enabled:
             self.hass.async_create_task(self.async_start())
 
@@ -230,6 +226,7 @@ class SmartHeatingController:
         return self._safe_float(state.attributes.get(attr))
 
     def _room_temp(self, room: dict[str, Any]) -> float | None:
+        """Raumtemperatur lesen."""
         return self._get_state_float(self._as_entity_id(room.get(CONF_ROOM_SENSOR)))
 
     def _is_window_open(self, room: dict[str, Any]) -> bool:
@@ -246,11 +243,7 @@ class SmartHeatingController:
         return raw in {"on", "open", "true"}
 
     def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
-        """Fensterlogik mit Delay.
-
-        Ein Raum wird pausiert, wenn das Fenster länger als open_delay offen ist.
-        Nach dem Schließen bleibt die Pause noch close_delay aktiv.
-        """
+        """Fensterlogik mit Open-/Close-Delay."""
         sensor = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
         if not sensor:
             self._window_open_since.pop(room_id, None)
@@ -354,20 +347,6 @@ class SmartHeatingController:
 
         return self._base_target_for_room(room)
 
-    def _main_reference_temp(self) -> float | None:
-        """Referenztemperatur am Hauptthermostat lesen."""
-        main_sensor = self._as_entity_id(self.config.get(CONF_MAIN_SENSOR))
-        if main_sensor:
-            value = self._get_state_float(main_sensor)
-            if value is not None:
-                return value
-
-        main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
-        if main_thermostat:
-            return self._get_attr_float(main_thermostat, "current_temperature")
-
-        return None
-
     def _thermostat_min_temp(self, entity_id: str) -> float:
         """Minimale Solltemperatur eines Thermostats lesen."""
         state = self.hass.states.get(entity_id)
@@ -382,7 +361,7 @@ class SmartHeatingController:
         current = self._get_attr_float(entity_id, ATTR_TEMPERATURE)
         rounded = round(float(temp), 1)
 
-        if current is not None and abs(current - rounded) < 0.1:
+        if current is not None and abs(current - rounded) < 0.2:
             return
 
         self.hass.async_create_task(
@@ -397,44 +376,18 @@ class SmartHeatingController:
             )
         )
 
-    def _get_heating_mode(self) -> str:
-        """Aktuellen Heizmodus lesen."""
-        return str(self.config.get(CONF_HEATING_MODE, DEFAULT_HEATING_MODE))
-
-    def _get_room_min_temp(self, room: dict[str, Any], thermostat_id: str) -> float:
-        """Minimale Zieltemperatur für inaktive Räume."""
-        thermostat_min = self._thermostat_min_temp(thermostat_id)
-        room_night = self._safe_float(room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT))
-        if room_night is None:
-            room_night = float(DEFAULT_TARGET_NIGHT)
-        return min(thermostat_min, room_night)
-
     def _get_idle_target_for_room(
         self,
         room: dict[str, Any],
         thermostat_id: str,
         target_temp: float,
     ) -> float:
-        """Zieltemperatur für Räume ohne akuten Heizbedarf je nach Modus."""
-        mode = self._get_heating_mode()
-        min_temp = self._get_room_min_temp(room, thermostat_id)
+        """Stabile Zielhaltung nach dem Heizen.
 
-        if mode == HEATING_MODE_COMFORT:
-            return max(min_temp, target_temp)
-
-        if mode == HEATING_MODE_BALANCED:
-            return max(min_temp, target_temp)
-
-        if mode == HEATING_MODE_ENERGY:
-            return max(min_temp, target_temp - 0.5)
-
-        if mode == HEATING_MODE_ADAPTIVE:
-            learned = float(room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT))
-            learned = max(MIN_ADAPTIVE_OVERSHOOT, min(MAX_ADAPTIVE_OVERSHOOT, learned))
-            adaptive_drop = min(0.5, learned)
-            return max(min_temp, target_temp - adaptive_drop)
-
-        return max(min_temp, target_temp)
+        Absichtlich kein aggressives Absenken mehr,
+        damit das Thermostat nicht zwischen Boost und Idle flattert.
+        """
+        return target_temp
 
     def _reset_runtime_states(self) -> None:
         """Laufzeit-Heizzustände zurücksetzen."""
@@ -549,7 +502,6 @@ class SmartHeatingController:
             overshoot = max(0.0, float(peak) - float(target))
             old_value = float(room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT))
             new_value = (old_value * 0.7) + (overshoot * 0.3)
-            new_value = max(MIN_ADAPTIVE_OVERSHOOT, min(MAX_ADAPTIVE_OVERSHOOT, new_value))
             room[CONF_ROOM_LEARNED_OVERSHOOT] = round(new_value, 2)
 
         room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = False
@@ -578,7 +530,6 @@ class SmartHeatingController:
         for room_id, room in rooms.items():
             actual = self._room_temp(room)
             target = self._effective_target_for_room(room)
-            raw_window_open = self._is_window_open(room)
             pause_active = self._window_pause_active(room_id, room)
 
             previous_cycle_target = room.get(CONF_ROOM_CYCLE_TARGET_TEMP)
@@ -602,31 +553,8 @@ class SmartHeatingController:
                 "target": target,
                 "needs_heat": needs_heat,
                 "reached_target": reached_target,
-                "raw_window_open": raw_window_open,
                 "pause_active": pause_active,
             }
-
-            _LOGGER.debug(
-                "ROOM[%s] actual=%s target=%s day=%s night=%s is_night=%s "
-                "away_enabled=%s away_temp=%s vacation_enabled=%s mode=%s "
-                "raw_window_open=%s pause_active=%s "
-                "needs_heat=%s reached_target=%s calling_for_heat=%s",
-                room_id,
-                actual,
-                target,
-                room.get(CONF_ROOM_TARGET_DAY),
-                room.get(CONF_ROOM_TARGET_NIGHT),
-                self._is_night_for_room(room),
-                self.config.get(CONF_AWAY_ENABLED),
-                room.get(CONF_ROOM_AWAY_TEMPERATURE),
-                self.config.get(CONF_VACATION_ENABLED),
-                self.config.get(CONF_HEATING_MODE),
-                raw_window_open,
-                pause_active,
-                needs_heat,
-                reached_target,
-                room.get(CONF_ROOM_CALLING_FOR_HEAT),
-            )
 
             if needs_heat:
                 self._start_room_heating_cycle(room, target, actual)
@@ -656,7 +584,7 @@ class SmartHeatingController:
             elif room_state["needs_heat"]:
                 room_target = target + boost_delta
             else:
-                room_target = self._get_idle_target_for_room(room, thermostat, target)
+                room_target = target
 
             self._set_temp_if_new(thermostat, room_target)
 
