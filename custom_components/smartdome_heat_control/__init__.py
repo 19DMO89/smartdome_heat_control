@@ -47,17 +47,20 @@ from .helpers import async_discover_rooms, deep_merge
 _LOGGER = logging.getLogger(__name__)
 
 
-def _get_integration_version() -> str:
-    """Version aus manifest.json lesen."""
+async def _get_integration_version(hass: HomeAssistant) -> str:
+    """Version aus manifest.json lesen (async-safe)."""
     manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
 
-    try:
-        with open(manifest_path, encoding="utf-8") as f:
-            manifest = json.load(f)
-        return str(manifest.get("version", "dev"))
-    except Exception:
-        _LOGGER.exception("Version aus manifest.json konnte nicht gelesen werden")
-        return "dev"
+    def _read_manifest() -> str:
+        try:
+            with open(manifest_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+            return str(manifest.get("version", "dev"))
+        except Exception:
+            _LOGGER.exception("Version aus manifest.json konnte nicht gelesen werden")
+            return "dev"
+
+    return await hass.async_add_executor_job(_read_manifest)
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -70,7 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .controller import SmartHeatingController
 
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN]["_version"] = _get_integration_version()
+    hass.data[DOMAIN]["_version"] = await _get_integration_version(hass)
 
     cfg = dict(entry.data)
     cfg = _normalize_config(cfg)
