@@ -26,6 +26,7 @@ from .const import (
     CONF_NIGHT_START,
     CONF_ROOMS,
     CONF_ROOM_AWAY_TEMPERATURE,
+    CONF_ROOM_CALLING_FOR_HEAT,
     CONF_ROOM_CYCLE_PEAK_TEMP,
     CONF_ROOM_CYCLE_TARGET_TEMP,
     CONF_ROOM_DAY_START,
@@ -166,6 +167,7 @@ class SmartHeatingController:
                 if isinstance(room, dict):
                     room.setdefault(CONF_ROOM_AWAY_TEMPERATURE, DEFAULT_ROOM_AWAY_TEMPERATURE)
                     room.setdefault(CONF_ROOM_WINDOW_SENSOR, "")
+                    room.setdefault(CONF_ROOM_CALLING_FOR_HEAT, False)
                     room.setdefault(
                         CONF_ROOM_LEARNED_OVERSHOOT,
                         DEFAULT_ADAPTIVE_OVERSHOOT,
@@ -428,7 +430,9 @@ class SmartHeatingController:
     def _get_room_min_temp(self, room: dict[str, Any], thermostat_id: str) -> float:
         """Minimale Zieltemperatur für inaktive Räume."""
         thermostat_min = self._thermostat_min_temp(thermostat_id)
-        room_night = self._safe_float(room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT))
+        room_night = self._safe_float(
+            room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT)
+        )
         if room_night is None:
             room_night = float(DEFAULT_TARGET_NIGHT)
         return min(thermostat_min, room_night)
@@ -460,6 +464,40 @@ class SmartHeatingController:
             return max(min_temp, target_temp - learned)
 
         return max(min_temp, target_temp - 0.5)
+
+    def _room_needs_heat_latched(
+        self,
+        room: dict[str, Any],
+        actual: float | None,
+        target: float,
+        window_open: bool,
+        tolerance: float,
+    ) -> bool:
+        """Heizbedarf mit Hysterese/Latch.
+
+        Start:
+            actual < target - tolerance
+
+        Stop:
+            actual >= target
+        """
+        if window_open or actual is None:
+            room[CONF_ROOM_CALLING_FOR_HEAT] = False
+            return False
+
+        currently_calling = bool(room.get(CONF_ROOM_CALLING_FOR_HEAT, False))
+
+        if currently_calling:
+            if actual >= target:
+                room[CONF_ROOM_CALLING_FOR_HEAT] = False
+                return False
+            return True
+
+        if actual < (target - tolerance):
+            room[CONF_ROOM_CALLING_FOR_HEAT] = True
+            return True
+
+        return False
 
     def _start_room_heating_cycle(
         self,
@@ -511,7 +549,10 @@ class SmartHeatingController:
                 room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT)
             )
             new_value = (old_value * 0.7) + (overshoot * 0.3)
-            new_value = max(MIN_ADAPTIVE_OVERSHOOT, min(MAX_ADAPTIVE_OVERSHOOT, new_value))
+            new_value = max(
+                MIN_ADAPTIVE_OVERSHOOT,
+                min(MAX_ADAPTIVE_OVERSHOOT, new_value),
+            )
             room[CONF_ROOM_LEARNED_OVERSHOOT] = round(new_value, 2)
 
         room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = False
@@ -546,10 +587,12 @@ class SmartHeatingController:
             target = self._effective_target_for_room(room)
             window_open = self._window_pause_active(room_id, room)
 
-            needs_heat = (
-                not window_open
-                and actual is not None
-                and actual < (target - tolerance)
+            needs_heat = self._room_needs_heat_latched(
+                room=room,
+                actual=actual,
+                target=target,
+                window_open=window_open,
+                tolerance=tolerance,
             )
             reached_target = actual is not None and actual >= target
 
