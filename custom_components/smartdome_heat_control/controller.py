@@ -73,8 +73,11 @@ class SmartHeatingController:
         self._window_paused_rooms: set[str] = set()
         self._enabled = True
         self._unsub: list[Callable[[], None]] = []
-        self._last_sent_targets: dict[str, float] = {}
-        self._last_sent_at: dict[str, float] = {}
+
+        # Merkt sich, welchen Sollwert Smartdome zuletzt bewusst gesendet hat.
+        # Dadurch wird nicht bei jedem Evaluate erneut geschrieben.
+        self._desired_targets: dict[str, float] = {}
+
         self._apply_config_defaults()
 
     async def async_start(self) -> None:
@@ -358,46 +361,22 @@ class SmartHeatingController:
                 return min_temp
         return 5.0
 
-    def _should_defer_target_change(self, entity_id: str, new_target: float) -> bool:
-        """Kurze Sperre gegen sofortiges Hin-und-Her-Schalten."""
-        now = dt_util.now().timestamp()
-        transition_lock_seconds = 15
+    def _set_temp_if_needed(self, entity_id: str, temp: float) -> None:
+        """Nur schreiben, wenn sich der gewünschte Smartdome-Zielwert geändert hat."""
+        desired = round(float(temp), 1)
+        previous = self._desired_targets.get(entity_id)
 
-        last_target = self._last_sent_targets.get(entity_id)
-        last_sent_at = self._last_sent_at.get(entity_id)
-
-        if last_target is None or last_sent_at is None:
-            return False
-
-        if abs(last_target - new_target) < 0.2:
-            return False
-
-        return (now - last_sent_at) < transition_lock_seconds
-
-    def _set_temp_if_new(self, entity_id: str, temp: float) -> None:
-        """Solltemperatur nur setzen, wenn sie sich wirklich geändert hat.
-
-        Zusätzlich mit kurzer Umschalt-Sperre, damit das Thermostat
-        nicht zwischen zwei Zuständen hin- und herspringt.
-        """
-        rounded = round(float(temp), 1)
-
-        if self._should_defer_target_change(entity_id, rounded):
-            _LOGGER.debug(
-                "Zielwechsel für %s kurz gesperrt: neues Ziel=%s",
-                entity_id,
-                rounded,
-            )
+        if previous is not None and abs(previous - desired) < 0.1:
             return
 
-        current = self._get_attr_float(entity_id, ATTR_TEMPERATURE)
+        self._desired_targets[entity_id] = desired
 
-        if current is not None and abs(current - rounded) < 0.2:
-            self._last_sent_targets[entity_id] = rounded
-            return
-
-        self._last_sent_targets[entity_id] = rounded
-        self._last_sent_at[entity_id] = dt_util.now().timestamp()
+        _LOGGER.debug(
+            "Smartdome set_temperature entity=%s old=%s new=%s",
+            entity_id,
+            previous,
+            desired,
+        )
 
         self.hass.async_create_task(
             self.hass.services.async_call(
@@ -405,20 +384,11 @@ class SmartHeatingController:
                 "set_temperature",
                 {
                     "entity_id": entity_id,
-                    ATTR_TEMPERATURE: rounded,
+                    ATTR_TEMPERATURE: desired,
                 },
                 blocking=True,
             )
         )
-
-    def _get_idle_target_for_room(
-        self,
-        room: dict[str, Any],
-        thermostat_id: str,
-        target_temp: float,
-    ) -> float:
-        """Stabile Zielhaltung nach dem Heizen."""
-        return target_temp
 
     def _reset_runtime_states(self) -> None:
         """Laufzeit-Heizzustände zurücksetzen."""
@@ -428,8 +398,7 @@ class SmartHeatingController:
             room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
             room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
 
-        self._last_sent_targets.clear()
-        self._last_sent_at.clear()
+        self._desired_targets.clear()
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
@@ -443,13 +412,13 @@ class SmartHeatingController:
                 continue
 
             target = self._effective_target_for_room(room)
-            self._set_temp_if_new(thermostat, target)
+            self._set_temp_if_needed(thermostat, target)
 
         main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
         if main_thermostat:
             try:
                 main_target = max(self._effective_target_for_room(room) for room in rooms.values())
-                self._set_temp_if_new(main_thermostat, main_target)
+                self._set_temp_if_needed(main_thermostat, main_target)
             except ValueError:
                 pass
 
@@ -603,7 +572,7 @@ class SmartHeatingController:
         if main_thermostat:
             main_base_target = max(room_state["target"] for room_state in room_states.values())
             main_target = main_base_target + boost_delta if any_room_needs_heat else main_base_target
-            self._set_temp_if_new(main_thermostat, main_target)
+            self._set_temp_if_needed(main_thermostat, main_target)
 
         for room_id, room in rooms.items():
             thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
@@ -619,7 +588,7 @@ class SmartHeatingController:
                 # Raumthermostat immer stabil auf dem echten Zielwert halten.
                 room_target = target
 
-            self._set_temp_if_new(thermostat, room_target)
+            self._set_temp_if_needed(thermostat, room_target)
 
     @callback
     def _on_state_change(self, event: Event) -> None:
