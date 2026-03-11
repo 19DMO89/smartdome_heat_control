@@ -26,6 +26,8 @@ from .const import (
     CONF_ROOM_LEARNED_OVERSHOOT,
     CONF_VACATION_ENABLED,
     CONF_VACATION_TEMPERATURE,
+    CONF_ENERGY_RESIDUAL_HEAT_HOLD,
+    DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
     DATA_CONTROLLER,
     DATA_ENABLED,
     DEFAULT_ADAPTIVE_OVERSHOOT,
@@ -233,6 +235,7 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
     normalized.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
     normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
+    normalized.setdefault(CONF_ENERGY_RESIDUAL_HEAT_HOLD,DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,)
     return normalized
 
 
