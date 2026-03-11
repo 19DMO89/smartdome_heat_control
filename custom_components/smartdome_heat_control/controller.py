@@ -18,6 +18,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_AWAY_ENABLED,
     CONF_BOOST_DELTA,
+    CONF_ENERGY_RESIDUAL_HEAT_HOLD,
     CONF_HEATING_MODE,
     CONF_MAIN_SENSOR,
     CONF_MAIN_THERMOSTAT,
@@ -46,6 +47,7 @@ from .const import (
     DEFAULT_ADAPTIVE_OVERSHOOT,
     DEFAULT_AWAY_ENABLED,
     DEFAULT_BOOST_DELTA,
+    DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
     DEFAULT_HEATING_MODE,
     DEFAULT_MORNING_BOOST_START,
     DEFAULT_NIGHT_START,
@@ -61,6 +63,11 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+HEATING_MODE_COMFORT = "comfort"
+HEATING_MODE_BALANCED = "balanced"
+HEATING_MODE_ENERGY = "energy"
+HEATING_MODE_ADAPTIVE = "adaptive"
+
 
 class SmartHeatingController:
     """Kernlogik: Reagiert auf Sensorwerte und steuert Thermostate."""
@@ -74,9 +81,12 @@ class SmartHeatingController:
         self._enabled = True
         self._unsub: list[Callable[[], None]] = []
 
-        # Merkt sich, welchen Sollwert Smartdome zuletzt bewusst gesendet hat.
-        # Dadurch wird nicht bei jedem Evaluate erneut geschrieben.
+        # Gewünschte Zielwerte, damit nicht bei jedem Evaluate neu geschrieben wird
         self._desired_targets: dict[str, float] = {}
+
+        # Nachlauf-Hold pro Raum im Energy Mode
+        self._residual_heat_hold_until: dict[str, float] = {}
+        self._was_heating_last_eval: dict[str, bool] = {}
 
         self._apply_config_defaults()
 
@@ -166,6 +176,10 @@ class SmartHeatingController:
         self.config.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
         self.config.setdefault(CONF_WINDOW_OPEN_DELAY, DEFAULT_WINDOW_OPEN_DELAY)
         self.config.setdefault(CONF_WINDOW_CLOSE_DELAY, DEFAULT_WINDOW_CLOSE_DELAY)
+        self.config.setdefault(
+            CONF_ENERGY_RESIDUAL_HEAT_HOLD,
+            DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
+        )
 
         rooms = self.config.get(CONF_ROOMS, {})
         if isinstance(rooms, dict):
@@ -328,13 +342,7 @@ class SmartHeatingController:
         return float(room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY))
 
     def _effective_target_for_room(self, room: dict[str, Any]) -> float:
-        """Ermittelt die gültige Zieltemperatur.
-
-        Priorität:
-        1. Urlaub
-        2. Away
-        3. Tag/Nacht
-        """
+        """Ermittelt die gültige Zieltemperatur."""
         vacation_enabled = bool(self.config.get(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED))
         away_enabled = bool(self.config.get(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED))
 
@@ -371,13 +379,6 @@ class SmartHeatingController:
 
         self._desired_targets[entity_id] = desired
 
-        _LOGGER.debug(
-            "Smartdome set_temperature entity=%s old=%s new=%s",
-            entity_id,
-            previous,
-            desired,
-        )
-
         self.hass.async_create_task(
             self.hass.services.async_call(
                 CLIMATE_DOMAIN,
@@ -390,6 +391,54 @@ class SmartHeatingController:
             )
         )
 
+    def _get_heating_mode(self) -> str:
+        """Aktuellen Heizmodus lesen."""
+        return str(self.config.get(CONF_HEATING_MODE, DEFAULT_HEATING_MODE))
+
+    def _get_energy_residual_heat_hold_seconds(self) -> int:
+        """Nachlaufzeit im Energy Mode."""
+        value = self._safe_float(
+            self.config.get(
+                CONF_ENERGY_RESIDUAL_HEAT_HOLD,
+                DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
+            )
+        )
+        if value is None:
+            return int(DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD)
+        return max(0, int(value))
+
+    def _get_idle_target_for_room(
+        self,
+        room_id: str,
+        room: dict[str, Any],
+        thermostat_id: str,
+        target_temp: float,
+    ) -> float:
+        """Zieltemperatur für Räume ohne akuten Heizbedarf je nach Modus."""
+        mode = self._get_heating_mode()
+        min_temp = self._thermostat_min_temp(thermostat_id)
+
+        if mode == HEATING_MODE_COMFORT:
+            return target_temp
+
+        if mode == HEATING_MODE_BALANCED:
+            return max(min_temp, target_temp - 1.0)
+
+        if mode == HEATING_MODE_ENERGY:
+            hold_until = self._residual_heat_hold_until.get(room_id, 0.0)
+            if hold_until > dt_util.now().timestamp():
+                return target_temp
+            return min_temp
+
+        if mode == HEATING_MODE_ADAPTIVE:
+            learned = float(
+                room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT)
+            )
+            learned = max(0.2, min(1.0, learned))
+            return max(min_temp, target_temp - learned)
+
+        return max(min_temp, target_temp - 1.0)
+
     def _reset_runtime_states(self) -> None:
         """Laufzeit-Heizzustände zurücksetzen."""
         for room in self._active_rooms().values():
@@ -399,6 +448,8 @@ class SmartHeatingController:
             room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
 
         self._desired_targets.clear()
+        self._residual_heat_hold_until.clear()
+        self._was_heating_last_eval.clear()
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
@@ -430,14 +481,7 @@ class SmartHeatingController:
         pause_active: bool,
         tolerance: float,
     ) -> bool:
-        """Heizbedarf mit Hysterese.
-
-        Start:
-            actual < target - tolerance
-
-        Stop:
-            sofort bei actual >= target
-        """
+        """Heizbedarf mit Hysterese."""
         if pause_active or actual is None:
             room[CONF_ROOM_CALLING_FOR_HEAT] = False
             return False
@@ -528,6 +572,9 @@ class SmartHeatingController:
         if tolerance is None:
             tolerance = float(DEFAULT_TOLERANCE)
 
+        now_ts = dt_util.now().timestamp()
+        hold_seconds = self._get_energy_residual_heat_hold_seconds()
+
         room_states: dict[str, dict[str, Any]] = {}
 
         for room_id, room in rooms.items():
@@ -550,6 +597,24 @@ class SmartHeatingController:
                 tolerance=tolerance,
             )
             reached_target = actual is not None and actual >= target
+
+            was_heating = self._was_heating_last_eval.get(room_id, False)
+
+            # Energy Mode: nach gerade beendeter Heizphase noch kurz offen lassen
+            if (
+                self._get_heating_mode() == HEATING_MODE_ENERGY
+                and was_heating
+                and not needs_heat
+                and not pause_active
+                and reached_target
+                and hold_seconds > 0
+            ):
+                self._residual_heat_hold_until[room_id] = now_ts + hold_seconds
+
+            if needs_heat or pause_active:
+                self._residual_heat_hold_until.pop(room_id, None)
+
+            self._was_heating_last_eval[room_id] = needs_heat
 
             room_states[room_id] = {
                 "actual": actual,
@@ -584,9 +649,15 @@ class SmartHeatingController:
 
             if room_state["pause_active"]:
                 room_target = self._thermostat_min_temp(thermostat)
+            elif room_state["needs_heat"]:
+                room_target = target + boost_delta
             else:
-                # Raumthermostat immer stabil auf dem echten Zielwert halten.
-                room_target = target
+                room_target = self._get_idle_target_for_room(
+                    room_id,
+                    room,
+                    thermostat,
+                    target,
+                )
 
             self._set_temp_if_needed(thermostat, room_target)
 
