@@ -39,12 +39,17 @@ const I18N = {
     status_rooms_reload_loading: "Reloading rooms …",
     status_rooms_reload_ok: "Rooms reloaded.",
     status_apply_times_ok: "Global times were applied to all rooms.",
-    status_no_rooms_apply:
-      "No rooms available to apply the times to.",
+    status_no_rooms_apply: "No rooms available to apply the times to.",
     status_vacation_on: "Vacation mode enabled.",
     status_vacation_off: "Vacation mode disabled.",
     status_away_on: "Away mode enabled.",
     status_away_off: "Away mode disabled.",
+    status_live_updates_failed: "Unable to initialize live updates.",
+    status_save_failed: "Saving failed",
+    status_reload_failed: "Reload failed",
+    status_room_reload_failed: "Room reload failed",
+    status_vacation_failed: "Could not change vacation mode",
+    status_away_failed: "Could not change away mode",
 
     global_settings: "Global settings",
     control_enabled: "Control enabled",
@@ -69,6 +74,7 @@ const I18N = {
     boost_delta: "Boost delta (°C)",
     tolerance: "Tolerance (°C)",
     heating_mode: "Heating mode",
+    energy_residual_heat_hold: "Residual heat hold (s)",
     vacation_temperature: "Vacation temperature (°C)",
     night_start: "Global night start",
     morning_boost_start: "Global day start",
@@ -140,6 +146,12 @@ const I18N = {
     status_vacation_off: "Urlaubsmodus deaktiviert.",
     status_away_on: "Nicht-Zuhause-Modus aktiviert.",
     status_away_off: "Nicht-Zuhause-Modus deaktiviert.",
+    status_live_updates_failed: "Live-Updates konnten nicht initialisiert werden.",
+    status_save_failed: "Speichern fehlgeschlagen",
+    status_reload_failed: "Neu laden fehlgeschlagen",
+    status_room_reload_failed: "Raum-Neuladen fehlgeschlagen",
+    status_vacation_failed: "Urlaubsmodus konnte nicht geändert werden",
+    status_away_failed: "Nicht-Zuhause-Modus konnte nicht geändert werden",
 
     global_settings: "Globale Einstellungen",
     control_enabled: "Steuerung aktiv",
@@ -164,6 +176,7 @@ const I18N = {
     boost_delta: "Boost-Delta (°C)",
     tolerance: "Toleranz (°C)",
     heating_mode: "Heizmodus",
+    energy_residual_heat_hold: "Restwärme-Nachlauf (s)",
     vacation_temperature: "Urlaubstemperatur (°C)",
     night_start: "Globale Nacht-Startzeit",
     morning_boost_start: "Globale Tag-Startzeit",
@@ -231,6 +244,7 @@ const DEFAULTS = {
   boost_delta: 2.0,
   tolerance: 0.5,
   heating_mode: "balanced",
+  energy_residual_heat_hold: 180,
   night_start: "22:00",
   morning_boost_start: "05:00",
   morning_boost_end: "05:30",
@@ -263,6 +277,7 @@ const els = {
   boostDelta: document.getElementById("boost_delta"),
   tolerance: document.getElementById("tolerance"),
   heatingMode: document.getElementById("heating_mode"),
+  energyResidualHeatHold: document.getElementById("energy_residual_heat_hold"),
   nightStart: document.getElementById("night_start"),
   morningBoostStart: document.getElementById("morning_boost_start"),
   morningBoostEnd: document.getElementById("morning_boost_end"),
@@ -298,6 +313,10 @@ function setButtonsDisabled(disabled) {
 
   if (els.heatingMode) {
     els.heatingMode.disabled = disabled;
+  }
+
+  if (els.energyResidualHeatHold) {
+    els.energyResidualHeatHold.disabled = disabled;
   }
 }
 
@@ -422,6 +441,10 @@ function normalizeConfig(input) {
   cfg.boost_delta = normalizeNumber(cfg.boost_delta, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(cfg.tolerance, DEFAULTS.tolerance);
   cfg.heating_mode = normalizeHeatingMode(cfg.heating_mode);
+  cfg.energy_residual_heat_hold = normalizeNumber(
+    cfg.energy_residual_heat_hold,
+    DEFAULTS.energy_residual_heat_hold
+  );
   cfg.night_start = normalizeTime(cfg.night_start, DEFAULTS.night_start);
   cfg.morning_boost_start = normalizeTime(
     cfg.morning_boost_start,
@@ -487,15 +510,7 @@ function isRoomHeating(thermostatId) {
   }
 
   const hvacAction = thermostat.attributes?.hvac_action;
-  if (hvacAction === "heating") {
-    return true;
-  }
-
-  if (thermostat.state === "heat") {
-    return false;
-  }
-
-  return false;
+  return hvacAction === "heating";
 }
 
 function isWindowOpen(windowSensorId) {
@@ -523,13 +538,17 @@ function roomTitleMeta(room) {
 
   if (heating) {
     metaParts.push(
-      `<span class="room-heating" title="Raum heizt gerade">🔥</span>`
+      `<span class="room-heating" title="${escapeHtml(
+        t("room_heating_now")
+      )}">🔥</span>`
     );
   }
 
   if (windowOpen) {
     metaParts.push(
-      `<span class="room-window-open" title="Fenster offen">🪟</span>`
+      `<span class="room-window-open" title="${escapeHtml(
+        t("room_window_open")
+      )}">🪟</span>`
     );
   }
 
@@ -545,14 +564,14 @@ function renderVersion() {
 function renderModeButtons() {
   if (els.toggleVacationBtn) {
     els.toggleVacationBtn.textContent = state.config.vacation_enabled
-      ? t("🏖 btn_vacation_disable")
-      : t("🏖 btn_vacation_enable");
+      ? t("btn_vacation_disable")
+      : t("btn_vacation_enable");
   }
 
   if (els.toggleAwayBtn) {
     els.toggleAwayBtn.textContent = state.config.away_enabled
-      ? t("🚪 btn_away_disable")
-      : t("🚪 btn_away_enable");
+      ? t("btn_away_disable")
+      : t("btn_away_enable");
   }
 }
 
@@ -636,7 +655,7 @@ async function callService(domain, service, data = {}) {
 function buildSelectOptions(selectEl, items, selectedValue, options = {}) {
   const {
     includeEmpty = true,
-    emptyLabel = "— Nicht gesetzt —",
+    emptyLabel = t("select_not_set"),
   } = options;
 
   selectEl.innerHTML = "";
@@ -699,6 +718,15 @@ function renderGlobalSettings() {
   els.morningBoostStart.value = cfg.morning_boost_start;
   els.morningBoostEnd.value = cfg.morning_boost_end;
 
+  if (els.energyResidualHeatHold) {
+    els.energyResidualHeatHold.value = String(
+      normalizeNumber(
+        cfg.energy_residual_heat_hold,
+        DEFAULTS.energy_residual_heat_hold
+      )
+    );
+  }
+
   if (els.vacationEnabled) {
     els.vacationEnabled.checked = cfg.vacation_enabled;
   }
@@ -713,12 +741,12 @@ function renderGlobalSettings() {
 
   buildSelectOptions(els.mainThermostat, state.climates, cfg.main_thermostat, {
     includeEmpty: true,
-    emptyLabel: "— Bitte wählen —",
+    emptyLabel: t("select_choose"),
   });
 
   buildSelectOptions(els.mainSensor, state.sensors, cfg.main_sensor, {
     includeEmpty: true,
-    emptyLabel: "— Automatisch / keiner —",
+    emptyLabel: t("select_auto_none"),
   });
 
   renderHeatingMode();
@@ -730,7 +758,7 @@ function createRoomCard(roomId, room) {
   wrapper.className = "room";
   wrapper.dataset.roomId = roomId;
 
-  const areaText = room.area_id ? `Area: ${room.area_id}` : "Manuell angelegt";
+  const areaText = room.area_id ? `Area: ${room.area_id}` : t("room_manual");
   const roomMeta = roomTitleMeta(room);
   const learnedOvershoot = normalizeNumber(room.learned_overshoot, 0.3);
 
@@ -744,68 +772,84 @@ function createRoomCard(roomId, room) {
           </div>
         </div>
         <div class="room-subtitle">${escapeHtml(areaText)}</div>
-        <div class="room-subtitle">Adaptive overshoot: ${escapeHtml(
+        <div class="room-subtitle">${escapeHtml(t("room_overshoot"))}: ${escapeHtml(
           learnedOvershoot.toFixed(1)
         )} °C</div>
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <span class="pill">
           <input class="room-enabled" type="checkbox" ${room.enabled ? "checked" : ""} />
-          <span>Aktiv</span>
+          <span>${escapeHtml(t("room_active"))}</span>
         </span>
-        <button class="danger room-delete-btn" type="button">Löschen</button>
+        <button class="danger room-delete-btn" type="button">${escapeHtml(
+          t("room_delete")
+        )}</button>
       </div>
     </div>
 
     <div class="room-grid">
       <div class="field">
-        <label>Bezeichnung</label>
-        <input class="room-label" type="text" value="${escapeHtml(room.label || "")}" />
+        <label>${escapeHtml(t("room_label"))}</label>
+        <input class="room-label" type="text" value="${escapeHtml(
+          room.label || ""
+        )}" />
       </div>
 
       <div class="field">
-        <label>Area-ID</label>
-        <input class="room-area-id" type="text" value="${escapeHtml(room.area_id || "")}" />
+        <label>${escapeHtml(t("room_area_id"))}</label>
+        <input class="room-area-id" type="text" value="${escapeHtml(
+          room.area_id || ""
+        )}" />
       </div>
 
       <div class="field">
-        <label>Thermostat</label>
+        <label>${escapeHtml(t("room_thermostat"))}</label>
         <select class="room-thermostat"></select>
       </div>
 
       <div class="field">
-        <label>Temperatursensor</label>
+        <label>${escapeHtml(t("room_sensor"))}</label>
         <select class="room-sensor"></select>
       </div>
 
       <div class="field">
-        <label>Fensterkontakt</label>
+        <label>${escapeHtml(t("room_window_sensor"))}</label>
         <select class="room-window-sensor"></select>
       </div>
 
       <div class="field">
-        <label>Zieltemperatur Tag (°C)</label>
-        <input class="room-target-day" type="number" min="5" max="30" step="0.1" value="${escapeHtml(room.target_day)}" />
+        <label>${escapeHtml(t("room_target_day"))}</label>
+        <input class="room-target-day" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+          room.target_day
+        )}" />
       </div>
 
       <div class="field">
-        <label>Zieltemperatur Nacht (°C)</label>
-        <input class="room-target-night" type="number" min="5" max="30" step="0.1" value="${escapeHtml(room.target_night)}" />
+        <label>${escapeHtml(t("room_target_night"))}</label>
+        <input class="room-target-night" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+          room.target_night
+        )}" />
       </div>
 
       <div class="field">
-        <label>Away-Temperatur (°C)</label>
-        <input class="room-away-temperature" type="number" min="5" max="30" step="0.1" value="${escapeHtml(room.away_temperature)}" />
+        <label>${escapeHtml(t("room_away_temperature"))}</label>
+        <input class="room-away-temperature" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+          room.away_temperature
+        )}" />
       </div>
 
       <div class="field">
-        <label>Tag-Start</label>
-        <input class="room-day-start" type="time" value="${escapeHtml(room.day_start || "")}" />
+        <label>${escapeHtml(t("room_day_start"))}</label>
+        <input class="room-day-start" type="time" value="${escapeHtml(
+          room.day_start || ""
+        )}" />
       </div>
 
       <div class="field">
-        <label>Nacht-Start</label>
-        <input class="room-night-start" type="time" value="${escapeHtml(room.night_start || "")}" />
+        <label>${escapeHtml(t("room_night_start"))}</label>
+        <input class="room-night-start" type="time" value="${escapeHtml(
+          room.night_start || ""
+        )}" />
       </div>
     </div>
   `;
@@ -817,12 +861,12 @@ function createRoomCard(roomId, room) {
 
   buildSelectOptions(thermostatSelect, state.climates, room.thermostat || "", {
     includeEmpty: true,
-    emptyLabel: t("— not set —"),
+    emptyLabel: t("select_not_set"),
   });
 
   buildSelectOptions(sensorSelect, state.sensors, room.sensor || "", {
     includeEmpty: true,
-    emptyLabel: t("— not set —"),
+    emptyLabel: t("select_not_set"),
   });
 
   buildSelectOptions(
@@ -831,7 +875,7 @@ function createRoomCard(roomId, room) {
     room.window_sensor || "",
     {
       includeEmpty: true,
-      emptyLabel: t("— not set —"),
+      emptyLabel: t("select_not_set"),
     }
   );
 
@@ -850,7 +894,7 @@ function renderRooms() {
   if (!entries.length) {
     const empty = document.createElement("div");
     empty.className = "muted";
-    empty.textContent = t("No Rooms here.");
+    empty.textContent = t("no_rooms");
     els.roomsContainer.appendChild(empty);
     return;
   }
@@ -879,7 +923,9 @@ function updateRoomLiveState() {
     const subtitleNodes = node.querySelectorAll(".room-subtitle");
     if (subtitleNodes.length >= 2) {
       const learnedOvershoot = normalizeNumber(room.learned_overshoot, 0.3);
-      subtitleNodes[1].textContent = `Adaptive overshoot: ${learnedOvershoot.toFixed(1)} °C`;
+      subtitleNodes[1].textContent = `${t("room_overshoot")}: ${learnedOvershoot.toFixed(
+        1
+      )} °C`;
     }
   }
 }
@@ -895,6 +941,12 @@ function collectFormState() {
   cfg.heating_mode = els.heatingMode
     ? normalizeHeatingMode(els.heatingMode.value)
     : DEFAULTS.heating_mode;
+  cfg.energy_residual_heat_hold = els.energyResidualHeatHold
+    ? normalizeNumber(
+        els.energyResidualHeatHold.value,
+        DEFAULTS.energy_residual_heat_hold
+      )
+    : DEFAULTS.energy_residual_heat_hold;
   cfg.night_start = normalizeTime(els.nightStart.value, DEFAULTS.night_start);
   cfg.morning_boost_start = normalizeTime(
     els.morningBoostStart.value,
@@ -949,7 +1001,7 @@ function generateRoomId() {
 function addRoom() {
   const roomId = generateRoomId();
   state.config.rooms[roomId] = {
-    label: t("New Room"),
+    label: t("room_new"),
     area_id: "",
     thermostat: "",
     sensor: "",
@@ -974,10 +1026,7 @@ function applyGlobalTimesToAllRooms() {
 
   const roomNodes = els.roomsContainer.querySelectorAll(".room");
   if (!roomNodes.length) {
-    setStatus(t(
-      "No avaliable rooms, for time changes."),
-      "warn"
-    );
+    setStatus(t("status_no_rooms_apply"), "warn");
     return;
   }
 
@@ -990,7 +1039,7 @@ function applyGlobalTimesToAllRooms() {
   }
 
   state.config = collectFormState();
-  setStatus(t("Global time set in all rooms."), "ok");
+  setStatus(t("status_apply_times_ok"), "ok");
 }
 
 async function toggleVacationMode() {
@@ -1007,17 +1056,12 @@ async function toggleVacationMode() {
 
     await refreshAll();
     setStatus(
-      newValue
-        ? t("Vacation on.")
-        : t("Vacation off."),
+      newValue ? t("status_vacation_on") : t("status_vacation_off"),
       "ok"
     );
   } catch (error) {
     console.error(error);
-    setStatus(
-      `Urlaubsmodus konnte nicht geändert werden: ${error.message}`,
-      "err"
-    );
+    setStatus(`${t("status_vacation_failed")}: ${error.message}`, "err");
   } finally {
     setButtonsDisabled(false);
   }
@@ -1036,18 +1080,10 @@ async function toggleAwayMode() {
     });
 
     await refreshAll();
-    setStatus(
-      newValue
-        ? t("awaymode activated.")
-        : t("awaymode deactivated."),
-      "ok"
-    );
+    setStatus(newValue ? t("status_away_on") : t("status_away_off"), "ok");
   } catch (error) {
     console.error(error);
-    setStatus(
-      `Nicht-Zuhause-Modus konnte nicht geändert werden: ${error.message}`,
-      "err"
-    );
+    setStatus(`${t("status_away_failed")}: ${error.message}`, "err");
   } finally {
     setButtonsDisabled(false);
   }
@@ -1072,7 +1108,7 @@ async function saveConfig() {
     setStatus(t("status_save_ok"), "ok");
   } catch (error) {
     console.error(error);
-    setStatus(`Speichern fehlgeschlagen: ${error.message}`, "err");
+    setStatus(`${t("status_save_failed")}: ${error.message}`, "err");
   } finally {
     setButtonsDisabled(false);
   }
@@ -1081,15 +1117,15 @@ async function saveConfig() {
 async function reloadRooms() {
   try {
     setButtonsDisabled(true);
-    setStatus(t("scanning new rooms..."), "warn");
+    setStatus(t("status_rooms_reload_loading"), "warn");
 
     await callService(DOMAIN, "reload", {});
     await refreshAll();
 
-    setStatus(t("New rooms scanned."), "ok");
+    setStatus(t("status_rooms_reload_ok"), "ok");
   } catch (error) {
     console.error(error);
-    setStatus(`Neu-Erkennung fehlgeschlagen: ${error.message}`, "err");
+    setStatus(`${t("status_room_reload_failed")}: ${error.message}`, "err");
   } finally {
     setButtonsDisabled(false);
   }
@@ -1098,13 +1134,13 @@ async function reloadRooms() {
 async function reloadConfig() {
   try {
     setButtonsDisabled(true);
-    setStatus(t("loading config …"), "warn");
+    setStatus(t("status_loading"), "warn");
 
     await refreshAll();
-    setStatus(t("config updatet."), "ok");
+    setStatus(t("status_reload_ok"), "ok");
   } catch (error) {
     console.error(error);
-    setStatus(`Neu laden fehlgeschlagen: ${error.message}`, "err");
+    setStatus(`${t("status_reload_failed")}: ${error.message}`, "err");
   } finally {
     setButtonsDisabled(false);
   }
@@ -1218,7 +1254,7 @@ async function setupLiveUpdates() {
       updateRoomLiveState();
     }, "state_changed");
   } catch (error) {
-    console.warn(t("Unable to initalize live-update:"), error);
+    console.warn(t("status_live_updates_failed"), error);
   }
 }
 
@@ -1233,7 +1269,7 @@ async function init() {
   try {
     await refreshAll();
     await setupLiveUpdates();
-    setStatus(t("config loaded."), "ok");
+    setStatus(t("status_loaded"), "ok");
   } catch (error) {
     console.error(error);
     setStatus(`Initialisierung fehlgeschlagen: ${error.message}`, "err");
