@@ -94,6 +94,16 @@ Entity:
 
 ------------------------------------------------------------------------
 
+### 3 Modes Available
+
+Comfort: all other rooms are set to the temperature while heating a Room
+
+Balanced: all other Rooms are set -1° to the pre set wehn heating a Room
+
+Energy: all other Rooms are set min temp wehn heating a Room, after the Room reached his temperature the TRV of this room stays open at the set temperature for a time you can set (default 180 seconds).
+
+------------------------------------------------------------------------
+
 # Dashboard
 
 ## Main Interface
