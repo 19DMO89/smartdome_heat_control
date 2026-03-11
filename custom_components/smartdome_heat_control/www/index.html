@@ -466,6 +466,22 @@
                 <option value="adaptive">Adaptive</option>
               </select>
             </div>
+            
+            <div class="field">
+              <label for="energy_residual_heat_hold">Energy residual heat hold (s)</label>
+              <input
+                id="energy_residual_heat_hold"
+                type="number"
+                min="0"
+                step="1"
+                value="180"
+              />
+            </div>
+            
+            <div class="field full mode-hint">
+              In <strong>Energy</strong> mode, the last heated room can stay at its target
+              temperature for a short time to use residual heat from the boiler / pump overrun.
+            </div>
 
             <div class="field">
               <label for="vacation_temperature">Urlaubstemperatur (°C)</label>
