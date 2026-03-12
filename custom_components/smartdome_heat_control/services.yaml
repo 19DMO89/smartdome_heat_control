@@ -1,0 +1,90 @@
+
+update_config:
+  name: Update config
+  description: Update the Smartdome Heat Control configuration.
+  fields:
+    config:
+      name: Config
+      description: Partial or full configuration object.
+      required: true
+      example:
+        enabled: true
+
+add_room:
+  name: Add room
+  description: Add a new room to the Smartdome Heat Control configuration.
+  fields:
+    room_id:
+      name: Room ID
+      description: Unique room identifier.
+      required: false
+      example: kinderzimmer
+    label:
+      name: Label
+      description: Friendly room name.
+      required: false
+      example: Kinderzimmer
+    area_id:
+      name: Area ID
+      description: Home Assistant area ID.
+      required: false
+      example: kinderzimmer
+    thermostat:
+      name: Thermostat
+      description: Climate entity for the room.
+      required: false
+      example: climate.kizi_thermostat
+    sensor:
+      name: Sensor
+      description: Temperature sensor entity for the room.
+      required: false
+      example: sensor.kinderzimmer_temperatur
+    window_sensor:
+      name: Window sensor
+      description: Binary sensor for window open detection.
+      required: false
+      example: binary_sensor.kinderzimmer_fenster
+    target_day:
+      name: Day target
+      description: Day target temperature.
+      required: false
+      example: 22
+    target_night:
+      name: Night target
+      description: Night target temperature.
+      required: false
+      example: 18
+    away_temperature:
+      name: Away temperature
+      description: Away target temperature.
+      required: false
+      example: 17
+    day_start:
+      name: Day start
+      description: Day schedule start time.
+      required: false
+      example: "06:00"
+    night_start:
+      name: Night start
+      description: Night schedule start time.
+      required: false
+      example: "22:00"
+    enabled:
+      name: Enabled
+      description: Whether the room is active.
+      required: false
+      example: true
+
+remove_room:
+  name: Remove room
+  description: Remove a room from the Smartdome Heat Control configuration.
+  fields:
+    room_id:
+      name: Room ID
+      description: Unique room identifier.
+      required: true
+      example: kinderzimmer
+
+reload:
+  name: Reload rooms
+  description: Rediscover rooms and refresh the Smartdome Heat Control configuration.
