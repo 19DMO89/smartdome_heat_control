@@ -1,14 +1,14 @@
 {
   "domain": "smartdome_heat_control",
   "name": "Smartdome Heat Control",
-  "version": "2.5.4",
+  "codeowners": ["@19DMO89"],
   "config_flow": true,
-  "documentation": "https://github.com/19DMO89/smartdome_heat_control",
-  "issue_tracker": "https://github.com/19DMO89/smartdome_heat_control/issues",
   "dependencies": [
     "frontend",
     "http"
   ],
+  "documentation": "https://github.com/19DMO89/smartdome_heat_control",
   "iot_class": "local_push",
-  "codeowners": ["@19DMO89"]
+  "issue_tracker": "https://github.com/19DMO89/smartdome_heat_control/issues",
+  "version": "2.4.0"
 }
