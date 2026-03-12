@@ -1,7 +1,5 @@
 {
-  "name": "Smart Heating Controller",
-  "description": "Intelligent heating control with automatic room discovery, night setback and morning boost.",
+  "name": "Smart Heat Control",
   "render_readme": true,
-  "homeassistant": "2023.1.0",
-  "iot_class": "local_push"
+  "homeassistant": "2026.1.0",
 }
