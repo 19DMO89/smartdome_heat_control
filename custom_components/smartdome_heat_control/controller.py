@@ -369,12 +369,28 @@ class SmartHeatingController:
                 return min_temp
         return 5.0
 
+    def _thermostat_target_step(self, entity_id: str) -> float:
+        """Schrittweite des Thermostats lesen, fallback 0.5°C."""
+        state = self.hass.states.get(entity_id)
+        if state:
+            step = self._safe_float(state.attributes.get("target_temp_step"))
+            if step is not None and step > 0:
+                return step
+        return 0.5
+
+    def _round_to_step(self, value: float, step: float) -> float:
+        """Zieltemperatur auf Schrittweite runden."""
+        if step <= 0:
+            return round(value, 1)
+        return round(round(value / step) * step, 2)
+
     def _set_temp_if_needed(self, entity_id: str, temp: float) -> None:
         """Nur schreiben, wenn sich der gewünschte Smartdome-Zielwert geändert hat."""
-        desired = round(float(temp), 1)
+        step = self._thermostat_target_step(entity_id)
+        desired = self._round_to_step(float(temp), step)
         previous = self._desired_targets.get(entity_id)
 
-        if previous is not None and abs(previous - desired) < 0.1:
+        if previous is not None and abs(previous - desired) < 0.01:
             return
 
         self._desired_targets[entity_id] = desired
@@ -417,27 +433,31 @@ class SmartHeatingController:
         """Zieltemperatur für Räume ohne akuten Heizbedarf je nach Modus."""
         mode = self._get_heating_mode()
         min_temp = self._thermostat_min_temp(thermostat_id)
+        step = self._thermostat_target_step(thermostat_id)
 
         if mode == HEATING_MODE_COMFORT:
-            return target_temp
+            return self._round_to_step(target_temp, step)
 
         if mode == HEATING_MODE_BALANCED:
-            return max(min_temp, target_temp - 1.0)
+            value = max(min_temp, target_temp - 1.0)
+            return self._round_to_step(value, step)
 
         if mode == HEATING_MODE_ENERGY:
             hold_until = self._residual_heat_hold_until.get(room_id, 0.0)
             if hold_until > dt_util.now().timestamp():
-                return target_temp
-            return min_temp
+                return self._round_to_step(target_temp, step)
+            return self._round_to_step(min_temp, step)
 
         if mode == HEATING_MODE_ADAPTIVE:
             learned = float(
                 room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT)
             )
             learned = max(0.2, min(1.0, learned))
-            return max(min_temp, target_temp - learned)
+            value = max(min_temp, target_temp - learned)
+            return self._round_to_step(value, step)
 
-        return max(min_temp, target_temp - 1.0)
+        value = max(min_temp, target_temp - 1.0)
+        return self._round_to_step(value, step)
 
     def _reset_runtime_states(self) -> None:
         """Laufzeit-Heizzustände zurücksetzen."""
@@ -600,7 +620,6 @@ class SmartHeatingController:
 
             was_heating = self._was_heating_last_eval.get(room_id, False)
 
-            # Energy Mode: nach gerade beendeter Heizphase noch kurz offen lassen
             if (
                 self._get_heating_mode() == HEATING_MODE_ENERGY
                 and was_heating
@@ -646,11 +665,15 @@ class SmartHeatingController:
 
             room_state = room_states[room_id]
             target = room_state["target"]
+            step = self._thermostat_target_step(thermostat)
 
             if room_state["pause_active"]:
-                room_target = self._thermostat_min_temp(thermostat)
+                room_target = self._round_to_step(
+                    self._thermostat_min_temp(thermostat),
+                    step,
+                )
             elif room_state["needs_heat"]:
-                room_target = target + boost_delta
+                room_target = self._round_to_step(target + boost_delta, step)
             else:
                 room_target = self._get_idle_target_for_room(
                     room_id,
