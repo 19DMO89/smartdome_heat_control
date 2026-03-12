@@ -430,7 +430,11 @@ class SmartHeatingController:
         thermostat_id: str,
         target_temp: float,
     ) -> float:
-        """Zieltemperatur für Räume ohne akuten Heizbedarf je nach Modus."""
+        """Zieltemperatur für Räume ohne akuten Heizbedarf je nach Modus.
+
+        Wichtig:
+        Toleranz wird hier NICHT verwendet.
+        """
         mode = self._get_heating_mode()
         min_temp = self._thermostat_min_temp(thermostat_id)
         step = self._thermostat_target_step(thermostat_id)
@@ -456,8 +460,7 @@ class SmartHeatingController:
             value = max(min_temp, target_temp - learned)
             return self._round_to_step(value, step)
 
-        value = max(min_temp, target_temp - 1.0)
-        return self._round_to_step(value, step)
+        return self._round_to_step(target_temp, step)
 
     def _reset_runtime_states(self) -> None:
         """Laufzeit-Heizzustände zurücksetzen."""
@@ -501,7 +504,11 @@ class SmartHeatingController:
         pause_active: bool,
         tolerance: float,
     ) -> bool:
-        """Heizbedarf mit Hysterese."""
+        """Heizbedarf mit Hysterese.
+
+        Toleranz wird ausschließlich für die Entscheidung genutzt,
+        ob geheizt werden soll. Sie wird NICHT an das Thermostat gesendet.
+        """
         if pause_active or actual is None:
             room[CONF_ROOM_CALLING_FOR_HEAT] = False
             return False
