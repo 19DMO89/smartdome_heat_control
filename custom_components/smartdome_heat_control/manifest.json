@@ -10,4 +10,5 @@
     "http"
   ],
   "iot_class": "local_push"
+  "codeowners": ["@19DMO89"]
 }
