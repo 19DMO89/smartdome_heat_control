@@ -80,6 +80,8 @@ class SmartHeatingController:
         self._window_paused_rooms: set[str] = set()
         self._enabled = True
         self._unsub: list[Callable[[], None]] = []
+        self._last_sent: dict[str, float] = {}
+        self._command_interval = 45
 
         # Gewünschte Zielwerte, damit nicht bei jedem Evaluate neu geschrieben wird
         self._desired_targets: dict[str, float] = {}
@@ -385,16 +387,33 @@ class SmartHeatingController:
         return round(round(value / step) * step, 2)
 
     def _set_temp_if_needed(self, entity_id: str, temp: float) -> None:
-        """Nur schreiben, wenn sich der gewünschte Smartdome-Zielwert geändert hat."""
+        """Send temperature only if needed and rate-limited."""
+    
         step = self._thermostat_target_step(entity_id)
         desired = self._round_to_step(float(temp), step)
+    
         previous = self._desired_targets.get(entity_id)
-
+    
+        # nichts geändert
         if previous is not None and abs(previous - desired) < 0.01:
             return
-
+    
+        now = dt_util.now().timestamp()
+        last_sent = self._last_sent.get(entity_id, 0)
+    
+        # Rate limit (z.B. 30 Sekunden)
+        if now - last_sent < self._command_interval:
+            return
+    
         self._desired_targets[entity_id] = desired
-
+        self._last_sent[entity_id] = now
+    
+        _LOGGER.debug(
+            "Setting %s target temperature to %.1f°C",
+            entity_id,
+            desired,
+        )
+    
         self.hass.async_create_task(
             self.hass.services.async_call(
                 CLIMATE_DOMAIN,
