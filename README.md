@@ -6,7 +6,7 @@ Smartdome Heat Control
 [![HACS
 Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)\
 [![HA
-Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue.svg)](https://home-assistant.io)\
+Version](https://img.shields.io/badge/Home%20Assistant-2026.1%2B-blue.svg)](https://home-assistant.io)\
 [![License:
 MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
