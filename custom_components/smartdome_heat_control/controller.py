@@ -94,7 +94,11 @@ class SmartHeatingController:
         self._apply_config_defaults()
 
     async def async_start(self) -> None:
-        """Listener registrieren."""
+        """Listener registrieren.
+
+        Wichtig:
+        Es werden nur Sensoren beobachtet, nicht die Thermostate selbst.
+        """
         self._unsubscribe_all()
 
         if not self._enabled:
@@ -104,23 +108,18 @@ class SmartHeatingController:
 
         watch_entities: set[str] = set()
 
-        main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+        # Nur Hauptsensor beobachten, nicht Hauptthermostat
         main_sensor = self._as_entity_id(self.config.get(CONF_MAIN_SENSOR))
-
-        if main_thermostat:
-            watch_entities.add(main_thermostat)
         if main_sensor:
             watch_entities.add(main_sensor)
 
+        # Nur Raumsensoren + Fenstersensoren beobachten, nicht Raumthermostate
         for room in self._active_rooms().values():
             room_sensor = self._as_entity_id(room.get(CONF_ROOM_SENSOR))
-            room_thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
             room_window_sensor = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
 
             if room_sensor:
                 watch_entities.add(room_sensor)
-            if room_thermostat:
-                watch_entities.add(room_thermostat)
             if room_window_sensor:
                 watch_entities.add(room_window_sensor)
 
@@ -133,6 +132,7 @@ class SmartHeatingController:
                 )
             )
 
+        # Fallback / Zeitlogik
         self._unsub.append(
             async_track_time_change(
                 self.hass,
