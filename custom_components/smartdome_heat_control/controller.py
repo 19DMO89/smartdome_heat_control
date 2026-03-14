@@ -445,11 +445,8 @@ class SmartHeatingController:
         last_sent = self._last_command_sent_at.get(entity_id, 0.0)
 
         if min_interval > 0 and (now_ts - last_sent) < min_interval:
-            # Ziel intern merken, aber jetzt keinen Befehl schicken
-            self._desired_targets[entity_id] = desired
             return
-
-        self._desired_targets[entity_id] = desired
+            
         self._last_command_sent_at[entity_id] = now_ts
 
         self.hass.async_create_task(
