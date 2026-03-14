@@ -74,6 +74,7 @@ HEATING_MODE_ADAPTIVE = "adaptive"
 ROOM_STATE_IDLE = "idle"
 ROOM_STATE_HEATING = "heating"
 ROOM_STATE_RESIDUAL_HOLD = "residual_hold"
+ROOM_STATE_WINDOW_PAUSE = "window_pause"
 
 
 class SmartHeatingController:
@@ -97,6 +98,9 @@ class SmartHeatingController:
 
         # Letzte echte Schreibzeit pro Thermostat
         self._last_command_sent_at: dict[str, float] = {}
+
+        # Zuletzt wirklich angewendeter effektiver Zustand pro Raum
+        self._last_applied_room_state: dict[str, str] = {}
 
         self._apply_config_defaults()
 
@@ -341,20 +345,36 @@ class SmartHeatingController:
 
     def _effective_target_for_room(self, room: dict[str, Any]) -> float:
         """Ermittelt die gültige Zieltemperatur."""
-        vacation_enabled = bool(self.config.get(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED))
+        vacation_enabled = bool(
+            self.config.get(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
+        )
         away_enabled = bool(self.config.get(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED))
 
         if vacation_enabled:
             vacation_temp = self._safe_float(
-                self.config.get(CONF_VACATION_TEMPERATURE, DEFAULT_VACATION_TEMPERATURE)
+                self.config.get(
+                    CONF_VACATION_TEMPERATURE,
+                    DEFAULT_VACATION_TEMPERATURE,
+                )
             )
-            return vacation_temp if vacation_temp is not None else float(DEFAULT_VACATION_TEMPERATURE)
+            return (
+                vacation_temp
+                if vacation_temp is not None
+                else float(DEFAULT_VACATION_TEMPERATURE)
+            )
 
         if away_enabled:
             away_temp = self._safe_float(
-                room.get(CONF_ROOM_AWAY_TEMPERATURE, DEFAULT_ROOM_AWAY_TEMPERATURE)
+                room.get(
+                    CONF_ROOM_AWAY_TEMPERATURE,
+                    DEFAULT_ROOM_AWAY_TEMPERATURE,
+                )
             )
-            return away_temp if away_temp is not None else float(DEFAULT_ROOM_AWAY_TEMPERATURE)
+            return (
+                away_temp
+                if away_temp is not None
+                else float(DEFAULT_ROOM_AWAY_TEMPERATURE)
+            )
 
         return self._base_target_for_room(room)
 
@@ -393,11 +413,13 @@ class SmartHeatingController:
 
         return CONTROL_PROFILE_STANDARD
 
+    def _is_self_regulating_room(self, room: dict[str, Any]) -> bool:
+        """Prüfen, ob der Raum ein selbst regelndes Thermostat nutzt."""
+        return self._get_room_control_profile(room) == CONTROL_PROFILE_SELF_REGULATING
+
     def _get_min_command_interval_for_room(self, room: dict[str, Any]) -> float:
         """Mindestabstand zwischen Befehlen je nach Raumprofil."""
-        profile = self._get_room_control_profile(room)
-
-        if profile == CONTROL_PROFILE_SELF_REGULATING:
+        if self._is_self_regulating_room(room):
             return 120.0
 
         return 0.0
@@ -518,6 +540,7 @@ class SmartHeatingController:
         self._room_state.clear()
         self._residual_heat_hold_until.clear()
         self._last_command_sent_at.clear()
+        self._last_applied_room_state.clear()
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
@@ -531,14 +554,25 @@ class SmartHeatingController:
                 continue
 
             target = self._effective_target_for_room(room)
-            idle_target = self._get_idle_target_for_room(room_id, room, thermostat, target)
+            idle_target = self._get_idle_target_for_room(
+                room_id,
+                room,
+                thermostat,
+                target,
+            )
             min_interval = self._get_min_command_interval_for_room(room)
-            self._set_temp_if_needed(thermostat, idle_target, min_interval=min_interval)
+            self._set_temp_if_needed(
+                thermostat,
+                idle_target,
+                min_interval=min_interval,
+            )
 
         main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
         if main_thermostat:
             try:
-                main_target = max(self._effective_target_for_room(room) for room in rooms.values())
+                main_target = max(
+                    self._effective_target_for_room(room) for room in rooms.values()
+                )
                 self._set_temp_if_needed(main_thermostat, main_target)
             except ValueError:
                 pass
@@ -726,17 +760,20 @@ class SmartHeatingController:
 
             if room_state["pause_active"]:
                 room_target = self._thermostat_min_temp(thermostat)
+                effective_state = ROOM_STATE_WINDOW_PAUSE
             elif state == ROOM_STATE_HEATING:
                 room_target = self._get_heating_target_for_room(
                     thermostat,
                     target,
                     boost_delta,
                 )
+                effective_state = ROOM_STATE_HEATING
             elif state == ROOM_STATE_RESIDUAL_HOLD:
                 room_target = self._get_residual_hold_target_for_room(
                     thermostat,
                     target,
                 )
+                effective_state = ROOM_STATE_RESIDUAL_HOLD
             else:
                 room_target = self._get_idle_target_for_room(
                     room_id,
@@ -744,12 +781,38 @@ class SmartHeatingController:
                     thermostat,
                     target,
                 )
+                effective_state = ROOM_STATE_IDLE
 
-            self._set_temp_if_needed(
-                thermostat,
-                room_target,
-                min_interval=min_interval,
-            )
+            if self._is_self_regulating_room(room):
+                last_state = self._last_applied_room_state.get(room_id)
+
+                if last_state != effective_state:
+                    self._set_temp_if_needed(
+                        thermostat,
+                        room_target,
+                        min_interval=min_interval,
+                    )
+                    self._last_applied_room_state[room_id] = effective_state
+                else:
+                    desired = self._round_to_step(
+                        float(room_target),
+                        self._thermostat_target_step(thermostat),
+                    )
+                    previous = self._desired_targets.get(thermostat)
+
+                    if previous is None or abs(previous - desired) >= 0.01:
+                        self._set_temp_if_needed(
+                            thermostat,
+                            room_target,
+                            min_interval=min_interval,
+                        )
+            else:
+                self._set_temp_if_needed(
+                    thermostat,
+                    room_target,
+                    min_interval=min_interval,
+                )
+                self._last_applied_room_state[room_id] = effective_state
 
     @callback
     def _on_state_change(self, event: Event) -> None:
@@ -759,4 +822,4 @@ class SmartHeatingController:
     @callback
     def _on_minute_tick(self, now) -> None:
         """Zyklische Auswertung jede Minute."""
-        self._evaluate()
+        self._evaluate()          
