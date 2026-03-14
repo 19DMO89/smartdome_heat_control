@@ -383,18 +383,28 @@
     <div class="header">
       <div class="title-block">
         <h1 data-i18n="title">Smartdome Heat Control</h1>
-        <p data-i18n="subtitle">Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.</p>
-        <div class="version-badge" id="versionBadge" data-i18n="version">Version</div>
+        <p data-i18n="subtitle">
+          Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.
+        </p>
+        <div class="version-badge" id="versionBadge">Version</div>
       </div>
 
       <div class="actions">
-        <button id="reloadRoomsBtn" class="ghost" data-i18n="reload_rooms">Räume neu erkennen</button>
-        <button id="reloadConfigBtn" class="ghost" data-i18n="reload_config">Neu laden</button>
-        <button id="saveBtn" class="primary" data-i18n="save_config">Konfiguration speichern</button>
+        <button id="reloadRoomsBtn" class="ghost" data-i18n="reload_rooms">
+          Räume neu erkennen
+        </button>
+        <button id="reloadConfigBtn" class="ghost" data-i18n="reload_config">
+          Neu laden
+        </button>
+        <button id="saveBtn" class="primary" data-i18n="save_config">
+          Konfiguration speichern
+        </button>
       </div>
     </div>
 
-    <div id="statusBox" class="status warn" data-i18n="status_loading">Lade Konfiguration …</div>
+    <div id="statusBox" class="status warn" data-i18n="status_loading">
+      Lade Konfiguration …
+    </div>
 
     <div class="layout">
       <div class="sticky-col">
@@ -404,8 +414,10 @@
           <div class="field full" style="margin-bottom: 14px;">
             <div class="toggle">
               <div class="toggle-text">
-                <strong>Steuerung aktiv</strong>
-                <span>Wenn ausgeschaltet, greift die Integration nicht mehr in Thermostate ein.</span>
+                <strong data-i18n="control_enabled">Steuerung aktiv</strong>
+                <span data-i18n="control_enabled_hint">
+                  Wenn ausgeschaltet, greift die Integration nicht mehr in Thermostate ein.
+                </span>
               </div>
               <input id="enabled" type="checkbox" />
             </div>
@@ -414,8 +426,10 @@
           <div class="field full" style="margin-bottom: 14px;">
             <div class="toggle">
               <div class="toggle-text">
-                <strong>Urlaubsmodus</strong>
-                <span>Setzt alle Räume auf die globale Urlaubstemperatur.</span>
+                <strong data-i18n="vacation_mode">Urlaubsmodus</strong>
+                <span data-i18n="vacation_mode_hint">
+                  Setzt alle Räume auf die globale Urlaubstemperatur.
+                </span>
               </div>
               <input id="vacation_enabled" type="checkbox" />
             </div>
@@ -424,51 +438,59 @@
           <div class="field full" style="margin-bottom: 14px;">
             <div class="toggle">
               <div class="toggle-text">
-                <strong>Nicht Zuhause</strong>
-                <span>Verwendet pro Raum die konfigurierte Away-Temperatur.</span>
+                <strong data-i18n="away_mode">Nicht Zuhause</strong>
+                <span data-i18n="away_mode_hint">
+                  Verwendet pro Raum die konfigurierte Away-Temperatur.
+                </span>
               </div>
               <input id="away_enabled" type="checkbox" />
             </div>
           </div>
 
           <div class="sub-actions" style="margin-bottom: 16px;">
-            <button id="toggleVacationBtn" type="button" class="ghost">🏖 Urlaub aktivieren</button>
-            <button id="toggleAwayBtn" type="button" class="ghost">🚪 Nicht Zuhause aktivieren</button>
+            <button id="toggleVacationBtn" type="button" class="ghost" data-i18n="btn_vacation_enable">
+              🏖 Urlaub aktivieren
+            </button>
+            <button id="toggleAwayBtn" type="button" class="ghost" data-i18n="btn_away_enable">
+              🚪 Nicht Zuhause aktivieren
+            </button>
           </div>
 
           <div class="fields">
             <div class="field">
-              <label for="main_thermostat">Hauptthermostat</label>
+              <label for="main_thermostat" data-i18n="main_thermostat">Hauptthermostat</label>
               <select id="main_thermostat"></select>
             </div>
 
             <div class="field">
-              <label for="main_sensor">Temperatursensor Hauptthermostat</label>
+              <label for="main_sensor" data-i18n="main_sensor">Temperatursensor Hauptthermostat</label>
               <select id="main_sensor"></select>
             </div>
 
             <div class="field">
-              <label for="boost_delta">Boost-Delta (°C)</label>
+              <label for="boost_delta" data-i18n="boost_delta">Boost-Delta (°C)</label>
               <input id="boost_delta" type="number" min="0" step="0.1" />
             </div>
 
             <div class="field">
-              <label for="tolerance">Toleranz (°C)</label>
+              <label for="tolerance" data-i18n="tolerance">Toleranz (°C)</label>
               <input id="tolerance" type="number" min="0" step="0.1" />
             </div>
 
             <div class="field">
-              <label for="heating_mode">Heizmodus</label>
+              <label for="heating_mode" data-i18n="heating_mode">Heizmodus</label>
               <select id="heating_mode">
-                <option value="comfort">Comfort</option>
-                <option value="balanced">Balanced</option>
-                <option value="energy">Energy</option>
-                <option value="adaptive">Adaptive</option>
+                <option value="comfort" data-i18n="mode_comfort">Comfort</option>
+                <option value="balanced" data-i18n="mode_balanced">Balanced</option>
+                <option value="energy" data-i18n="mode_energy">Energy</option>
+                <option value="adaptive" data-i18n="mode_adaptive">Adaptive</option>
               </select>
             </div>
-            
+
             <div class="field">
-              <label for="energy_residual_heat_hold">Energy residual heat hold (s)</label>
+              <label for="energy_residual_heat_hold" data-i18n="energy_residual_heat_hold">
+                Energy residual heat hold (s)
+              </label>
               <input
                 id="energy_residual_heat_hold"
                 type="number"
@@ -477,18 +499,20 @@
                 value="180"
               />
             </div>
-            
+
             <div class="field full mode-hint">
               In <strong>Energy</strong> mode, the last heated room can stay at its target
               temperature for a short time to use residual heat from the boiler / pump overrun.
             </div>
 
             <div class="field">
-              <label for="vacation_temperature">Urlaubstemperatur (°C)</label>
+              <label for="vacation_temperature" data-i18n="vacation_temperature">
+                Urlaubstemperatur (°C)
+              </label>
               <input id="vacation_temperature" type="number" min="5" max="20" step="0.1" />
             </div>
 
-            <div class="field full mode-hint">
+            <div class="field full mode-hint" data-i18n="mode_hint">
               <strong>Comfort</strong> hält Ventile länger offen,
               <strong>Balanced</strong> ist der empfohlene Standard,
               <strong>Energy</strong> schließt früher,
@@ -496,26 +520,28 @@
             </div>
 
             <div class="field">
-              <label for="night_start">Globale Nacht-Startzeit</label>
+              <label for="night_start" data-i18n="night_start">Globale Nacht-Startzeit</label>
               <input id="night_start" type="time" />
             </div>
 
             <div class="field">
-              <label for="morning_boost_start">Globale Tag-Startzeit</label>
+              <label for="morning_boost_start" data-i18n="morning_boost_start">Globale Tag-Startzeit</label>
               <input id="morning_boost_start" type="time" />
             </div>
 
             <div class="field">
-              <label for="morning_boost_end">Morgen-Boost Ende</label>
+              <label for="morning_boost_end" data-i18n="morning_boost_end">Morgen-Boost Ende</label>
               <input id="morning_boost_end" type="time" />
             </div>
           </div>
 
           <div class="sub-actions">
-            <button id="applyTimesToRoomsBtn" class="ghost">Globale Zeiten in alle Räume übernehmen</button>
+            <button id="applyTimesToRoomsBtn" class="ghost" data-i18n="apply_times">
+              Globale Zeiten in alle Räume übernehmen
+            </button>
           </div>
 
-          <div class="footer-note">
+          <div class="footer-note" data-i18n="footer_note">
             Der Übernehmen-Button setzt für alle Räume:
             <strong>Tag-Start = globale Tag-Startzeit</strong> und
             <strong>Nacht-Start = globale Nacht-Startzeit</strong>.
@@ -526,11 +552,15 @@
       <section class="card rooms-card">
         <div class="rooms-header">
           <div>
-            <h2 style="margin-bottom: 6px;">Räume</h2>
-            <div class="muted">Rechts scrollbar, damit die Haupteinstellungen sichtbar bleiben.</div>
+            <h2 style="margin-bottom: 6px;" data-i18n="rooms_title">Räume</h2>
+            <div class="muted" data-i18n="rooms_subtitle">
+              Rechts scrollbar, damit die Haupteinstellungen sichtbar bleiben.
+            </div>
           </div>
 
-          <button id="addRoomBtn" class="success">Raum hinzufügen</button>
+          <button id="addRoomBtn" class="success" data-i18n="add_room">
+            Raum hinzufügen
+          </button>
         </div>
 
         <div class="rooms-scroll">
@@ -542,4 +572,4 @@
 
   <script type="module" src="./app.js"></script>
 </body>
-                </html>
+</html>
