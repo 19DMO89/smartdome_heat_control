@@ -19,6 +19,8 @@ from .const import (
     CONF_AWAY_ENABLED,
     CONF_HEATING_MODE,
     CONF_ROOMS,
+    CONF_ROOM_CONTROL_PROFILE,
+    DEFAULT_ROOM_CONTROL_PROFILE,
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_CALLING_FOR_HEAT,
     CONF_ROOM_CYCLE_PEAK_TEMP,
@@ -223,6 +225,10 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             ),
             CONF_ROOM_CYCLE_TARGET_TEMP: room.get(CONF_ROOM_CYCLE_TARGET_TEMP),
             CONF_ROOM_CYCLE_PEAK_TEMP: room.get(CONF_ROOM_CYCLE_PEAK_TEMP),
+            "control_profile": room.get(
+            "control_profile",
+            DEFAULT_ROOM_CONTROL_PROFILE,
+            ),
         }
 
     return normalized
