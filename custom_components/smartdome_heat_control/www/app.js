@@ -421,6 +421,7 @@ function normalizeRoom(roomId, room) {
     target_day: normalizeNumber(room?.target_day, 21.0),
     target_night: normalizeNumber(room?.target_night, 18.0),
     away_temperature: normalizeNumber(room?.away_temperature, 17.0),
+    control_profile: typeof room?.control_profile === "string" && room.control_profile.trim() ? room.control_profile.trim() : "standard",
     day_start: normalizeTime(room?.day_start, ""),
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
@@ -815,6 +816,18 @@ function createRoomCard(roomId, room) {
       <div class="field">
         <label>${escapeHtml(t("room_window_sensor"))}</label>
         <select class="room-window-sensor"></select>
+      </div>
+
+      <div class="field">
+        <label>Thermostat control profile</label>
+        <select class="room-control-profile">
+          <option value="standard" ${
+            room.control_profile === "standard" ? "selected" : ""
+          }>Standard thermostat</option>
+           <optionvalue="self_regulating" ${
+            room.control_profile === "self_regulating" ? "selected" : ""
+          }>Self-regulating thermostat</option>
+        </select>
       </div>
 
       <div class="field">
