@@ -100,6 +100,9 @@ const I18N = {
     room_thermostat: "Thermostat",
     room_sensor: "Temperature sensor",
     room_window_sensor: "Window sensor",
+    room_control_profile: "Thermostat control profile",
+    control_profile_standard: "Standard thermostat",
+    control_profile_self_regulating: "Self-regulating thermostat",
     room_target_day: "Day target temperature (°C)",
     room_target_night: "Night target temperature (°C)",
     room_away_temperature: "Away temperature (°C)",
@@ -202,6 +205,9 @@ const I18N = {
     room_thermostat: "Thermostat",
     room_sensor: "Temperatursensor",
     room_window_sensor: "Fensterkontakt",
+    room_control_profile: "Thermostat-Regelprofil",
+    control_profile_standard: "Standard-Thermostat",
+    control_profile_self_regulating: "Selbst regelndes Thermostat",
     room_target_day: "Zieltemperatur Tag (°C)",
     room_target_night: "Zieltemperatur Nacht (°C)",
     room_away_temperature: "Away-Temperatur (°C)",
@@ -236,6 +242,7 @@ function getPanelVersion() {
 const PANEL_VERSION = getPanelVersion();
 
 const HEATING_MODES = ["comfort", "balanced", "energy", "adaptive"];
+const CONTROL_PROFILES = ["standard", "self_regulating"];
 
 const DEFAULTS = {
   enabled: true,
@@ -407,6 +414,15 @@ function normalizeHeatingMode(value) {
     : DEFAULTS.heating_mode;
 }
 
+function normalizeControlProfile(value) {
+  if (typeof value !== "string") {
+    return "standard";
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return CONTROL_PROFILES.includes(normalized) ? normalized : "standard";
+}
+
 function normalizeRoom(roomId, room) {
   return {
     label:
@@ -418,10 +434,10 @@ function normalizeRoom(roomId, room) {
     sensor: typeof room?.sensor === "string" ? room.sensor : "",
     window_sensor:
       typeof room?.window_sensor === "string" ? room.window_sensor : "",
+    control_profile: normalizeControlProfile(room?.control_profile),
     target_day: normalizeNumber(room?.target_day, 21.0),
     target_night: normalizeNumber(room?.target_night, 18.0),
     away_temperature: normalizeNumber(room?.away_temperature, 17.0),
-    control_profile: typeof room?.control_profile === "string" && room.control_profile.trim() ? room.control_profile.trim() : "standard",
     day_start: normalizeTime(room?.day_start, ""),
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
@@ -819,14 +835,14 @@ function createRoomCard(roomId, room) {
       </div>
 
       <div class="field">
-        <label>Thermostat control profile</label>
+        <label>${escapeHtml(t("room_control_profile"))}</label>
         <select class="room-control-profile">
           <option value="standard" ${
             room.control_profile === "standard" ? "selected" : ""
-          }>Standard thermostat</option>
-           <optionvalue="self_regulating" ${
+          }>${escapeHtml(t("control_profile_standard"))}</option>
+          <option value="self_regulating" ${
             room.control_profile === "self_regulating" ? "selected" : ""
-          }>Self-regulating thermostat</option>
+          }>${escapeHtml(t("control_profile_self_regulating"))}</option>
         </select>
       </div>
 
@@ -993,12 +1009,13 @@ function collectFormState() {
       thermostat: node.querySelector(".room-thermostat").value || "",
       sensor: node.querySelector(".room-sensor").value || "",
       window_sensor: node.querySelector(".room-window-sensor").value || "",
+      control_profile:
+        node.querySelector(".room-control-profile")?.value || "standard",
       target_day: node.querySelector(".room-target-day").value,
       target_night: node.querySelector(".room-target-night").value,
       away_temperature: node.querySelector(".room-away-temperature").value,
       day_start: node.querySelector(".room-day-start").value || "",
       night_start: node.querySelector(".room-night-start").value || "",
-      control_profile: node.querySelector(".room-control-profile")?.value || "standard",
       enabled: node.querySelector(".room-enabled").checked,
       learned_overshoot: existingRoom.learned_overshoot,
     });
