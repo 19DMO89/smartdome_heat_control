@@ -998,6 +998,7 @@ function collectFormState() {
       away_temperature: node.querySelector(".room-away-temperature").value,
       day_start: node.querySelector(".room-day-start").value || "",
       night_start: node.querySelector(".room-night-start").value || "",
+      control_profile: node.querySelector(".room-control-profile")?.value || "standard",
       enabled: node.querySelector(".room-enabled").checked,
       learned_overshoot: existingRoom.learned_overshoot,
     });
@@ -1019,6 +1020,7 @@ function addRoom() {
     thermostat: "",
     sensor: "",
     window_sensor: "",
+    control_profile: "standard",
     target_day: 21.0,
     target_night: 18.0,
     away_temperature: 17.0,
