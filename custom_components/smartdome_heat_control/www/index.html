@@ -461,6 +461,30 @@
       flex-wrap: wrap;
     }
 
+    .schedule-copy-rooms-list {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .schedule-copy-room {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #0f151d;
+    }
+
+    .schedule-copy-room input[type="checkbox"] {
+      flex: 0 0 auto;
+    }
+
+    .schedule-copy-room-label {
+      font-size: 14px;
+    }
+
     @media (max-width: 1100px) {
       .layout {
         grid-template-columns: 1fr;
@@ -718,10 +742,30 @@
       <div class="schedule-footer">
         <div class="schedule-footer-left">
           <button id="schedule-add" type="button" class="ghost">Add time block</button>
+          <button id="schedule-copy-rooms" type="button" class="ghost">Copy to other rooms</button>
         </div>
         <div class="schedule-footer-right">
           <button id="schedule-cancel" type="button" class="ghost">Cancel</button>
           <button id="schedule-save" type="button" class="primary">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="schedule-copy-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="schedule-copy-title">Copy weekly schedule</h2>
+        <button id="schedule-copy-close" type="button" class="ghost">✕</button>
+      </div>
+
+      <div id="schedule-copy-rooms-list" class="schedule-copy-rooms-list"></div>
+
+      <div class="schedule-footer">
+        <div class="schedule-footer-left"></div>
+        <div class="schedule-footer-right">
+          <button id="schedule-copy-cancel" type="button" class="ghost">Cancel</button>
+          <button id="schedule-copy-apply" type="button" class="primary">Apply</button>
         </div>
       </div>
     </div>
