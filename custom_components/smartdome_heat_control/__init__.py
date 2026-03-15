@@ -40,6 +40,8 @@ from .const import (
     DEFAULT_ROOM_AWAY_TEMPERATURE,
     DEFAULT_VACATION_ENABLED,
     DEFAULT_VACATION_TEMPERATURE,
+    CONF_ROOM_WEEKLY_SCHEDULE,
+    DEFAULT_ROOM_WEEKLY_SCHEDULE,
     DOMAIN,
     PLATFORMS,
     SERVICE_ADD_ROOM,
@@ -222,6 +224,10 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             CONF_ROOM_HEATING_CYCLE_ACTIVE: room.get(
                 CONF_ROOM_HEATING_CYCLE_ACTIVE,
                 False,
+            ),
+            CONF_ROOM_WEEKLY_SCHEDULE: room.get(
+                CONF_ROOM_WEEKLY_SCHEDULE,
+                DEFAULT_ROOM_WEEKLY_SCHEDULE,
             ),
             CONF_ROOM_CYCLE_TARGET_TEMP: room.get(CONF_ROOM_CYCLE_TARGET_TEMP),
             CONF_ROOM_CYCLE_PEAK_TEMP: room.get(CONF_ROOM_CYCLE_PEAK_TEMP),
