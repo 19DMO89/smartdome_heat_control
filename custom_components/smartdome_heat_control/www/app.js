@@ -19,6 +19,26 @@ function getUiLanguage() {
 
 const UI_LANG = getUiLanguage();
 
+const WEEK_DAYS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+const DEFAULT_WEEKLY_SCHEDULE = {
+  monday: [],
+  tuesday: [],
+  wednesday: [],
+  thursday: [],
+  friday: [],
+  saturday: [],
+  sunday: [],
+};
+
 const I18N = {
   en: {
     title: "Smartdome Heat Control",
@@ -113,6 +133,7 @@ const I18N = {
     room_heating_now: "Room is currently heating",
     room_window_open: "Window open",
     room_new: "New room",
+    room_schedule: "Schedule",
 
     select_not_set: "— Not set —",
     select_choose: "— Please choose —",
@@ -122,6 +143,21 @@ const I18N = {
     mode_balanced: "Balanced",
     mode_energy: "Energy",
     mode_adaptive: "Adaptive",
+
+    schedule_title: "Weekly schedule",
+    schedule_add: "Add time block",
+    schedule_save: "Save",
+    schedule_cancel: "Cancel",
+    schedule_empty: "No entries for this day yet.",
+    schedule_time: "Time",
+    schedule_temperature: "Temperature",
+    day_monday: "Mon",
+    day_tuesday: "Tue",
+    day_wednesday: "Wed",
+    day_thursday: "Thu",
+    day_friday: "Fri",
+    day_saturday: "Sat",
+    day_sunday: "Sun",
   },
 
   de: {
@@ -218,6 +254,7 @@ const I18N = {
     room_heating_now: "Raum heizt gerade",
     room_window_open: "Fenster offen",
     room_new: "Neuer Raum",
+    room_schedule: "Wochenschema",
 
     select_not_set: "— Nicht gesetzt —",
     select_choose: "— Bitte wählen —",
@@ -227,6 +264,21 @@ const I18N = {
     mode_balanced: "Balanced",
     mode_energy: "Energy",
     mode_adaptive: "Adaptive",
+
+    schedule_title: "Wochenschema",
+    schedule_add: "Zeitblock hinzufügen",
+    schedule_save: "Speichern",
+    schedule_cancel: "Abbrechen",
+    schedule_empty: "Für diesen Tag sind noch keine Einträge vorhanden.",
+    schedule_time: "Zeit",
+    schedule_temperature: "Temperatur",
+    day_monday: "Mo",
+    day_tuesday: "Di",
+    day_wednesday: "Mi",
+    day_thursday: "Do",
+    day_friday: "Fr",
+    day_saturday: "Sa",
+    day_sunday: "So",
   },
 };
 
@@ -293,10 +345,23 @@ const els = {
   awayEnabled: document.getElementById("away_enabled"),
   roomsContainer: document.getElementById("roomsContainer"),
   versionBadge: document.getElementById("versionBadge"),
+
+  scheduleModal: document.getElementById("schedule-modal"),
+  scheduleModalTitle: document.getElementById("schedule-modal-title"),
+  scheduleClose: document.getElementById("schedule-close"),
+  scheduleCancel: document.getElementById("schedule-cancel"),
+  scheduleAdd: document.getElementById("schedule-add"),
+  scheduleSave: document.getElementById("schedule-save"),
+  scheduleEntries: document.getElementById("schedule-entries"),
+  scheduleDayButtons: document.querySelectorAll(".schedule-days button"),
 };
 
 let unsubscribeStateChanged = null;
 let isEditing = false;
+
+let scheduleRoomId = null;
+let currentScheduleDay = "monday";
+let draftWeeklySchedule = null;
 
 function setStatus(message, type = "warn") {
   els.statusBox.textContent = message;
@@ -352,6 +417,39 @@ function applyTranslations() {
   document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
     const key = el.dataset.i18nPlaceholder;
     el.placeholder = t(key);
+  });
+
+  if (els.scheduleModalTitle) {
+    els.scheduleModalTitle.textContent = t("schedule_title");
+  }
+
+  if (els.scheduleAdd) {
+    els.scheduleAdd.textContent = t("schedule_add");
+  }
+
+  if (els.scheduleSave) {
+    els.scheduleSave.textContent = t("schedule_save");
+  }
+
+  if (els.scheduleCancel) {
+    els.scheduleCancel.textContent = t("schedule_cancel");
+  }
+
+  const dayLabelMap = {
+    monday: "day_monday",
+    tuesday: "day_tuesday",
+    wednesday: "day_wednesday",
+    thursday: "day_thursday",
+    friday: "day_friday",
+    saturday: "day_saturday",
+    sunday: "day_sunday",
+  };
+
+  els.scheduleDayButtons.forEach((btn) => {
+    const key = dayLabelMap[btn.dataset.day];
+    if (key) {
+      btn.textContent = t(key);
+    }
   });
 }
 
@@ -423,6 +521,27 @@ function normalizeControlProfile(value) {
   return CONTROL_PROFILES.includes(normalized) ? normalized : "standard";
 }
 
+function normalizeScheduleEntry(entry) {
+  return {
+    start: normalizeTime(entry?.start, "06:00"),
+    temperature: normalizeNumber(entry?.temperature, 21.0),
+  };
+}
+
+function normalizeWeeklySchedule(schedule) {
+  const source =
+    schedule && typeof schedule === "object" ? schedule : DEFAULT_WEEKLY_SCHEDULE;
+
+  const normalized = {};
+  for (const day of WEEK_DAYS) {
+    const entries = Array.isArray(source[day]) ? source[day] : [];
+    normalized[day] = entries.map((entry) => normalizeScheduleEntry(entry));
+    normalized[day].sort((a, b) => a.start.localeCompare(b.start));
+  }
+
+  return normalized;
+}
+
 function normalizeRoom(roomId, room) {
   return {
     label:
@@ -438,6 +557,7 @@ function normalizeRoom(roomId, room) {
     target_day: normalizeNumber(room?.target_day, 21.0),
     target_night: normalizeNumber(room?.target_night, 18.0),
     away_temperature: normalizeNumber(room?.away_temperature, 17.0),
+    weekly_schedule: normalizeWeeklySchedule(room?.weekly_schedule),
     day_start: normalizeTime(room?.day_start, ""),
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
@@ -798,6 +918,9 @@ function createRoomCard(roomId, room) {
           <input class="room-enabled" type="checkbox" ${room.enabled ? "checked" : ""} />
           <span>${escapeHtml(t("room_active"))}</span>
         </span>
+        <button class="ghost room-schedule-btn" type="button">${escapeHtml(
+          t("room_schedule")
+        )}</button>
         <button class="danger room-delete-btn" type="button">${escapeHtml(
           t("room_delete")
         )}</button>
@@ -887,6 +1010,7 @@ function createRoomCard(roomId, room) {
   const sensorSelect = wrapper.querySelector(".room-sensor");
   const windowSensorSelect = wrapper.querySelector(".room-window-sensor");
   const deleteBtn = wrapper.querySelector(".room-delete-btn");
+  const scheduleBtn = wrapper.querySelector(".room-schedule-btn");
 
   buildSelectOptions(thermostatSelect, state.climates, room.thermostat || "", {
     includeEmpty: true,
@@ -911,6 +1035,10 @@ function createRoomCard(roomId, room) {
   deleteBtn.addEventListener("click", () => {
     delete state.config.rooms[roomId];
     renderRooms();
+  });
+
+  scheduleBtn.addEventListener("click", () => {
+    openScheduleModal(roomId);
   });
 
   return wrapper;
@@ -1014,6 +1142,7 @@ function collectFormState() {
       target_day: node.querySelector(".room-target-day").value,
       target_night: node.querySelector(".room-target-night").value,
       away_temperature: node.querySelector(".room-away-temperature").value,
+      weekly_schedule: existingRoom.weekly_schedule || DEFAULT_WEEKLY_SCHEDULE,
       day_start: node.querySelector(".room-day-start").value || "",
       night_start: node.querySelector(".room-night-start").value || "",
       enabled: node.querySelector(".room-enabled").checked,
@@ -1041,6 +1170,7 @@ function addRoom() {
     target_day: 21.0,
     target_night: 18.0,
     away_temperature: 17.0,
+    weekly_schedule: structuredClone(DEFAULT_WEEKLY_SCHEDULE),
     day_start: "",
     night_start: "",
     enabled: true,
@@ -1185,6 +1315,179 @@ async function refreshAll() {
   renderRooms();
 }
 
+function getDayLabel(day) {
+  const map = {
+    monday: t("day_monday"),
+    tuesday: t("day_tuesday"),
+    wednesday: t("day_wednesday"),
+    thursday: t("day_thursday"),
+    friday: t("day_friday"),
+    saturday: t("day_saturday"),
+    sunday: t("day_sunday"),
+  };
+  return map[day] || day;
+}
+
+function openScheduleModal(roomId) {
+  const room = state.config.rooms?.[roomId];
+  if (!room) {
+    return;
+  }
+
+  scheduleRoomId = roomId;
+  currentScheduleDay = "monday";
+  draftWeeklySchedule = normalizeWeeklySchedule(room.weekly_schedule);
+
+  if (els.scheduleModalTitle) {
+    const label = room.label || roomId;
+    els.scheduleModalTitle.textContent = `${t("schedule_title")} · ${label}`;
+  }
+
+  els.scheduleModal.classList.remove("hidden");
+  renderScheduleEditor();
+}
+
+function closeScheduleModal() {
+  scheduleRoomId = null;
+  currentScheduleDay = "monday";
+  draftWeeklySchedule = null;
+  els.scheduleModal.classList.add("hidden");
+}
+
+function renderScheduleDayButtons() {
+  els.scheduleDayButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.day === currentScheduleDay);
+    btn.textContent = getDayLabel(btn.dataset.day);
+  });
+}
+
+function sortScheduleEntries(entries) {
+  entries.sort((a, b) => a.start.localeCompare(b.start));
+}
+
+function renderScheduleEditor() {
+  renderScheduleDayButtons();
+
+  if (!draftWeeklySchedule || !scheduleRoomId) {
+    els.scheduleEntries.innerHTML = "";
+    return;
+  }
+
+  const entries = draftWeeklySchedule[currentScheduleDay] || [];
+  els.scheduleEntries.innerHTML = "";
+
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "schedule-empty";
+    empty.textContent = t("schedule_empty");
+    els.scheduleEntries.appendChild(empty);
+    return;
+  }
+
+  entries.forEach((entry, index) => {
+    const row = document.createElement("div");
+    row.className = "schedule-entry";
+
+    row.innerHTML = `
+      <input class="schedule-time" type="time" value="${escapeHtml(
+        entry.start
+      )}" />
+      <input class="schedule-temp" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+        entry.temperature
+      )}" />
+      <button type="button" class="danger schedule-delete">✕</button>
+    `;
+
+    const timeInput = row.querySelector(".schedule-time");
+    const tempInput = row.querySelector(".schedule-temp");
+    const deleteBtn = row.querySelector(".schedule-delete");
+
+    timeInput.addEventListener("change", () => {
+      entry.start = normalizeTime(timeInput.value, "06:00");
+      sortScheduleEntries(entries);
+      renderScheduleEditor();
+    });
+
+    tempInput.addEventListener("change", () => {
+      entry.temperature = normalizeNumber(tempInput.value, 21.0);
+    });
+
+    deleteBtn.addEventListener("click", () => {
+      entries.splice(index, 1);
+      renderScheduleEditor();
+    });
+
+    els.scheduleEntries.appendChild(row);
+  });
+}
+
+function addScheduleEntry() {
+  if (!draftWeeklySchedule || !scheduleRoomId) {
+    return;
+  }
+
+  if (!Array.isArray(draftWeeklySchedule[currentScheduleDay])) {
+    draftWeeklySchedule[currentScheduleDay] = [];
+  }
+
+  draftWeeklySchedule[currentScheduleDay].push({
+    start: "06:00",
+    temperature: 21.0,
+  });
+
+  sortScheduleEntries(draftWeeklySchedule[currentScheduleDay]);
+  renderScheduleEditor();
+}
+
+function saveScheduleDraft() {
+  if (!scheduleRoomId || !draftWeeklySchedule) {
+    closeScheduleModal();
+    return;
+  }
+
+  const room = state.config.rooms?.[scheduleRoomId];
+  if (!room) {
+    closeScheduleModal();
+    return;
+  }
+
+  room.weekly_schedule = normalizeWeeklySchedule(draftWeeklySchedule);
+  closeScheduleModal();
+}
+
+function bindScheduleEvents() {
+  if (els.scheduleClose) {
+    els.scheduleClose.addEventListener("click", closeScheduleModal);
+  }
+
+  if (els.scheduleCancel) {
+    els.scheduleCancel.addEventListener("click", closeScheduleModal);
+  }
+
+  if (els.scheduleAdd) {
+    els.scheduleAdd.addEventListener("click", addScheduleEntry);
+  }
+
+  if (els.scheduleSave) {
+    els.scheduleSave.addEventListener("click", saveScheduleDraft);
+  }
+
+  els.scheduleDayButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      currentScheduleDay = btn.dataset.day;
+      renderScheduleEditor();
+    });
+  });
+
+  if (els.scheduleModal) {
+    els.scheduleModal.addEventListener("click", (event) => {
+      if (event.target === els.scheduleModal) {
+        closeScheduleModal();
+      }
+    });
+  }
+}
+
 function bindEvents() {
   els.saveBtn.addEventListener("click", saveConfig);
   els.reloadRoomsBtn.addEventListener("click", reloadRooms);
@@ -1202,6 +1505,8 @@ function bindEvents() {
   if (els.toggleAwayBtn) {
     els.toggleAwayBtn.addEventListener("click", toggleAwayMode);
   }
+
+  bindScheduleEvents();
 }
 
 function enableEditTracking() {
