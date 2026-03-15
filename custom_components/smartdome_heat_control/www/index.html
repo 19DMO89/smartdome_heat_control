@@ -211,6 +211,7 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+      min-width: 0;
     }
 
     .field.full {
@@ -348,6 +349,149 @@
       padding: 6px 10px;
       color: var(--muted);
       font-size: 12px;
+    }
+
+    /* Searchable entity picker */
+    .entity-picker {
+      position: relative;
+      width: 100%;
+    }
+
+    .entity-picker-trigger {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid var(--line);
+      background: #0f151d;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 42px 10px 14px;
+      cursor: pointer;
+      text-align: left;
+      box-shadow: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .entity-picker-trigger::after {
+      content: "▾";
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 14px;
+      pointer-events: none;
+    }
+
+    .entity-picker-trigger:hover,
+    .entity-picker.open .entity-picker-trigger {
+      border-color: var(--accent);
+    }
+
+    .entity-picker-empty {
+      color: var(--muted);
+    }
+
+    .entity-picker-icon {
+      width: 18px;
+      min-width: 18px;
+      text-align: center;
+      opacity: 0.95;
+    }
+
+    .entity-picker-label {
+      min-width: 0;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .entity-picker-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      z-index: 60;
+      background: rgba(20, 26, 34, 0.98);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 10px;
+      display: none;
+    }
+
+    .entity-picker.open .entity-picker-dropdown {
+      display: block;
+    }
+
+    .entity-picker-search {
+      width: 100%;
+      margin-bottom: 10px;
+      background: #0f151d;
+    }
+
+    .entity-picker-list {
+      max-height: 240px;
+      overflow: auto;
+      display: grid;
+      gap: 6px;
+    }
+
+    .entity-picker-option {
+      width: 100%;
+      border: 1px solid transparent;
+      background: #0f151d;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      text-align: left;
+      box-shadow: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .entity-picker-option:hover,
+    .entity-picker-option.active {
+      border-color: var(--accent);
+      background: #162233;
+    }
+
+    .entity-picker-option-text {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow: hidden;
+    }
+
+    .entity-picker-option-title {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 14px;
+    }
+
+    .entity-picker-option-id {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .entity-picker-no-results {
+      color: var(--muted);
+      font-size: 13px;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
     }
 
     .modal {
@@ -608,13 +752,13 @@
 
           <div class="fields">
             <div class="field">
-              <label for="main_thermostat" data-i18n="main_thermostat">Hauptthermostat</label>
-              <select id="main_thermostat"></select>
+              <label for="main_thermostat_picker" data-i18n="main_thermostat">Hauptthermostat</label>
+              <div id="main_thermostat_picker"></div>
             </div>
 
             <div class="field">
-              <label for="main_sensor" data-i18n="main_sensor">Temperatursensor Hauptthermostat</label>
-              <select id="main_sensor"></select>
+              <label for="main_sensor_picker" data-i18n="main_sensor">Temperatursensor Hauptthermostat</label>
+              <div id="main_sensor_picker"></div>
             </div>
 
             <div class="field">
