@@ -1,4 +1,4 @@
-"""Smart Heating Controller – Kernlogik."""
+          """Smart Heating Controller – Kernlogik."""
 
 from __future__ import annotations
 
@@ -89,8 +89,11 @@ class SmartHeatingController:
         self._enabled = True
         self._unsub: list[Callable[[], None]] = []
 
-        # Zuletzt von Smartdome gewünschter Zielwert pro Thermostat
+        # Zuletzt wirklich gesendeter Zielwert pro Thermostat
         self._desired_targets: dict[str, float] = {}
+
+        # Zuletzt berechneter Zielwert pro Thermostat
+        self._last_computed_targets: dict[str, float] = {}
 
         # Raumzustände
         self._room_state: dict[str, str] = {}
@@ -421,8 +424,27 @@ class SmartHeatingController:
         """Mindestabstand zwischen Befehlen je nach Raumprofil."""
         if self._is_self_regulating_room(room):
             return 120.0
-
         return 0.0
+
+    def _should_force_send_for_self_regulating(
+        self,
+        thermostat: str,
+        desired: float,
+    ) -> bool:
+        """Prüfen, ob ein selbst regelndes Thermostat trotz Drosselung sofort
+        aktualisiert werden soll, weil sich der berechnete Zielwert geändert hat.
+        """
+        previous_computed = self._last_computed_targets.get(thermostat)
+
+        if previous_computed is None:
+            self._last_computed_targets[thermostat] = desired
+            return True
+
+        if abs(previous_computed - desired) >= 0.01:
+            self._last_computed_targets[thermostat] = desired
+            return True
+
+        return False
 
     def _set_temp_if_needed(
         self,
@@ -446,7 +468,8 @@ class SmartHeatingController:
 
         if min_interval > 0 and (now_ts - last_sent) < min_interval:
             return
-            
+
+        self._desired_targets[entity_id] = desired
         self._last_command_sent_at[entity_id] = now_ts
 
         self.hass.async_create_task(
@@ -534,6 +557,7 @@ class SmartHeatingController:
             room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
 
         self._desired_targets.clear()
+        self._last_computed_targets.clear()
         self._room_state.clear()
         self._residual_heat_hold_until.clear()
         self._last_command_sent_at.clear()
@@ -780,29 +804,25 @@ class SmartHeatingController:
                 )
                 effective_state = ROOM_STATE_IDLE
 
+            desired = self._round_to_step(
+                float(room_target),
+                self._thermostat_target_step(thermostat),
+            )
+
             if self._is_self_regulating_room(room):
                 last_state = self._last_applied_room_state.get(room_id)
+                force_send = self._should_force_send_for_self_regulating(
+                    thermostat,
+                    desired,
+                )
 
-                if last_state != effective_state:
+                if last_state != effective_state or force_send:
                     self._set_temp_if_needed(
                         thermostat,
                         room_target,
-                        min_interval=min_interval,
+                        min_interval=0.0 if force_send else min_interval,
                     )
                     self._last_applied_room_state[room_id] = effective_state
-                else:
-                    desired = self._round_to_step(
-                        float(room_target),
-                        self._thermostat_target_step(thermostat),
-                    )
-                    previous = self._desired_targets.get(thermostat)
-
-                    if previous is None or abs(previous - desired) >= 0.01:
-                        self._set_temp_if_needed(
-                            thermostat,
-                            room_target,
-                            min_interval=min_interval,
-                        )
             else:
                 self._set_temp_if_needed(
                     thermostat,
@@ -819,4 +839,4 @@ class SmartHeatingController:
     @callback
     def _on_minute_tick(self, now) -> None:
         """Zyklische Auswertung jede Minute."""
-        self._evaluate()          
+        self._evaluate()   
