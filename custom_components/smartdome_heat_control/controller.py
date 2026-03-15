@@ -796,6 +796,11 @@ class SmartHeatingController:
                     )
                 effective_state = ROOM_STATE_HEATING
             elif state == ROOM_STATE_RESIDUAL_HOLD:
+                room_target = self._get_residual_hold_target_for_room(
+                    thermostat,
+                    target,
+                )
+                effective_state = ROOM_STATE_RESIDUAL_HOLD
             else:
                 room_target = self._get_idle_target_for_room(
                     room_id,
