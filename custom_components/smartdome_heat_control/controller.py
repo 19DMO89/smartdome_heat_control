@@ -38,6 +38,7 @@ from .const import (
     CONF_ROOM_TARGET_DAY,
     CONF_ROOM_TARGET_NIGHT,
     CONF_ROOM_THERMOSTAT,
+    CONF_ROOM_WEEKLY_SCHEDULE,
     CONF_ROOM_WINDOW_SENSOR,
     CONF_TOLERANCE,
     CONF_VACATION_ENABLED,
@@ -55,6 +56,7 @@ from .const import (
     DEFAULT_NIGHT_START,
     DEFAULT_ROOM_AWAY_TEMPERATURE,
     DEFAULT_ROOM_CONTROL_PROFILE,
+    DEFAULT_ROOM_WEEKLY_SCHEDULE,
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
     DEFAULT_TOLERANCE,
@@ -209,6 +211,10 @@ class SmartHeatingController:
                         DEFAULT_ROOM_CONTROL_PROFILE,
                     )
                     room.setdefault(
+                        CONF_ROOM_WEEKLY_SCHEDULE,
+                        DEFAULT_ROOM_WEEKLY_SCHEDULE,
+                    )
+                    room.setdefault(
                         CONF_ROOM_LEARNED_OVERSHOOT,
                         DEFAULT_ADAPTIVE_OVERSHOOT,
                     )
@@ -330,6 +336,113 @@ class SmartHeatingController:
         """Aktuelle Uhrzeit als HH:MM."""
         return dt_util.now().strftime("%H:%M")
 
+    def _normalize_weekly_schedule(
+        self,
+        schedule: Any,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Weekly schedule normalisieren."""
+        base = {
+            "monday": [],
+            "tuesday": [],
+            "wednesday": [],
+            "thursday": [],
+            "friday": [],
+            "saturday": [],
+            "sunday": [],
+        }
+
+        if not isinstance(schedule, dict):
+            return base
+
+        normalized: dict[str, list[dict[str, Any]]] = {}
+
+        for day in base:
+            entries = schedule.get(day, [])
+            if not isinstance(entries, list):
+                normalized[day] = []
+                continue
+
+            valid_entries: list[dict[str, Any]] = []
+
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+
+                start = str(entry.get("start", "")).strip()
+                temperature = self._safe_float(entry.get("temperature"))
+
+                if not start or temperature is None:
+                    continue
+
+                if not self._is_valid_schedule_time(start):
+                    continue
+
+                valid_entries.append(
+                    {
+                        "start": start[:5],
+                        "temperature": float(temperature),
+                    }
+                )
+
+            valid_entries.sort(key=lambda item: item["start"])
+            normalized[day] = valid_entries
+
+        return normalized
+
+    def _is_valid_schedule_time(self, value: str) -> bool:
+        """Zeitformat HH:MM prüfen."""
+        if len(value) < 5:
+            return False
+
+        try:
+            hours = int(value[:2])
+            minutes = int(value[3:5])
+        except (TypeError, ValueError):
+            return False
+
+        return (
+            len(value[:5]) == 5
+            and value[2] == ":"
+            and 0 <= hours <= 23
+            and 0 <= minutes <= 59
+        )
+
+    def _scheduled_target_for_room(self, room: dict[str, Any]) -> float | None:
+        """Zieltemperatur aus dem Wochenplan lesen.
+
+        Gibt None zurück, wenn für den aktuellen Tag keine gültigen
+        Schedule-Einträge vorhanden sind.
+        """
+        schedule = self._normalize_weekly_schedule(
+            room.get(CONF_ROOM_WEEKLY_SCHEDULE, DEFAULT_ROOM_WEEKLY_SCHEDULE)
+        )
+
+        day_key = dt_util.now().strftime("%A").lower()
+        entries = schedule.get(day_key, [])
+
+        if not entries:
+            return None
+
+        now_hhmm = self._time_hhmm()
+        active_temperature: float | None = None
+
+        for entry in entries:
+            start = str(entry.get("start", ""))[:5]
+            temperature = self._safe_float(entry.get("temperature"))
+
+            if temperature is None:
+                continue
+
+            if start <= now_hhmm:
+                active_temperature = float(temperature)
+            else:
+                break
+
+        if active_temperature is not None:
+            return active_temperature
+
+        return None
+
     def _is_night_for_room(self, room: dict[str, Any]) -> bool:
         """Raumbezogene Tag-/Nacht-Zeit prüfen."""
         now = self._time_hhmm()
@@ -391,6 +504,10 @@ class SmartHeatingController:
                 if away_temp is not None
                 else float(DEFAULT_ROOM_AWAY_TEMPERATURE)
             )
+
+        scheduled_target = self._scheduled_target_for_room(room)
+        if scheduled_target is not None:
+            return scheduled_target
 
         return self._base_target_for_room(room)
 
