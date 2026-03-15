@@ -1,4 +1,4 @@
-          """Smart Heating Controller – Kernlogik."""
+"""Smart Heating Controller – Kernlogik."""
 
 from __future__ import annotations
 
@@ -199,10 +199,19 @@ class SmartHeatingController:
         if isinstance(rooms, dict):
             for room in rooms.values():
                 if isinstance(room, dict):
-                    room.setdefault(CONF_ROOM_AWAY_TEMPERATURE, DEFAULT_ROOM_AWAY_TEMPERATURE)
+                    room.setdefault(
+                        CONF_ROOM_AWAY_TEMPERATURE,
+                        DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    )
                     room.setdefault(CONF_ROOM_WINDOW_SENSOR, "")
-                    room.setdefault(CONF_ROOM_CONTROL_PROFILE, DEFAULT_ROOM_CONTROL_PROFILE)
-                    room.setdefault(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT)
+                    room.setdefault(
+                        CONF_ROOM_CONTROL_PROFILE,
+                        DEFAULT_ROOM_CONTROL_PROFILE,
+                    )
+                    room.setdefault(
+                        CONF_ROOM_LEARNED_OVERSHOOT,
+                        DEFAULT_ADAPTIVE_OVERSHOOT,
+                    )
                     room.setdefault(CONF_ROOM_HEATING_CYCLE_ACTIVE, False)
                     room.setdefault(CONF_ROOM_CYCLE_TARGET_TEMP, None)
                     room.setdefault(CONF_ROOM_CYCLE_PEAK_TEMP, None)
@@ -276,8 +285,12 @@ class SmartHeatingController:
             return False
 
         now = dt_util.now().timestamp()
-        open_delay = int(self.config.get(CONF_WINDOW_OPEN_DELAY, DEFAULT_WINDOW_OPEN_DELAY))
-        close_delay = int(self.config.get(CONF_WINDOW_CLOSE_DELAY, DEFAULT_WINDOW_CLOSE_DELAY))
+        open_delay = int(
+            self.config.get(CONF_WINDOW_OPEN_DELAY, DEFAULT_WINDOW_OPEN_DELAY)
+        )
+        close_delay = int(
+            self.config.get(CONF_WINDOW_CLOSE_DELAY, DEFAULT_WINDOW_CLOSE_DELAY)
+        )
 
         window_open = self._is_window_open(room)
 
@@ -845,4 +858,4 @@ class SmartHeatingController:
     @callback
     def _on_minute_tick(self, now) -> None:
         """Zyklische Auswertung jede Minute."""
-        self._evaluate()   
+        self._evaluate()
