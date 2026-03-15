@@ -783,18 +783,19 @@ class SmartHeatingController:
                 room_target = self._thermostat_min_temp(thermostat)
                 effective_state = ROOM_STATE_WINDOW_PAUSE
             elif state == ROOM_STATE_HEATING:
-                room_target = self._get_heating_target_for_room(
-                    thermostat,
-                    target,
-                    boost_delta,
-                )
+                if self._is_self_regulating_room(room):
+                    room_target = self._round_to_step(
+                        target,
+                        self._thermostat_target_step(thermostat),
+                    )
+                else:
+                    room_target = self._get_heating_target_for_room(
+                        thermostat,
+                        target,
+                        boost_delta,
+                    )
                 effective_state = ROOM_STATE_HEATING
             elif state == ROOM_STATE_RESIDUAL_HOLD:
-                room_target = self._get_residual_hold_target_for_room(
-                    thermostat,
-                    target,
-                )
-                effective_state = ROOM_STATE_RESIDUAL_HOLD
             else:
                 room_target = self._get_idle_target_for_room(
                     room_id,
