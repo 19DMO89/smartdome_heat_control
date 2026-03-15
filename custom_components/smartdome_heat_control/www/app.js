@@ -819,30 +819,106 @@ async function callService(domain, service, data = {}) {
   });
 }
 
-function buildSelectOptions(selectEl, items, selectedValue, options = {}) {
-  const {
-    includeEmpty = true,
-    emptyLabel = t("select_not_set"),
-  } = options;
+function buildSearchableSelect(container, items, selectedValue, onChange) {
 
-  selectEl.innerHTML = "";
+  container.innerHTML = "";
 
-  if (includeEmpty) {
-    const emptyOption = document.createElement("option");
-    emptyOption.value = "";
-    emptyOption.textContent = emptyLabel;
-    selectEl.appendChild(emptyOption);
+  const wrapper = document.createElement("div");
+  wrapper.className = "search-select";
+
+  const input = document.createElement("input");
+  input.className = "search-select-input";
+  input.type = "text";
+  input.placeholder = "Search...";
+
+  const dropdown = document.createElement("div");
+  dropdown.className = "search-select-dropdown";
+
+  wrapper.appendChild(input);
+  wrapper.appendChild(dropdown);
+  container.appendChild(wrapper);
+
+  function entityIcon(entity) {
+
+    if (entity.entity_id.startsWith("climate"))
+      return "🔥";
+
+    if (entity.entity_id.startsWith("sensor"))
+      return "🌡";
+
+    if (entity.entity_id.startsWith("binary_sensor"))
+      return "🪟";
+
+    return "🔧";
   }
 
-  for (const item of items) {
-    const option = document.createElement("option");
-    option.value = item.entity_id;
-    option.textContent = prettyEntityLabel(item);
-    if (item.entity_id === selectedValue) {
-      option.selected = true;
-    }
-    selectEl.appendChild(option);
+  function label(entity) {
+
+    const name =
+      entity.attributes?.friendly_name || entity.entity_id;
+
+    return `${entityIcon(entity)} ${name}`;
   }
+
+  function render(filter="") {
+
+    dropdown.innerHTML = "";
+
+    const filtered = items.filter(e =>
+      label(e).toLowerCase().includes(filter.toLowerCase())
+    );
+
+    filtered.forEach(entity => {
+
+      const row = document.createElement("div");
+      row.className = "search-select-item";
+      row.textContent = label(entity);
+
+      row.onclick = () => {
+
+        input.value = label(entity);
+        dropdown.style.display = "none";
+
+        onChange(entity.entity_id);
+
+      };
+
+      dropdown.appendChild(row);
+
+    });
+
+  }
+
+  input.addEventListener("focus", () => {
+
+    dropdown.style.display = "block";
+    render(input.value);
+
+  });
+
+  input.addEventListener("input", () => {
+
+    render(input.value);
+
+  });
+
+  document.addEventListener("click", e => {
+
+    if (!wrapper.contains(e.target))
+      dropdown.style.display = "none";
+
+  });
+
+  if (selectedValue) {
+
+    const entity =
+      items.find(e => e.entity_id === selectedValue);
+
+    if (entity)
+      input.value = label(entity);
+
+  }
+
 }
 
 async function loadAllStates() {
