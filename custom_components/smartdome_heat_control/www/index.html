@@ -350,6 +350,117 @@
       font-size: 12px;
     }
 
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.62);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 9999;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .modal-content {
+      width: min(760px, 100%);
+      max-height: 90vh;
+      overflow: auto;
+      background: rgba(20, 26, 34, 0.98);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .modal-header button {
+      min-width: 44px;
+      padding: 10px 14px;
+    }
+
+    .schedule-days {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .schedule-days button {
+      margin: 0;
+      border: 1px solid var(--line);
+      background: #0f151d;
+      box-shadow: none;
+    }
+
+    .schedule-days button.active {
+      background: var(--accent);
+      color: #08111a;
+      border-color: transparent;
+    }
+
+    .schedule-entries {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .schedule-entry {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #0f151d;
+    }
+
+    .schedule-entry button {
+      min-width: 44px;
+      padding: 10px 12px;
+    }
+
+    .schedule-empty {
+      color: var(--muted);
+      font-size: 13px;
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .schedule-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .schedule-footer-left,
+    .schedule-footer-right {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     @media (max-width: 1100px) {
       .layout {
         grid-template-columns: 1fr;
@@ -368,12 +479,27 @@
 
     @media (max-width: 700px) {
       .fields,
-      .room-grid {
+      .room-grid,
+      .schedule-entry {
         grid-template-columns: 1fr;
       }
 
       .wrap {
         padding: 16px;
+      }
+
+      .schedule-footer {
+        flex-direction: column;
+      }
+
+      .schedule-footer-left,
+      .schedule-footer-right {
+        width: 100%;
+      }
+
+      .schedule-footer-left button,
+      .schedule-footer-right button {
+        flex: 1;
       }
     }
   </style>
@@ -567,6 +693,37 @@
           <div id="roomsContainer" class="rooms"></div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <div id="schedule-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="schedule-modal-title">Weekly Schedule</h2>
+        <button id="schedule-close" type="button" class="ghost">✕</button>
+      </div>
+
+      <div class="schedule-days">
+        <button type="button" data-day="monday">Mon</button>
+        <button type="button" data-day="tuesday">Tue</button>
+        <button type="button" data-day="wednesday">Wed</button>
+        <button type="button" data-day="thursday">Thu</button>
+        <button type="button" data-day="friday">Fri</button>
+        <button type="button" data-day="saturday">Sat</button>
+        <button type="button" data-day="sunday">Sun</button>
+      </div>
+
+      <div id="schedule-entries" class="schedule-entries"></div>
+
+      <div class="schedule-footer">
+        <div class="schedule-footer-left">
+          <button id="schedule-add" type="button" class="ghost">Add time block</button>
+        </div>
+        <div class="schedule-footer-right">
+          <button id="schedule-cancel" type="button" class="ghost">Cancel</button>
+          <button id="schedule-save" type="button" class="primary">Save</button>
+        </div>
+      </div>
     </div>
   </div>
 
