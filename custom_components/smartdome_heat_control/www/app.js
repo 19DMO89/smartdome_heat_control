@@ -163,6 +163,9 @@ const I18N = {
     schedule_copy_title: "Copy weekly schedule",
     schedule_copy_apply: "Apply",
     schedule_copy_no_rooms: "No other rooms available.",
+
+    picker_search_placeholder: "Search entity…",
+    picker_no_results: "No matching entities found.",
   },
 
   de: {
@@ -289,6 +292,9 @@ const I18N = {
     schedule_copy_title: "Wochenschema kopieren",
     schedule_copy_apply: "Übernehmen",
     schedule_copy_no_rooms: "Keine anderen Räume verfügbar.",
+
+    picker_search_placeholder: "Entity suchen…",
+    picker_no_results: "Keine passenden Entities gefunden.",
   },
 };
 
@@ -302,7 +308,6 @@ function getPanelVersion() {
 }
 
 const PANEL_VERSION = getPanelVersion();
-
 const HEATING_MODES = ["comfort", "balanced", "energy", "adaptive"];
 const CONTROL_PROFILES = ["standard", "self_regulating"];
 
@@ -331,6 +336,8 @@ const state = {
   allStates: [],
 };
 
+const entityPickerState = new Map();
+
 const els = {
   statusBox: document.getElementById("statusBox"),
   saveBtn: document.getElementById("saveBtn"),
@@ -341,8 +348,8 @@ const els = {
   toggleVacationBtn: document.getElementById("toggleVacationBtn"),
   toggleAwayBtn: document.getElementById("toggleAwayBtn"),
   enabled: document.getElementById("enabled"),
-  mainThermostat: document.getElementById("main_thermostat"),
-  mainSensor: document.getElementById("main_sensor"),
+  mainThermostatPicker: document.getElementById("main_thermostat_picker"),
+  mainSensorPicker: document.getElementById("main_sensor_picker"),
   boostDelta: document.getElementById("boost_delta"),
   tolerance: document.getElementById("tolerance"),
   heatingMode: document.getElementById("heating_mode"),
@@ -376,7 +383,6 @@ const els = {
 
 let unsubscribeStateChanged = null;
 let isEditing = false;
-
 let scheduleRoomId = null;
 let currentScheduleDay = "monday";
 let draftWeeklySchedule = null;
@@ -766,6 +772,197 @@ function renderHeatingMode() {
   }
 }
 
+function getEntityIcon(entityId) {
+  if (!entityId) {
+    return "—";
+  }
+  if (entityId.startsWith("climate.")) {
+    return "🔥";
+  }
+  if (entityId.startsWith("binary_sensor.")) {
+    return "🪟";
+  }
+  if (entityId.startsWith("sensor.")) {
+    return "🌡️";
+  }
+  return "•";
+}
+
+function getEntityTitle(item) {
+  return item?.attributes?.friendly_name || item?.entity_id || "";
+}
+
+function closeAllEntityPickers() {
+  entityPickerState.forEach((_, id) => {
+    const root = document.getElementById(id);
+    if (root) {
+      root.classList.remove("open");
+    }
+  });
+}
+
+function createEntityPicker({
+  container,
+  pickerId,
+  items,
+  selectedValue,
+  emptyLabel,
+  onChange,
+}) {
+  if (!container) {
+    return;
+  }
+
+  const normalizedItems = Array.isArray(items) ? items : [];
+  entityPickerState.set(pickerId, {
+    items: normalizedItems,
+    selectedValue: selectedValue || "",
+    onChange,
+    emptyLabel,
+  });
+
+  const selectedItem =
+    normalizedItems.find((item) => item.entity_id === selectedValue) || null;
+
+  container.innerHTML = `
+    <div class="entity-picker" id="${pickerId}">
+      <button type="button" class="entity-picker-trigger">
+        <span class="entity-picker-icon">${
+          selectedItem ? getEntityIcon(selectedItem.entity_id) : "—"
+        }</span>
+        <span class="entity-picker-label ${
+          selectedItem ? "" : "entity-picker-empty"
+        }">${
+          selectedItem
+            ? escapeHtml(getEntityTitle(selectedItem))
+            : escapeHtml(emptyLabel)
+        }</span>
+      </button>
+      <div class="entity-picker-dropdown">
+        <input
+          type="text"
+          class="entity-picker-search"
+          placeholder="${escapeHtml(t("picker_search_placeholder"))}"
+        />
+        <div class="entity-picker-list"></div>
+      </div>
+    </div>
+  `;
+
+  const root = container.querySelector(".entity-picker");
+  const trigger = root.querySelector(".entity-picker-trigger");
+  const searchInput = root.querySelector(".entity-picker-search");
+
+  trigger.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const willOpen = !root.classList.contains("open");
+    closeAllEntityPickers();
+    if (willOpen) {
+      root.classList.add("open");
+      renderEntityPickerOptions(pickerId, "");
+      searchInput.value = "";
+      setTimeout(() => searchInput.focus(), 0);
+    }
+  });
+
+  searchInput.addEventListener("input", () => {
+    renderEntityPickerOptions(pickerId, searchInput.value);
+  });
+
+  root.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  renderEntityPickerOptions(pickerId, "");
+}
+
+function renderEntityPickerOptions(pickerId, query = "") {
+  const config = entityPickerState.get(pickerId);
+  const root = document.getElementById(pickerId);
+  if (!config || !root) {
+    return;
+  }
+
+  const list = root.querySelector(".entity-picker-list");
+  const q = String(query || "").trim().toLowerCase();
+
+  const entries = [
+    {
+      entity_id: "",
+      attributes: { friendly_name: config.emptyLabel },
+      __empty: true,
+    },
+    ...config.items,
+  ].filter((item) => {
+    if (!q) {
+      return true;
+    }
+    const haystack = `${item.entity_id} ${getEntityTitle(item)}`.toLowerCase();
+    return haystack.includes(q);
+  });
+
+  list.innerHTML = "";
+
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "entity-picker-no-results";
+    empty.textContent = t("picker_no_results");
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const item of entries) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "entity-picker-option";
+
+    if ((config.selectedValue || "") === item.entity_id) {
+      option.classList.add("active");
+    }
+
+    const icon = item.__empty ? "—" : getEntityIcon(item.entity_id);
+    const title = item.__empty ? config.emptyLabel : getEntityTitle(item);
+
+    option.innerHTML = `
+      <span class="entity-picker-icon">${icon}</span>
+      <span class="entity-picker-option-text">
+        <span class="entity-picker-option-title">${escapeHtml(title)}</span>
+        <span class="entity-picker-option-id">${
+          item.entity_id ? escapeHtml(item.entity_id) : "&nbsp;"
+        }</span>
+      </span>
+    `;
+
+    option.addEventListener("click", () => {
+      config.selectedValue = item.entity_id || "";
+
+      if (typeof config.onChange === "function") {
+        config.onChange(config.selectedValue);
+      }
+
+      const triggerIcon = root.querySelector(
+        ".entity-picker-trigger .entity-picker-icon"
+      );
+      const triggerLabel = root.querySelector(
+        ".entity-picker-trigger .entity-picker-label"
+      );
+
+      triggerIcon.textContent = item.__empty ? "—" : icon;
+      triggerLabel.textContent = title;
+      triggerLabel.classList.toggle("entity-picker-empty", !!item.__empty);
+
+      closeAllEntityPickers();
+      renderEntityPickerOptions(pickerId, "");
+    });
+
+    list.appendChild(option);
+  }
+}
+
+function getEntityPickerValue(pickerId) {
+  return entityPickerState.get(pickerId)?.selectedValue || "";
+}
+
 async function getHassConnection() {
   if (window.hassConnection) {
     return window.hassConnection;
@@ -819,108 +1016,6 @@ async function callService(domain, service, data = {}) {
   });
 }
 
-function buildSearchableSelect(container, items, selectedValue, onChange) {
-
-  container.innerHTML = "";
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "search-select";
-
-  const input = document.createElement("input");
-  input.className = "search-select-input";
-  input.type = "text";
-  input.placeholder = "Search...";
-
-  const dropdown = document.createElement("div");
-  dropdown.className = "search-select-dropdown";
-
-  wrapper.appendChild(input);
-  wrapper.appendChild(dropdown);
-  container.appendChild(wrapper);
-
-  function entityIcon(entity) {
-
-    if (entity.entity_id.startsWith("climate"))
-      return "🔥";
-
-    if (entity.entity_id.startsWith("sensor"))
-      return "🌡";
-
-    if (entity.entity_id.startsWith("binary_sensor"))
-      return "🪟";
-
-    return "🔧";
-  }
-
-  function label(entity) {
-
-    const name =
-      entity.attributes?.friendly_name || entity.entity_id;
-
-    return `${entityIcon(entity)} ${name}`;
-  }
-
-  function render(filter="") {
-
-    dropdown.innerHTML = "";
-
-    const filtered = items.filter(e =>
-      label(e).toLowerCase().includes(filter.toLowerCase())
-    );
-
-    filtered.forEach(entity => {
-
-      const row = document.createElement("div");
-      row.className = "search-select-item";
-      row.textContent = label(entity);
-
-      row.onclick = () => {
-
-        input.value = label(entity);
-        dropdown.style.display = "none";
-
-        onChange(entity.entity_id);
-
-      };
-
-      dropdown.appendChild(row);
-
-    });
-
-  }
-
-  input.addEventListener("focus", () => {
-
-    dropdown.style.display = "block";
-    render(input.value);
-
-  });
-
-  input.addEventListener("input", () => {
-
-    render(input.value);
-
-  });
-
-  document.addEventListener("click", e => {
-
-    if (!wrapper.contains(e.target))
-      dropdown.style.display = "none";
-
-  });
-
-  if (selectedValue) {
-
-    const entity =
-      items.find(e => e.entity_id === selectedValue);
-
-    if (entity)
-      input.value = label(entity);
-
-  }
-
-}
-
 async function loadAllStates() {
   const states = await haFetch("/api/states");
   state.allStates = Array.isArray(states) ? states : [];
@@ -934,7 +1029,9 @@ async function loadAllStates() {
   );
 
   state.binarySensors = sortByEntityId(
-    state.allStates.filter((item) => item.entity_id?.startsWith("binary_sensor."))
+    state.allStates.filter((item) =>
+      item.entity_id?.startsWith("binary_sensor.")
+    )
   );
 }
 
@@ -982,14 +1079,22 @@ function renderGlobalSettings() {
     els.awayEnabled.checked = cfg.away_enabled;
   }
 
-  buildSelectOptions(els.mainThermostat, state.climates, cfg.main_thermostat, {
-    includeEmpty: true,
+  createEntityPicker({
+    container: els.mainThermostatPicker,
+    pickerId: "global_main_thermostat_picker",
+    items: state.climates,
+    selectedValue: cfg.main_thermostat,
     emptyLabel: t("select_choose"),
+    onChange: () => {},
   });
 
-  buildSelectOptions(els.mainSensor, state.sensors, cfg.main_sensor, {
-    includeEmpty: true,
+  createEntityPicker({
+    container: els.mainSensorPicker,
+    pickerId: "global_main_sensor_picker",
+    items: state.sensors,
+    selectedValue: cfg.main_sensor,
     emptyLabel: t("select_auto_none"),
+    onChange: () => {},
   });
 
   renderHeatingMode();
@@ -1021,7 +1126,9 @@ function createRoomCard(roomId, room) {
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <span class="pill">
-          <input class="room-enabled" type="checkbox" ${room.enabled ? "checked" : ""} />
+          <input class="room-enabled" type="checkbox" ${
+            room.enabled ? "checked" : ""
+          } />
           <span>${escapeHtml(t("room_active"))}</span>
         </span>
         <button class="ghost room-schedule-btn" type="button">${escapeHtml(
@@ -1050,17 +1157,17 @@ function createRoomCard(roomId, room) {
 
       <div class="field">
         <label>${escapeHtml(t("room_thermostat"))}</label>
-        <select class="room-thermostat"></select>
+        <div class="room-thermostat-picker"></div>
       </div>
 
       <div class="field">
         <label>${escapeHtml(t("room_sensor"))}</label>
-        <select class="room-sensor"></select>
+        <div class="room-sensor-picker"></div>
       </div>
 
       <div class="field">
         <label>${escapeHtml(t("room_window_sensor"))}</label>
-        <select class="room-window-sensor"></select>
+        <div class="room-window-sensor-picker"></div>
       </div>
 
       <div class="field">
@@ -1112,31 +1219,35 @@ function createRoomCard(roomId, room) {
     </div>
   `;
 
-  const thermostatSelect = wrapper.querySelector(".room-thermostat");
-  const sensorSelect = wrapper.querySelector(".room-sensor");
-  const windowSensorSelect = wrapper.querySelector(".room-window-sensor");
   const deleteBtn = wrapper.querySelector(".room-delete-btn");
   const scheduleBtn = wrapper.querySelector(".room-schedule-btn");
 
-  buildSelectOptions(thermostatSelect, state.climates, room.thermostat || "", {
-    includeEmpty: true,
+  createEntityPicker({
+    container: wrapper.querySelector(".room-thermostat-picker"),
+    pickerId: `room_${roomId}_thermostat_picker`,
+    items: state.climates,
+    selectedValue: room.thermostat || "",
     emptyLabel: t("select_not_set"),
+    onChange: () => {},
   });
 
-  buildSelectOptions(sensorSelect, state.sensors, room.sensor || "", {
-    includeEmpty: true,
+  createEntityPicker({
+    container: wrapper.querySelector(".room-sensor-picker"),
+    pickerId: `room_${roomId}_sensor_picker`,
+    items: state.sensors,
+    selectedValue: room.sensor || "",
     emptyLabel: t("select_not_set"),
+    onChange: () => {},
   });
 
-  buildSelectOptions(
-    windowSensorSelect,
-    state.binarySensors,
-    room.window_sensor || "",
-    {
-      includeEmpty: true,
-      emptyLabel: t("select_not_set"),
-    }
-  );
+  createEntityPicker({
+    container: wrapper.querySelector(".room-window-sensor-picker"),
+    pickerId: `room_${roomId}_window_sensor_picker`,
+    items: state.binarySensors,
+    selectedValue: room.window_sensor || "",
+    emptyLabel: t("select_not_set"),
+    onChange: () => {},
+  });
 
   deleteBtn.addEventListener("click", () => {
     delete state.config.rooms[roomId];
@@ -1197,8 +1308,8 @@ function collectFormState() {
   const cfg = structuredClone(state.config);
 
   cfg.enabled = els.enabled.checked;
-  cfg.main_thermostat = els.mainThermostat.value || "";
-  cfg.main_sensor = els.mainSensor.value || "";
+  cfg.main_thermostat = getEntityPickerValue("global_main_thermostat_picker");
+  cfg.main_sensor = getEntityPickerValue("global_main_sensor_picker");
   cfg.boost_delta = normalizeNumber(els.boostDelta.value, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(els.tolerance.value, DEFAULTS.tolerance);
   cfg.heating_mode = els.heatingMode
@@ -1240,9 +1351,10 @@ function collectFormState() {
     rooms[roomId] = normalizeRoom(roomId, {
       label: node.querySelector(".room-label").value.trim() || roomId,
       area_id: node.querySelector(".room-area-id").value.trim(),
-      thermostat: node.querySelector(".room-thermostat").value || "",
-      sensor: node.querySelector(".room-sensor").value || "",
-      window_sensor: node.querySelector(".room-window-sensor").value || "",
+      thermostat: getEntityPickerValue(`room_${roomId}_thermostat_picker`) || "",
+      sensor: getEntityPickerValue(`room_${roomId}_sensor_picker`) || "",
+      window_sensor:
+        getEntityPickerValue(`room_${roomId}_window_sensor_picker`) || "",
       control_profile:
         node.querySelector(".room-control-profile")?.value || "standard",
       target_day: node.querySelector(".room-target-day").value,
@@ -1715,11 +1827,20 @@ function bindEvents() {
   }
 
   bindScheduleEvents();
+
+  document.addEventListener("click", () => {
+    closeAllEntityPickers();
+  });
 }
 
 function enableEditTracking() {
   document.addEventListener("focusin", (e) => {
-    if (e.target.closest(".room") || e.target.closest(".fields")) {
+    if (
+      e.target.closest(".room") ||
+      e.target.closest(".fields") ||
+      e.target.closest(".modal-content") ||
+      e.target.closest(".entity-picker")
+    ) {
       isEditing = true;
     }
   });
@@ -1727,7 +1848,13 @@ function enableEditTracking() {
   document.addEventListener("focusout", () => {
     setTimeout(() => {
       const active = document.activeElement;
-      if (!active || (!active.closest(".room") && !active.closest(".fields"))) {
+      if (
+        !active ||
+        (!active.closest(".room") &&
+          !active.closest(".fields") &&
+          !active.closest(".modal-content") &&
+          !active.closest(".entity-picker"))
+      ) {
         isEditing = false;
       }
     }, 0);
