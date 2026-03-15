@@ -63,6 +63,19 @@ CONTROL_PROFILE_SELF_REGULATING = "self_regulating"
 
 DEFAULT_ROOM_CONTROL_PROFILE = CONTROL_PROFILE_STANDARD
 
+#Wochenplan
+CONF_ROOM_WEEKLY_SCHEDULE = "weekly_schedule"
+
+DEFAULT_ROOM_WEEKLY_SCHEDULE = {
+    "monday": [],
+    "tuesday": [],
+    "wednesday": [],
+    "thursday": [],
+    "friday": [],
+    "saturday": [],
+    "sunday": [],
+}
+
 # Heating modes
 HEATING_MODE_COMFORT = "comfort"
 HEATING_MODE_BALANCED = "balanced"
