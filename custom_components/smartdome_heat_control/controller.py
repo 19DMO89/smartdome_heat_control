@@ -1044,34 +1044,32 @@ class SmartHeatingController:
                 if not circuit_room_states:
                     continue
                 any_circuit_needs_heat = any(
-                    rs["state"] == ROOM_STATE_HEATING
+                    rs["state"] in (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD)
                     for rs in circuit_room_states.values()
                 )
                 circuit_base_target = max(
                     rs["target"] for rs in circuit_room_states.values()
                 )
-                circuit_target = (
-                    circuit_base_target + boost_delta
-                    if any_circuit_needs_heat
-                    else circuit_base_target
-                )
+                if any_circuit_needs_heat:
+                    circuit_target = circuit_base_target + boost_delta
+                else:
+                    circuit_target = self._thermostat_min_temp(ct)
                 self._set_temp_if_needed(ct, circuit_target)
         else:
             # Single-circuit fallback: use global main_thermostat
             any_room_needs_heat = any(
-                rs["state"] == ROOM_STATE_HEATING
+                rs["state"] in (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD)
                 for rs in room_states.values()
             )
             main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
             if main_thermostat:
-                main_base_target = max(
-                    rs["target"] for rs in room_states.values()
-                )
-                main_target = (
-                    main_base_target + boost_delta
-                    if any_room_needs_heat
-                    else main_base_target
-                )
+                if any_room_needs_heat:
+                    main_base_target = max(
+                        rs["target"] for rs in room_states.values()
+                    )
+                    main_target = main_base_target + boost_delta
+                else:
+                    main_target = self._thermostat_min_temp(main_thermostat)
                 self._set_temp_if_needed(main_thermostat, main_target)
 
         for room_id, room in rooms.items():
