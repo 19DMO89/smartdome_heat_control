@@ -1,5 +1,5 @@
 <h1>
-<img src="https://raw.githubusercontent.com/19DMO89/smartdome_heat_control/main/branding/icon.png" width="48">
+<img src="https://raw.githubusercontent.com/19DMO89/smartdome_heat_control/main/images/icon.png" width="48">
 Smartdome Heat Control
 </h1>
 
@@ -247,7 +247,7 @@ Rooms can then be discovered automatically from your Home Assistant areas, or ad
 ---
 
 <h1>
-<img src="https://raw.githubusercontent.com/19DMO89/smartdome_heat_control/main/branding/icon.png" width="48">
+<img src="https://raw.githubusercontent.com/19DMO89/smartdome_heat_control/main/images/icon.png" width="48">
 Smartdome Heat Control (Deutsch)
 </h1>
 
