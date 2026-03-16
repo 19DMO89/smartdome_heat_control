@@ -385,54 +385,58 @@ const state = {
 
 const entityPickerState = new Map();
 
-const els = {
-  statusBox: document.getElementById("statusBox"),
-  saveBtn: document.getElementById("saveBtn"),
-  reloadConfigBtn: document.getElementById("reloadConfigBtn"),
-  reloadRoomsBtn: document.getElementById("reloadRoomsBtn"),
-  addRoomBtn: document.getElementById("addRoomBtn"),
-  applyTimesToRoomsBtn: document.getElementById("applyTimesToRoomsBtn"),
-  enabled: document.getElementById("enabled"),
-  mainThermostatPicker: document.getElementById("main_thermostat_picker"),
-  mainSensorPicker: document.getElementById("main_sensor_picker"),
-  boostDelta: document.getElementById("boost_delta"),
-  tolerance: document.getElementById("tolerance"),
-  modePickerContainer: document.getElementById("heating_mode_picker"),
-  energyResidualHeatHold: document.getElementById("energy_residual_heat_hold"),
-  energyHoldField: document.getElementById("energy_hold_field"),
-  nightStart: document.getElementById("night_start"),
-  morningBoostStart: document.getElementById("morning_boost_start"),
-  morningBoostEnd: document.getElementById("morning_boost_end"),
-  vacationEnabled: document.getElementById("vacation_enabled"),
-  vacationTemperature: document.getElementById("vacation_temperature"),
-  awayEnabled: document.getElementById("away_enabled"),
-  roomsContainer: document.getElementById("roomsContainer"),
-  versionBadge: document.getElementById("versionBadge"),
-  circuitsList: document.getElementById("circuitsList"),
-  addCircuitBtn: document.getElementById("addCircuitBtn"),
-  entityPickerModal: document.getElementById("entity-picker-modal"),
-  entityPickerModalTitle: document.getElementById("entity-picker-modal-title"),
-  entityPickerModalClose: document.getElementById("entity-picker-modal-close"),
-  entityPickerModalSearch: document.getElementById("entity-picker-modal-search"),
-  entityPickerModalList: document.getElementById("entity-picker-modal-list"),
+let els = {};
 
-  scheduleModal: document.getElementById("schedule-modal"),
-  scheduleModalTitle: document.getElementById("schedule-modal-title"),
-  scheduleClose: document.getElementById("schedule-close"),
-  scheduleCancel: document.getElementById("schedule-cancel"),
-  scheduleAdd: document.getElementById("schedule-add"),
-  scheduleSave: document.getElementById("schedule-save"),
-  scheduleEntries: document.getElementById("schedule-entries"),
-  scheduleDayButtons: document.querySelectorAll(".schedule-days button"),
-  scheduleCopyRoomsBtn: document.getElementById("schedule-copy-rooms"),
+function initEls() {
+  els = {
+    statusBox: document.getElementById("statusBox"),
+    saveBtn: document.getElementById("saveBtn"),
+    reloadConfigBtn: document.getElementById("reloadConfigBtn"),
+    reloadRoomsBtn: document.getElementById("reloadRoomsBtn"),
+    addRoomBtn: document.getElementById("addRoomBtn"),
+    applyTimesToRoomsBtn: document.getElementById("applyTimesToRoomsBtn"),
+    enabled: document.getElementById("enabled"),
+    mainThermostatPicker: document.getElementById("main_thermostat_picker"),
+    mainSensorPicker: document.getElementById("main_sensor_picker"),
+    boostDelta: document.getElementById("boost_delta"),
+    tolerance: document.getElementById("tolerance"),
+    modePickerContainer: document.getElementById("heating_mode_picker"),
+    energyResidualHeatHold: document.getElementById("energy_residual_heat_hold"),
+    energyHoldField: document.getElementById("energy_hold_field"),
+    nightStart: document.getElementById("night_start"),
+    morningBoostStart: document.getElementById("morning_boost_start"),
+    morningBoostEnd: document.getElementById("morning_boost_end"),
+    vacationEnabled: document.getElementById("vacation_enabled"),
+    vacationTemperature: document.getElementById("vacation_temperature"),
+    awayEnabled: document.getElementById("away_enabled"),
+    roomsContainer: document.getElementById("roomsContainer"),
+    versionBadge: document.getElementById("versionBadge"),
+    circuitsList: document.getElementById("circuitsList"),
+    addCircuitBtn: document.getElementById("addCircuitBtn"),
+    entityPickerModal: document.getElementById("entity-picker-modal"),
+    entityPickerModalTitle: document.getElementById("entity-picker-modal-title"),
+    entityPickerModalClose: document.getElementById("entity-picker-modal-close"),
+    entityPickerModalSearch: document.getElementById("entity-picker-modal-search"),
+    entityPickerModalList: document.getElementById("entity-picker-modal-list"),
 
-  scheduleCopyModal: document.getElementById("schedule-copy-modal"),
-  scheduleCopyTitle: document.getElementById("schedule-copy-title"),
-  scheduleCopyClose: document.getElementById("schedule-copy-close"),
-  scheduleCopyCancel: document.getElementById("schedule-copy-cancel"),
-  scheduleCopyApply: document.getElementById("schedule-copy-apply"),
-  scheduleCopyRoomsList: document.getElementById("schedule-copy-rooms-list"),
-};
+    scheduleModal: document.getElementById("schedule-modal"),
+    scheduleModalTitle: document.getElementById("schedule-modal-title"),
+    scheduleClose: document.getElementById("schedule-close"),
+    scheduleCancel: document.getElementById("schedule-cancel"),
+    scheduleAdd: document.getElementById("schedule-add"),
+    scheduleSave: document.getElementById("schedule-save"),
+    scheduleEntries: document.getElementById("schedule-entries"),
+    scheduleDayButtons: document.querySelectorAll(".schedule-days button"),
+    scheduleCopyRoomsBtn: document.getElementById("schedule-copy-rooms"),
+
+    scheduleCopyModal: document.getElementById("schedule-copy-modal"),
+    scheduleCopyTitle: document.getElementById("schedule-copy-title"),
+    scheduleCopyClose: document.getElementById("schedule-copy-close"),
+    scheduleCopyCancel: document.getElementById("schedule-copy-cancel"),
+    scheduleCopyApply: document.getElementById("schedule-copy-apply"),
+    scheduleCopyRoomsList: document.getElementById("schedule-copy-rooms-list"),
+  };
+}
 
 let unsubscribeStateChanged = null;
 let isEditing = false;
@@ -1633,6 +1637,7 @@ function createRoomCard(roomId, room) {
 }
 
 function renderRooms() {
+  if (!els.roomsContainer) return;
   els.roomsContainer.innerHTML = "";
 
   const entries = Object.entries(state.config.rooms || {});
@@ -2371,6 +2376,7 @@ async function setupLiveUpdates() {
 }
 
 async function init() {
+  initEls();
   applyTranslations();
   bindEvents();
   enableEditTracking();
