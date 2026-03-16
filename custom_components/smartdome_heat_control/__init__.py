@@ -310,6 +310,11 @@ def _async_register_services(hass: HomeAssistant) -> None:
         current_cfg = dict(data["config"])
         patch = dict(call.data.get("config", {}))
 
+        # Rooms must be replaced entirely, not merged, so that deleted rooms
+        # are actually removed and don't reappear after reload.
+        if CONF_ROOMS in patch:
+            current_cfg[CONF_ROOMS] = patch.pop(CONF_ROOMS)
+
         deep_merge(current_cfg, patch)
         current_cfg = _normalize_config(current_cfg)
 
