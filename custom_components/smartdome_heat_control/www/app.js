@@ -176,6 +176,8 @@ const I18N = {
 
     add_window_sensor: "Add window sensor",
 
+    help_btn: "Help",
+
     section_circuits: "Heating circuits",
     circuits_hint: "Only required if the building has multiple independent heating circuits, each with its own main thermostat.",
     add_circuit: "Add heating circuit",
@@ -323,6 +325,8 @@ const I18N = {
     picker_no_results: "Keine passenden Entities gefunden.",
 
     add_window_sensor: "Fensterkontakt hinzufügen",
+
+    help_btn: "Hilfe",
 
     section_circuits: "Heizkreise",
     circuits_hint: "Nur erforderlich wenn das Gebäude mehrere unabhängige Heizkreise besitzt, die jeweils ein eigenes Hauptthermostat haben.",
@@ -2319,4 +2323,40 @@ async function init() {
   }
 }
 
+// ─── Help modal ──────────────────────────────────────────────────────────────
+function setupHelpModal() {
+  const modal = document.getElementById("help-modal");
+  if (!modal) return;
+
+  let helpLang = UI_LANG;
+
+  function setHelpLang(lang) {
+    helpLang = lang;
+    modal.querySelectorAll(".help-lang-content").forEach((el) => {
+      el.classList.toggle("hidden", el.dataset.lang !== lang);
+    });
+    document.getElementById("help-lang-de").classList.toggle("active", lang === "de");
+    document.getElementById("help-lang-en").classList.toggle("active", lang === "en");
+  }
+
+  document.getElementById("helpBtn").addEventListener("click", () => {
+    modal.classList.remove("hidden");
+    setHelpLang(helpLang);
+  });
+
+  document.getElementById("help-modal-close").addEventListener("click", () => {
+    modal.classList.add("hidden");
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.add("hidden");
+  });
+
+  document.getElementById("help-lang-de").addEventListener("click", () => setHelpLang("de"));
+  document.getElementById("help-lang-en").addEventListener("click", () => setHelpLang("en"));
+
+  setHelpLang(UI_LANG);
+}
+
+setupHelpModal();
 init();
