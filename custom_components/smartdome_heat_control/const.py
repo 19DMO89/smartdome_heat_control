@@ -30,6 +30,7 @@ CONF_MORNING_BOOST_START = "morning_boost_start"
 CONF_MORNING_BOOST_END = "morning_boost_end"
 CONF_ROOMS = "rooms"
 CONF_ROOM_WINDOW_SENSOR = "window_sensor"
+CONF_ROOM_WINDOW_SENSORS = "window_sensors"
 
 CONF_ENERGY_RESIDUAL_HEAT_HOLD = "energy_residual_heat_hold"
 DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD = 180
