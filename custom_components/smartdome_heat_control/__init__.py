@@ -24,9 +24,13 @@ from .const import (
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_CALLING_FOR_HEAT,
     CONF_ROOM_CYCLE_PEAK_TEMP,
+    CONF_ROOM_CYCLE_START_TS,
     CONF_ROOM_CYCLE_TARGET_TEMP,
     CONF_ROOM_HEATING_CYCLE_ACTIVE,
     CONF_ROOM_LEARNED_OVERSHOOT,
+    CONF_ROOM_LEARNED_OVERSHOOT_LONG,
+    CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM,
+    CONF_ROOM_LEARNED_OVERSHOOT_SHORT,
     CONF_VACATION_ENABLED,
     CONF_VACATION_TEMPERATURE,
     CONF_ENERGY_RESIDUAL_HEAT_HOLD,
@@ -34,6 +38,9 @@ from .const import (
     DATA_CONTROLLER,
     DATA_ENABLED,
     DEFAULT_ADAPTIVE_OVERSHOOT,
+    DEFAULT_ADAPTIVE_OVERSHOOT_LONG,
+    DEFAULT_ADAPTIVE_OVERSHOOT_MEDIUM,
+    DEFAULT_ADAPTIVE_OVERSHOOT_SHORT,
     DEFAULT_AWAY_ENABLED,
     DEFAULT_ENABLED,
     DEFAULT_HEATING_MODE,
@@ -88,11 +95,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     controller = SmartHeatingController(hass, dict(cfg))
     controller._enabled = bool(cfg.get(DATA_ENABLED, DEFAULT_ENABLED))
 
-    hass.data[DOMAIN][entry.entry_id] = {
+    domain_data: dict[str, Any] = {
         DATA_CONTROLLER: controller,
         "config": cfg,
         "entry": entry,
     }
+    hass.data[DOMAIN][entry.entry_id] = domain_data
+
+    async def _persist_learned(config: dict[str, Any]) -> None:
+        hass.config_entries.async_update_entry(entry, data=config)
+        domain_data["config"] = config
+
+    controller.set_persist_callback(_persist_learned)
 
     await _async_register_frontend(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -221,6 +235,18 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
                 CONF_ROOM_LEARNED_OVERSHOOT,
                 DEFAULT_ADAPTIVE_OVERSHOOT,
             ),
+            CONF_ROOM_LEARNED_OVERSHOOT_SHORT: room.get(
+                CONF_ROOM_LEARNED_OVERSHOOT_SHORT,
+                DEFAULT_ADAPTIVE_OVERSHOOT_SHORT,
+            ),
+            CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM: room.get(
+                CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM,
+                DEFAULT_ADAPTIVE_OVERSHOOT_MEDIUM,
+            ),
+            CONF_ROOM_LEARNED_OVERSHOOT_LONG: room.get(
+                CONF_ROOM_LEARNED_OVERSHOOT_LONG,
+                DEFAULT_ADAPTIVE_OVERSHOOT_LONG,
+            ),
             CONF_ROOM_HEATING_CYCLE_ACTIVE: room.get(
                 CONF_ROOM_HEATING_CYCLE_ACTIVE,
                 False,
@@ -231,6 +257,7 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             ),
             CONF_ROOM_CYCLE_TARGET_TEMP: room.get(CONF_ROOM_CYCLE_TARGET_TEMP),
             CONF_ROOM_CYCLE_PEAK_TEMP: room.get(CONF_ROOM_CYCLE_PEAK_TEMP),
+            CONF_ROOM_CYCLE_START_TS: None,
             "control_profile": room.get(
             "control_profile",
             DEFAULT_ROOM_CONTROL_PROFILE,

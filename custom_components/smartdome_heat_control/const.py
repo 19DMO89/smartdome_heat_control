@@ -52,9 +52,18 @@ CONF_HEATING_MODE = "heating_mode"
 
 # Room learning keys
 CONF_ROOM_LEARNED_OVERSHOOT = "learned_overshoot"
+CONF_ROOM_LEARNED_OVERSHOOT_SHORT = "learned_overshoot_short"
+CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM = "learned_overshoot_medium"
+CONF_ROOM_LEARNED_OVERSHOOT_LONG = "learned_overshoot_long"
 CONF_ROOM_HEATING_CYCLE_ACTIVE = "heating_cycle_active"
 CONF_ROOM_CYCLE_TARGET_TEMP = "cycle_target_temp"
 CONF_ROOM_CYCLE_PEAK_TEMP = "cycle_peak_temp"
+CONF_ROOM_CYCLE_START_TS = "cycle_start_ts"
+
+# Adaptive bucket boundaries (seconds)
+ADAPTIVE_BUCKET_SHORT_MAX_SECS = 900   # < 15 min
+ADAPTIVE_BUCKET_MEDIUM_MAX_SECS = 2700  # 15–45 min
+                                        # > 45 min = long bucket
 
 CONF_ROOM_CONTROL_PROFILE = "control_profile"
 
@@ -95,6 +104,11 @@ DEFAULT_HEATING_MODE = HEATING_MODE_BALANCED
 DEFAULT_ADAPTIVE_OVERSHOOT = 0.3
 MIN_ADAPTIVE_OVERSHOOT = 0.0
 MAX_ADAPTIVE_OVERSHOOT = 1.5
+
+# Per-bucket defaults (short cycles overshoot less, long cycles overshoot more)
+DEFAULT_ADAPTIVE_OVERSHOOT_SHORT = 0.2
+DEFAULT_ADAPTIVE_OVERSHOOT_MEDIUM = 0.4
+DEFAULT_ADAPTIVE_OVERSHOOT_LONG = 0.7
 
 DEFAULT_WINDOW_OPEN_DELAY = 120
 DEFAULT_WINDOW_CLOSE_DELAY = 60
