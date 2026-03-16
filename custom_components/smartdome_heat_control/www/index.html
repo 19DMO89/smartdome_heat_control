@@ -99,13 +99,143 @@
       filter: drop-shadow(0 0 4px rgba(77, 163, 255, 0.2));
     }
 
-    .mode-hint {
-      grid-column: 1 / -1;
-      margin-top: -2px;
+    .settings-group {
+      margin-bottom: 20px;
+    }
+
+    .settings-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .settings-group-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .toggle + .toggle {
+      margin-top: 10px;
+    }
+
+    .toggle-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .toggle-temp {
+      width: 70px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    /* Mode picker */
+    .mode-picker {
+      position: relative;
+      width: 100%;
+    }
+
+    .mode-picker-trigger {
+      width: 100%;
+      min-height: 54px;
+      border: 1px solid var(--line);
+      background: #0f151d;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 40px 10px 14px;
+      cursor: pointer;
+      text-align: left;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      position: relative;
+    }
+
+    .mode-picker-trigger::after {
+      content: "▾";
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 14px;
+      pointer-events: none;
+    }
+
+    .mode-picker-trigger:hover,
+    .mode-picker.open .mode-picker-trigger {
+      border-color: var(--accent);
+    }
+
+    .mode-picker-trigger-label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .mode-picker-trigger-desc {
       font-size: 12px;
       color: var(--muted);
-      line-height: 1.45;
-      padding: 2px 2px 0;
+    }
+
+    .mode-picker-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      z-index: 60;
+      background: rgba(20, 26, 34, 0.98);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 8px;
+      display: none;
+    }
+
+    .mode-picker.open .mode-picker-dropdown {
+      display: block;
+    }
+
+    .mode-picker-option {
+      width: 100%;
+      border: 1px solid transparent;
+      background: #0f151d;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      text-align: left;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      cursor: pointer;
+      margin-bottom: 4px;
+    }
+
+    .mode-picker-option:last-child {
+      margin-bottom: 0;
+    }
+
+    .mode-picker-option:hover,
+    .mode-picker-option.selected {
+      border-color: var(--accent);
+      background: #162233;
+    }
+
+    .mode-picker-option-label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .mode-picker-option-desc {
+      font-size: 12px;
+      color: var(--muted);
     }
 
     button {
@@ -705,7 +835,10 @@
         <section class="card">
           <h2 data-i18n="global_settings">Globale Einstellungen</h2>
 
-          <div class="field full" style="margin-bottom: 14px;">
+          <!-- Steuerung -->
+          <div class="settings-group">
+            <div class="settings-group-label" data-i18n="section_control">Steuerung</div>
+
             <div class="toggle">
               <div class="toggle-text">
                 <strong data-i18n="control_enabled">Steuerung aktiv</strong>
@@ -715,9 +848,7 @@
               </div>
               <input id="enabled" type="checkbox" />
             </div>
-          </div>
 
-          <div class="field full" style="margin-bottom: 14px;">
             <div class="toggle">
               <div class="toggle-text">
                 <strong data-i18n="vacation_mode">Urlaubsmodus</strong>
@@ -725,11 +856,12 @@
                   Setzt alle Räume auf die globale Urlaubstemperatur.
                 </span>
               </div>
-              <input id="vacation_enabled" type="checkbox" />
+              <div class="toggle-right">
+                <input id="vacation_temperature" class="toggle-temp" type="number" min="5" max="20" step="0.1" />
+                <input id="vacation_enabled" type="checkbox" />
+              </div>
             </div>
-          </div>
 
-          <div class="field full" style="margin-bottom: 14px;">
             <div class="toggle">
               <div class="toggle-text">
                 <strong data-i18n="away_mode">Nicht Zuhause</strong>
@@ -741,104 +873,73 @@
             </div>
           </div>
 
-          <div class="sub-actions" style="margin-bottom: 16px;">
-            <button id="toggleVacationBtn" type="button" class="ghost" data-i18n="btn_vacation_enable">
-              🏖 Urlaub aktivieren
-            </button>
-            <button id="toggleAwayBtn" type="button" class="ghost" data-i18n="btn_away_enable">
-              🚪 Nicht Zuhause aktivieren
-            </button>
-          </div>
-
-          <div class="fields">
-            <div class="field">
-              <label for="main_thermostat_picker" data-i18n="main_thermostat">Hauptthermostat</label>
-              <div id="main_thermostat_picker"></div>
-            </div>
-
-            <div class="field">
-              <label for="main_sensor_picker" data-i18n="main_sensor">Temperatursensor Hauptthermostat</label>
-              <div id="main_sensor_picker"></div>
-            </div>
-
-            <div class="field">
-              <label for="boost_delta" data-i18n="boost_delta">Boost-Delta (°C)</label>
-              <input id="boost_delta" type="number" min="0" step="0.1" />
-            </div>
-
-            <div class="field">
-              <label for="tolerance" data-i18n="tolerance">Toleranz (°C)</label>
-              <input id="tolerance" type="number" min="0" step="0.1" />
-            </div>
-
-            <div class="field">
-              <label for="heating_mode" data-i18n="heating_mode">Heizmodus</label>
-              <select id="heating_mode">
-                <option value="comfort" data-i18n="mode_comfort">Comfort</option>
-                <option value="balanced" data-i18n="mode_balanced">Balanced</option>
-                <option value="energy" data-i18n="mode_energy">Energy</option>
-                <option value="adaptive" data-i18n="mode_adaptive">Adaptive</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="energy_residual_heat_hold" data-i18n="energy_residual_heat_hold">
-                Energy residual heat hold (s)
-              </label>
-              <input
-                id="energy_residual_heat_hold"
-                type="number"
-                min="0"
-                step="1"
-                value="180"
-              />
-            </div>
-
-            <div class="field full mode-hint">
-              In <strong>Energy</strong> mode, the last heated room can stay at its target
-              temperature for a short time to use residual heat from the boiler / pump overrun.
-            </div>
-
-            <div class="field">
-              <label for="vacation_temperature" data-i18n="vacation_temperature">
-                Urlaubstemperatur (°C)
-              </label>
-              <input id="vacation_temperature" type="number" min="5" max="20" step="0.1" />
-            </div>
-
-            <div class="field full mode-hint" data-i18n="mode_hint">
-              <strong>Comfort</strong> hält Ventile länger offen,
-              <strong>Balanced</strong> ist der empfohlene Standard,
-              <strong>Energy</strong> schließt früher,
-              <strong>Adaptive</strong> nutzt das gelernte Raumverhalten.
-            </div>
-
-            <div class="field">
-              <label for="night_start" data-i18n="night_start">Globale Nacht-Startzeit</label>
-              <input id="night_start" type="time" />
-            </div>
-
-            <div class="field">
-              <label for="morning_boost_start" data-i18n="morning_boost_start">Globale Tag-Startzeit</label>
-              <input id="morning_boost_start" type="time" />
-            </div>
-
-            <div class="field">
-              <label for="morning_boost_end" data-i18n="morning_boost_end">Morgen-Boost Ende</label>
-              <input id="morning_boost_end" type="time" />
+          <!-- Hauptthermostat -->
+          <div class="settings-group">
+            <div class="settings-group-label" data-i18n="section_thermostat">Hauptthermostat</div>
+            <div class="fields">
+              <div class="field">
+                <label for="main_thermostat_picker" data-i18n="main_thermostat">Hauptthermostat</label>
+                <div id="main_thermostat_picker"></div>
+              </div>
+              <div class="field">
+                <label for="main_sensor_picker" data-i18n="main_sensor">Temperatursensor</label>
+                <div id="main_sensor_picker"></div>
+              </div>
             </div>
           </div>
 
-          <div class="sub-actions">
-            <button id="applyTimesToRoomsBtn" class="ghost" data-i18n="apply_times">
-              Globale Zeiten in alle Räume übernehmen
-            </button>
+          <!-- Heizung -->
+          <div class="settings-group">
+            <div class="settings-group-label" data-i18n="section_heating">Heizung</div>
+            <div class="fields">
+              <div class="field full">
+                <label data-i18n="heating_mode">Heizmodus</label>
+                <div id="heating_mode_picker"></div>
+              </div>
+              <div class="field" id="energy_hold_field">
+                <label for="energy_residual_heat_hold" data-i18n="energy_residual_heat_hold">
+                  Nachlaufzeit Energy (s)
+                </label>
+                <input id="energy_residual_heat_hold" type="number" min="0" step="1" value="180" />
+              </div>
+              <div class="field">
+                <label for="boost_delta" data-i18n="boost_delta">Boost-Delta (°C)</label>
+                <input id="boost_delta" type="number" min="0" step="0.1" />
+              </div>
+              <div class="field">
+                <label for="tolerance" data-i18n="tolerance">Toleranz (°C)</label>
+                <input id="tolerance" type="number" min="0" step="0.1" />
+              </div>
+            </div>
           </div>
 
-          <div class="footer-note" data-i18n="footer_note">
-            Der Übernehmen-Button setzt für alle Räume:
-            <strong>Tag-Start = globale Tag-Startzeit</strong> und
-            <strong>Nacht-Start = globale Nacht-Startzeit</strong>.
+          <!-- Zeiten -->
+          <div class="settings-group">
+            <div class="settings-group-label" data-i18n="section_times">Zeiten</div>
+            <div class="fields">
+              <div class="field">
+                <label for="morning_boost_start" data-i18n="morning_boost_start">Globale Tag-Startzeit</label>
+                <input id="morning_boost_start" type="time" />
+              </div>
+              <div class="field">
+                <label for="night_start" data-i18n="night_start">Globale Nacht-Startzeit</label>
+                <input id="night_start" type="time" />
+              </div>
+              <div class="field">
+                <label for="morning_boost_end" data-i18n="morning_boost_end">Morgen-Boost Ende</label>
+                <input id="morning_boost_end" type="time" />
+              </div>
+            </div>
+            <div class="sub-actions">
+              <button id="applyTimesToRoomsBtn" class="ghost" data-i18n="apply_times">
+                Globale Zeiten in alle Räume übernehmen
+              </button>
+            </div>
+            <div class="footer-note" data-i18n="footer_note">
+              Der Übernehmen-Button setzt für alle Räume:
+              <strong>Tag-Start = globale Tag-Startzeit</strong> und
+              <strong>Nacht-Start = globale Nacht-Startzeit</strong>.
+            </div>
           </div>
         </section>
       </div>
