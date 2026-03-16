@@ -267,6 +267,52 @@
       margin-bottom: 10px;
     }
 
+    /* Live status chips (global settings + rooms) */
+    .live-status {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-size: 13px;
+    }
+
+    .live-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+    }
+
+    .live-chip-value {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Adaptive overshoot bucket display in rooms */
+    .room-adaptive {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .adaptive-bucket {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .adaptive-bucket-value {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
     /* Room group header */
     .room-group-header {
       font-size: 11px;
@@ -932,6 +978,7 @@
                 <div id="main_sensor_picker"></div>
               </div>
             </div>
+            <div id="main_live_status" class="live-status hidden"></div>
           </div>
 
           <!-- Heizung -->
@@ -1006,10 +1053,7 @@
       <section class="card rooms-card">
         <div class="rooms-header">
           <div>
-            <h2 style="margin-bottom: 6px;" data-i18n="rooms_title">Räume</h2>
-            <div class="muted" data-i18n="rooms_subtitle">
-              Rechts scrollbar, damit die Haupteinstellungen sichtbar bleiben.
-            </div>
+            <h2 data-i18n="rooms_title">Räume</h2>
           </div>
 
           <button id="addRoomBtn" class="success" data-i18n="add_room">
@@ -1072,6 +1116,21 @@
           <button id="schedule-copy-apply" type="button" class="primary">Apply</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="entity-picker-modal" class="modal hidden">
+    <div class="modal-content" style="width: min(540px, 100%); max-height: 85vh; display: flex; flex-direction: column; gap: 10px;">
+      <div class="modal-header">
+        <h2 id="entity-picker-modal-title">Entity wählen</h2>
+        <button id="entity-picker-modal-close" type="button" class="ghost">✕</button>
+      </div>
+      <input
+        id="entity-picker-modal-search"
+        type="text"
+        style="margin: 0;"
+      />
+      <div id="entity-picker-modal-list" class="entity-picker-list" style="max-height: 60vh; overflow-y: auto;"></div>
     </div>
   </div>
 
