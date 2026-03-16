@@ -518,6 +518,12 @@ function sortByEntityId(items) {
 }
 
 function isTemperatureSensor(entity) {
+  // climate entities with current_temperature attribute can be used as sensors
+  if (entity?.entity_id?.startsWith("climate.")) {
+    const currentTemp = entity.attributes?.current_temperature;
+    return currentTemp !== undefined && currentTemp !== null && !Number.isNaN(Number(currentTemp));
+  }
+
   if (!entity?.entity_id?.startsWith("sensor.")) {
     return false;
   }
@@ -710,7 +716,12 @@ function getSensorTemperature(sensorId) {
     return null;
   }
 
-  const value = Number(sensor.state);
+  // climate entities expose temperature in attributes, not state
+  const raw = sensor.entity_id?.startsWith("climate.")
+    ? sensor.attributes?.current_temperature
+    : sensor.state;
+
+  const value = Number(raw);
   if (!Number.isFinite(value)) {
     return null;
   }
@@ -965,7 +976,7 @@ function getEntityIcon(entityId) {
     return "—";
   }
   if (entityId.startsWith("climate.")) {
-    return "🔥";
+    return "🌡️";
   }
   if (entityId.startsWith("binary_sensor.")) {
     return "🪟";
