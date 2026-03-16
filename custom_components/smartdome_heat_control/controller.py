@@ -298,12 +298,18 @@ class SmartHeatingController:
             return None
 
     def _get_state_float(self, entity_id: str | None) -> float | None:
-        """Numerischen Zustand einer Entity lesen."""
+        """Numerischen Zustand einer Entity lesen.
+
+        Für climate.*-Entities wird current_temperature aus den Attributen
+        gelesen, da state dort den HVAC-Modus enthält (z.B. 'heat_cool').
+        """
         if not entity_id:
             return None
         state = self.hass.states.get(entity_id)
         if not state or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return None
+        if entity_id.startswith("climate."):
+            return self._safe_float(state.attributes.get("current_temperature"))
         return self._safe_float(state.state)
 
     def _room_temp(self, room: dict[str, Any]) -> float | None:
