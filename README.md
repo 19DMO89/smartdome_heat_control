@@ -114,14 +114,35 @@ Entity:
 
 In Adaptive mode, Smartdome measures how much a room overshoots its target temperature after a heating cycle and automatically adjusts future behavior.
 
+Smartdome uses **three separate learning buckets** based on heating cycle duration:
+
+| Bucket | Duration | Default overshoot |
+|---|---|---|
+| Short | < 15 min | 0.2 °C |
+| Medium | 15 – 45 min | 0.4 °C |
+| Long | > 45 min | 0.7 °C |
+
 Example:
 
     Target temperature:  21.0 °C
     Actual peak:         21.5 °C
-    Learned overshoot:    0.5 °C
+    Learned overshoot:    0.5 °C (medium bucket)
     → Next cycle: heating stops 0.5 °C earlier
 
-This improves comfort, energy efficiency, and temperature stability over time.
+Learned values are persisted across Home Assistant restarts.
+
+---
+
+### Heating Circuits
+
+For buildings with **multiple independent heating circuits** (e.g. underfloor + radiators, or different floors), each circuit can be configured with its own main thermostat and sensor.
+
+| Setup | Description |
+|---|---|
+| **No circuits configured** | Works exactly as before — one global main thermostat for all rooms. |
+| **Circuits configured** | Each circuit has its own main thermostat. Rooms are assigned to circuits and grouped accordingly in the UI. |
+
+> Circuits are only needed if the building has multiple physically separate heating systems. For most homes, no circuits need to be configured.
 
 ---
 
@@ -148,6 +169,7 @@ Configure:
 - Global day/night times
 - Heating mode
 - Vacation and away mode
+- Heating circuits *(optional — only for multi-circuit buildings)*
 
 ---
 
@@ -162,6 +184,7 @@ Configure each room individually:
 - Away temperature
 - Day/night schedule or weekly schedule
 - Thermostat control profile
+- Heating circuit assignment *(optional)*
 - Enable/disable
 
 ---
@@ -335,14 +358,35 @@ Entität:
 
 Im Adaptive-Modus misst Smartdome, wie stark ein Raum nach einem Heizzyklus über die Zieltemperatur hinausschießt, und passt das zukünftige Verhalten automatisch an.
 
+Smartdome verwendet **drei separate Lern-Buckets** basierend auf der Heizzyklusdauer:
+
+| Bucket | Dauer | Standard-Überschwingen |
+|---|---|---|
+| Kurz | < 15 Min | 0,2 °C |
+| Mittel | 15 – 45 Min | 0,4 °C |
+| Lang | > 45 Min | 0,7 °C |
+
 Beispiel:
 
-    Zieltemperatur:        21,0 °C
-    Tatsächlicher Peak:    21,5 °C
-    Gelerntes Überschwingen: 0,5 °C
+    Zieltemperatur:          21,0 °C
+    Tatsächlicher Peak:      21,5 °C
+    Gelerntes Überschwingen:  0,5 °C (Mittel-Bucket)
     → Nächster Zyklus: Heizung stoppt 0,5 °C früher
 
-Das verbessert Komfort, Energieeffizienz und Temperaturstabilität über Zeit.
+Gelernte Werte bleiben über Home Assistant-Neustarts hinweg erhalten.
+
+---
+
+### Heizkreise
+
+Für Gebäude mit **mehreren unabhängigen Heizkreisen** (z.B. Fußbodenheizung + Heizkörper oder verschiedene Etagen) kann jeder Heizkreis mit eigenem Hauptthermostat und Sensor konfiguriert werden.
+
+| Setup | Beschreibung |
+|---|---|
+| **Keine Heizkreise konfiguriert** | Funktioniert wie bisher — ein globales Hauptthermostat für alle Räume. |
+| **Heizkreise konfiguriert** | Jeder Kreis hat sein eigenes Hauptthermostat. Räume werden Kreisen zugewiesen und im Dashboard entsprechend gruppiert angezeigt. |
+
+> Heizkreise werden nur benötigt, wenn das Gebäude mehrere physisch getrennte Heizsysteme besitzt. In den meisten Häusern ist keine Konfiguration von Heizkreisen erforderlich.
 
 ---
 
@@ -369,6 +413,7 @@ Konfigurierbar:
 - Globale Tag/Nacht-Zeiten
 - Heizmodus
 - Urlaubs- und Abwesenheitsmodus
+- Heizkreise *(optional — nur für Mehrkreis-Gebäude)*
 
 ---
 
@@ -383,6 +428,7 @@ Jeden Raum einzeln konfigurieren:
 - Abwesenheitstemperatur
 - Tag/Nacht-Zeitplan oder Wochenschema
 - Thermostat-Regelprofil
+- Heizkreis-Zuweisung *(optional)*
 - Aktivieren/Deaktivieren
 
 ---
