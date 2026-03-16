@@ -867,6 +867,14 @@
       }
     }
 
+    /* Live label badges */
+    .label-live {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
     /* Help modal */
     .help-modal-content {
       width: min(820px, 100%);
@@ -1072,15 +1080,20 @@
             <div class="settings-group-label" data-i18n="section_thermostat">Hauptthermostat</div>
             <div class="fields">
               <div class="field">
-                <label for="main_thermostat_picker" data-i18n="main_thermostat">Hauptthermostat</label>
+                <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span data-i18n="main_thermostat">Hauptthermostat</span>
+                  <span id="global_thermostat_live" class="label-live"></span>
+                </label>
                 <div id="main_thermostat_picker"></div>
               </div>
               <div class="field">
-                <label for="main_sensor_picker" data-i18n="main_sensor">Temperatursensor</label>
+                <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span data-i18n="main_sensor">Temperatursensor</span>
+                  <span id="global_sensor_live" class="label-live"></span>
+                </label>
                 <div id="main_sensor_picker"></div>
               </div>
             </div>
-            <div id="main_live_status" class="live-status hidden"></div>
           </div>
 
           <!-- Heizung -->

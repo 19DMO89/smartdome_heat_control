@@ -406,8 +406,6 @@ const els = {
   versionBadge: document.getElementById("versionBadge"),
   circuitsList: document.getElementById("circuitsList"),
   addCircuitBtn: document.getElementById("addCircuitBtn"),
-  mainLiveStatus: document.getElementById("main_live_status"),
-
   entityPickerModal: document.getElementById("entity-picker-modal"),
   entityPickerModalTitle: document.getElementById("entity-picker-modal-title"),
   entityPickerModalClose: document.getElementById("entity-picker-modal-close"),
@@ -796,25 +794,16 @@ function isThermostatHeating(thermostatId) {
   return entity?.attributes?.hvac_action === "heating";
 }
 
+function isAnyWindowOpen(room) {
+  const sensors = Array.isArray(room.window_sensors) ? room.window_sensors : [];
+  return sensors.some((id) => isWindowOpen(id));
+}
+
 function roomTitleMeta(room) {
-  const temp = getSensorTemperature(room.sensor);
   const heating = isRoomHeating(room.thermostat);
-  const windowOpen = isWindowOpen(room.window_sensor);
-  const setpoint = getThermostatSetpoint(room.thermostat);
+  const windowOpen = isAnyWindowOpen(room);
 
   const metaParts = [];
-
-  if (temp !== null) {
-    metaParts.push(
-      `<span class="room-live-temp">${escapeHtml(formatTemperature(temp))}</span>`
-    );
-  }
-
-  if (setpoint !== null) {
-    metaParts.push(
-      `<span style="color:var(--muted);font-size:12px;" title="Thermostat setpoint">→ ${escapeHtml(formatTemperature(setpoint))}</span>`
-    );
-  }
 
   if (heating) {
     metaParts.push(
@@ -838,43 +827,29 @@ function renderVersion() {
 }
 
 function updateMainLiveStatus() {
-  if (!els.mainLiveStatus) return;
-
   const thermostatId = getEntityPickerValue("global_main_thermostat_picker");
   const sensorId = getEntityPickerValue("global_main_sensor_picker");
 
-  const chips = [];
-
-  if (thermostatId) {
-    const heating = isThermostatHeating(thermostatId);
-    const setpoint = getThermostatSetpoint(thermostatId);
-    const currentTemp = getSensorTemperature(thermostatId);
-
-    let thermostatChip = `<span class="live-chip">${heating ? "🔥" : "🌡️"}&nbsp;`;
-    if (currentTemp !== null) {
-      thermostatChip += `<span class="live-chip-value">${escapeHtml(formatTemperature(currentTemp))}</span>`;
-    }
-    if (setpoint !== null) {
-      thermostatChip += `<span style="color:var(--muted)"> → ${escapeHtml(formatTemperature(setpoint))}</span>`;
-    }
-    thermostatChip += `</span>`;
-    chips.push(thermostatChip);
-  }
-
-  if (sensorId && sensorId !== thermostatId) {
-    const sensorTemp = getSensorTemperature(sensorId);
-    if (sensorTemp !== null) {
-      chips.push(
-        `<span class="live-chip">🌡️&nbsp;<span class="live-chip-value">${escapeHtml(formatTemperature(sensorTemp))}</span></span>`
-      );
+  const thermostatLive = document.getElementById("global_thermostat_live");
+  if (thermostatLive) {
+    if (thermostatId) {
+      const heating = isThermostatHeating(thermostatId);
+      const setpoint = getThermostatSetpoint(thermostatId);
+      if (setpoint !== null) {
+        thermostatLive.innerHTML = `${heating ? "🔥 " : ""}${escapeHtml(formatTemperature(setpoint))}`;
+      } else {
+        thermostatLive.textContent = "";
+      }
+    } else {
+      thermostatLive.textContent = "";
     }
   }
 
-  if (chips.length) {
-    els.mainLiveStatus.innerHTML = chips.join("");
-    els.mainLiveStatus.classList.remove("hidden");
-  } else {
-    els.mainLiveStatus.classList.add("hidden");
+  const sensorLive = document.getElementById("global_sensor_live");
+  if (sensorLive) {
+    const tempSrc = sensorId || thermostatId;
+    const temp = tempSrc ? getSensorTemperature(tempSrc) : null;
+    sensorLive.textContent = temp !== null ? formatTemperature(temp) : "";
   }
 }
 
@@ -1476,12 +1451,18 @@ function createRoomCard(roomId, room) {
       </div>
 
       <div class="field">
-        <label>${escapeHtml(t("room_thermostat"))}</label>
+        <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span>${escapeHtml(t("room_thermostat"))}</span>
+          <span class="label-live room-thermostat-live"></span>
+        </label>
         <div class="room-thermostat-picker"></div>
       </div>
 
       <div class="field">
-        <label>${escapeHtml(t("room_sensor"))}</label>
+        <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span>${escapeHtml(t("room_sensor"))}</span>
+          <span class="label-live room-sensor-live"></span>
+        </label>
         <div class="room-sensor-picker"></div>
       </div>
 
@@ -1679,6 +1660,26 @@ function updateRoomLiveState() {
     const titleMeta = node.querySelector(".room-title-meta");
     if (titleMeta) {
       titleMeta.innerHTML = roomTitleMeta(room);
+    }
+
+    // live thermostat label: setpoint + heating indicator
+    const thermostatLive = node.querySelector(".room-thermostat-live");
+    if (thermostatLive) {
+      const setpoint = getThermostatSetpoint(room.thermostat);
+      const heating = isThermostatHeating(room.thermostat);
+      if (setpoint !== null) {
+        thermostatLive.innerHTML = `${heating ? "🔥 " : ""}${escapeHtml(formatTemperature(setpoint))}`;
+      } else {
+        thermostatLive.textContent = "";
+      }
+    }
+
+    // live sensor label: current measured temperature
+    const sensorLive = node.querySelector(".room-sensor-live");
+    if (sensorLive) {
+      const tempSrc = room.sensor || room.thermostat;
+      const temp = getSensorTemperature(tempSrc);
+      sensorLive.textContent = temp !== null ? formatTemperature(temp) : "";
     }
 
     // update adaptive bucket display
