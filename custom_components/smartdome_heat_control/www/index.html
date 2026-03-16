@@ -238,6 +238,52 @@
       color: var(--muted);
     }
 
+    /* Circuit cards */
+    .circuit-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #0f151d;
+      display: grid;
+      gap: 10px;
+    }
+
+    .circuit-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .circuit-card-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .circuits-list {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    /* Room group header */
+    .room-group-header {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 6px 2px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 4px;
+      margin-top: 10px;
+    }
+
+    .room-group-header:first-child {
+      margin-top: 0;
+    }
+
     button {
       appearance: none;
       border: 0;
@@ -940,6 +986,19 @@
               <strong>Tag-Start = globale Tag-Startzeit</strong> und
               <strong>Nacht-Start = globale Nacht-Startzeit</strong>.
             </div>
+          </div>
+
+          <!-- Heizkreise -->
+          <div class="settings-group">
+            <div class="settings-group-label" data-i18n="section_circuits">Heizkreise</div>
+            <div class="footer-note" style="margin-top:0; margin-bottom:12px;" data-i18n="circuits_hint">
+              Nur erforderlich wenn das Gebäude mehrere unabhängige Heizkreise besitzt,
+              die jeweils ein eigenes Hauptthermostat haben.
+            </div>
+            <div id="circuitsList" class="circuits-list"></div>
+            <button id="addCircuitBtn" class="ghost" data-i18n="add_circuit" style="width:100%;">
+              Heizkreis hinzufügen
+            </button>
           </div>
         </section>
       </div>

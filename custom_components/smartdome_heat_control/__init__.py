@@ -17,8 +17,13 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_AWAY_ENABLED,
+    CONF_CIRCUIT_LABEL,
+    CONF_CIRCUIT_MAIN_SENSOR,
+    CONF_CIRCUIT_MAIN_THERMOSTAT,
+    CONF_CIRCUITS,
     CONF_HEATING_MODE,
     CONF_ROOMS,
+    CONF_ROOM_CIRCUIT_ID,
     CONF_ROOM_CONTROL_PROFILE,
     DEFAULT_ROOM_CONTROL_PROFILE,
     CONF_ROOM_AWAY_TEMPERATURE,
@@ -258,12 +263,30 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             CONF_ROOM_CYCLE_TARGET_TEMP: room.get(CONF_ROOM_CYCLE_TARGET_TEMP),
             CONF_ROOM_CYCLE_PEAK_TEMP: room.get(CONF_ROOM_CYCLE_PEAK_TEMP),
             CONF_ROOM_CYCLE_START_TS: None,
+            CONF_ROOM_CIRCUIT_ID: room.get(CONF_ROOM_CIRCUIT_ID, ""),
             "control_profile": room.get(
             "control_profile",
             DEFAULT_ROOM_CONTROL_PROFILE,
             ),
         }
 
+    return normalized
+
+
+def _normalize_circuits(circuits: Any) -> dict[str, dict[str, Any]]:
+    """Heizkreise normalisieren."""
+    if not isinstance(circuits, dict):
+        return {}
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for circuit_id, circuit in circuits.items():
+        if not isinstance(circuit, dict):
+            continue
+        normalized[circuit_id] = {
+            CONF_CIRCUIT_LABEL: circuit.get(CONF_CIRCUIT_LABEL, circuit_id),
+            CONF_CIRCUIT_MAIN_THERMOSTAT: circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT, ""),
+            CONF_CIRCUIT_MAIN_SENSOR: circuit.get(CONF_CIRCUIT_MAIN_SENSOR, ""),
+        }
     return normalized
 
 
@@ -276,6 +299,7 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)
     normalized.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
     normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
+    normalized[CONF_CIRCUITS] = _normalize_circuits(normalized.get(CONF_CIRCUITS, {}))
     normalized.setdefault(CONF_ENERGY_RESIDUAL_HEAT_HOLD,DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,)
     return normalized
 

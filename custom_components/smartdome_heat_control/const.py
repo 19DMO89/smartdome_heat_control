@@ -16,6 +16,13 @@ SERVICE_RELOAD = "reload"
 # Globale Config-Keys
 CONF_MAIN_THERMOSTAT = "main_thermostat"
 CONF_MAIN_SENSOR = "main_sensor"
+
+# Heizkreise
+CONF_CIRCUITS = "circuits"
+CONF_CIRCUIT_LABEL = "label"
+CONF_CIRCUIT_MAIN_THERMOSTAT = "main_thermostat"
+CONF_CIRCUIT_MAIN_SENSOR = "main_sensor"
+CONF_ROOM_CIRCUIT_ID = "circuit_id"
 CONF_BOOST_DELTA = "boost_delta"
 CONF_TOLERANCE = "tolerance"
 CONF_NIGHT_START = "night_start"

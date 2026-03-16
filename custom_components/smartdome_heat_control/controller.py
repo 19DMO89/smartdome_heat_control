@@ -20,10 +20,14 @@ from .const import (
     ADAPTIVE_BUCKET_SHORT_MAX_SECS,
     CONF_AWAY_ENABLED,
     CONF_BOOST_DELTA,
+    CONF_CIRCUIT_MAIN_SENSOR,
+    CONF_CIRCUIT_MAIN_THERMOSTAT,
+    CONF_CIRCUITS,
     CONF_ENERGY_RESIDUAL_HEAT_HOLD,
     CONF_HEATING_MODE,
     CONF_MAIN_SENSOR,
     CONF_MAIN_THERMOSTAT,
+    CONF_ROOM_CIRCUIT_ID,
     CONF_MORNING_BOOST_START,
     CONF_NIGHT_START,
     CONF_ROOMS,
@@ -137,6 +141,12 @@ class SmartHeatingController:
         main_sensor = self._as_entity_id(self.config.get(CONF_MAIN_SENSOR))
         if main_sensor:
             watch_entities.add(main_sensor)
+
+        for circuit in self.config.get(CONF_CIRCUITS, {}).values():
+            if isinstance(circuit, dict):
+                circuit_sensor = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_SENSOR))
+                if circuit_sensor:
+                    watch_entities.add(circuit_sensor)
 
         for room in self._active_rooms().values():
             room_sensor = self._as_entity_id(room.get(CONF_ROOM_SENSOR))
@@ -791,15 +801,36 @@ class SmartHeatingController:
                 min_interval=min_interval,
             )
 
-        main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
-        if main_thermostat:
-            try:
-                main_target = max(
-                    self._effective_target_for_room(room) for room in rooms.values()
-                )
-                self._set_temp_if_needed(main_thermostat, main_target)
-            except ValueError:
-                pass
+        circuits = self.config.get(CONF_CIRCUITS, {})
+        if circuits and isinstance(circuits, dict):
+            for circuit in circuits.values():
+                if not isinstance(circuit, dict):
+                    continue
+                ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
+                if not ct:
+                    continue
+                circuit_rooms = [
+                    r for r in rooms.values()
+                    if r.get(CONF_ROOM_CIRCUIT_ID) == next(
+                        (cid for cid, c in circuits.items() if c is circuit), None
+                    )
+                ]
+                if circuit_rooms:
+                    try:
+                        target = max(self._effective_target_for_room(r) for r in circuit_rooms)
+                        self._set_temp_if_needed(ct, target)
+                    except ValueError:
+                        pass
+        else:
+            main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+            if main_thermostat:
+                try:
+                    main_target = max(
+                        self._effective_target_for_room(room) for room in rooms.values()
+                    )
+                    self._set_temp_if_needed(main_thermostat, main_target)
+                except ValueError:
+                    pass
 
     def _update_room_state(
         self,
@@ -986,22 +1017,51 @@ class SmartHeatingController:
                 ):
                     self._finish_room_heating_cycle(room)
 
-        any_room_needs_heat = any(
-            room_state["state"] == ROOM_STATE_HEATING
-            for room_state in room_states.values()
-        )
-
-        main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
-        if main_thermostat:
-            main_base_target = max(
-                room_state["target"] for room_state in room_states.values()
+        circuits = self.config.get(CONF_CIRCUITS, {})
+        if circuits and isinstance(circuits, dict):
+            # Multi-circuit mode: each circuit controls its own main thermostat
+            for circuit_id, circuit in circuits.items():
+                if not isinstance(circuit, dict):
+                    continue
+                ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
+                if not ct:
+                    continue
+                circuit_room_states = {
+                    rid: rs for rid, rs in room_states.items()
+                    if rooms[rid].get(CONF_ROOM_CIRCUIT_ID) == circuit_id
+                }
+                if not circuit_room_states:
+                    continue
+                any_circuit_needs_heat = any(
+                    rs["state"] == ROOM_STATE_HEATING
+                    for rs in circuit_room_states.values()
+                )
+                circuit_base_target = max(
+                    rs["target"] for rs in circuit_room_states.values()
+                )
+                circuit_target = (
+                    circuit_base_target + boost_delta
+                    if any_circuit_needs_heat
+                    else circuit_base_target
+                )
+                self._set_temp_if_needed(ct, circuit_target)
+        else:
+            # Single-circuit fallback: use global main_thermostat
+            any_room_needs_heat = any(
+                rs["state"] == ROOM_STATE_HEATING
+                for rs in room_states.values()
             )
-            main_target = (
-                main_base_target + boost_delta
-                if any_room_needs_heat
-                else main_base_target
-            )
-            self._set_temp_if_needed(main_thermostat, main_target)
+            main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+            if main_thermostat:
+                main_base_target = max(
+                    rs["target"] for rs in room_states.values()
+                )
+                main_target = (
+                    main_base_target + boost_delta
+                    if any_room_needs_heat
+                    else main_base_target
+                )
+                self._set_temp_if_needed(main_thermostat, main_target)
 
         for room_id, room in rooms.items():
             thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
