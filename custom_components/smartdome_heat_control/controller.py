@@ -159,6 +159,13 @@ class SmartHeatingController:
                 if ws_id:
                     watch_entities.add(ws_id)
 
+            # Bei selbst regelnden Räumen auch den Thermostat beobachten,
+            # damit _evaluate() greift sobald die CCU den State bestätigt.
+            if self._is_self_regulating_room(room):
+                thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
+                if thermostat:
+                    watch_entities.add(thermostat)
+
         if watch_entities:
             self._unsub.append(
                 async_track_state_change_event(
@@ -623,7 +630,7 @@ class SmartHeatingController:
             self._last_computed_targets[thermostat] = desired
             return True
 
-        if abs(previous_computed - desired) >= 0.01:
+        if abs(previous_computed - desired) >= 0.5:
             self._last_computed_targets[thermostat] = desired
             return True
 
@@ -1120,17 +1127,22 @@ class SmartHeatingController:
 
             if self._is_self_regulating_room(room):
                 last_state = self._last_applied_room_state.get(room_id)
+                state_changed = last_state != effective_state
                 force_send = self._should_force_send_for_self_regulating(
                     thermostat,
                     desired,
                 )
 
-                if last_state != effective_state or force_send:
-                    self._set_temp_if_needed(
-                        thermostat,
-                        room_target,
-                        min_interval=0.0 if force_send else min_interval,
-                    )
+                if state_changed:
+                    # Zustandswechsel (z.B. idle→heating) immer sofort senden –
+                    # CCU-Verzögerung spielt hier keine Rolle.
+                    self._set_temp_if_needed(thermostat, room_target, min_interval=0.0)
+                    self._last_applied_room_state[room_id] = effective_state
+                elif force_send:
+                    # Zielwert hat sich geändert, aber kein Zustandswechsel →
+                    # Cooldown respektieren, damit CCU-Polling-Verzögerung keine
+                    # Befehlsflut auslöst.
+                    self._set_temp_if_needed(thermostat, room_target, min_interval=min_interval)
                     self._last_applied_room_state[room_id] = effective_state
             else:
                 self._set_temp_if_needed(
