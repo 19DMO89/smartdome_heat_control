@@ -175,6 +175,8 @@ const I18N = {
     picker_no_results: "No matching entities found.",
 
     add_window_sensor: "Add window sensor",
+    room_advanced_show: "Advanced",
+    room_advanced_hide: "Hide advanced",
 
     help_btn: "Help",
 
@@ -325,6 +327,8 @@ const I18N = {
     picker_no_results: "Keine passenden Entities gefunden.",
 
     add_window_sensor: "Fensterkontakt hinzufügen",
+    room_advanced_show: "Erweitert",
+    room_advanced_hide: "Erweitert ausblenden",
 
     help_btn: "Hilfe",
 
@@ -1444,13 +1448,6 @@ function createRoomCard(roomId, room) {
       </div>
 
       <div class="field">
-        <label>${escapeHtml(t("room_area_id"))}</label>
-        <input class="room-area-id" type="text" value="${escapeHtml(
-          room.area_id || ""
-        )}" />
-      </div>
-
-      <div class="field">
         <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span>${escapeHtml(t("room_thermostat"))}</span>
           <span class="label-live room-thermostat-live"></span>
@@ -1475,18 +1472,6 @@ function createRoomCard(roomId, room) {
       </div>
 
       <div class="field">
-        <label>${escapeHtml(t("room_control_profile"))}</label>
-        <select class="room-control-profile">
-          <option value="standard" ${
-            room.control_profile === "standard" ? "selected" : ""
-          }>${escapeHtml(t("control_profile_standard"))}</option>
-          <option value="self_regulating" ${
-            room.control_profile === "self_regulating" ? "selected" : ""
-          }>${escapeHtml(t("control_profile_self_regulating"))}</option>
-        </select>
-      </div>
-
-      <div class="field">
         <label>${escapeHtml(t("room_target_day"))}</label>
         <input class="room-target-day" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
           room.target_day
@@ -1499,39 +1484,67 @@ function createRoomCard(roomId, room) {
           room.target_night
         )}" />
       </div>
+    </div>
 
-      <div class="field">
-        <label>${escapeHtml(t("room_away_temperature"))}</label>
-        <input class="room-away-temperature" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
-          room.away_temperature
-        )}" />
+    <button type="button" class="ghost room-advanced-toggle" style="width:100%; margin-top:10px; font-size:12px; color:var(--muted); padding:8px;">
+      <span class="room-advanced-toggle-label">${escapeHtml(t("room_advanced_show"))}</span>
+      <span class="room-advanced-chevron" style="margin-left:6px; display:inline-block; transition:transform 0.2s;">▾</span>
+    </button>
+
+    <div class="room-advanced hidden">
+      <div class="room-grid" style="margin-top:12px;">
+        <div class="field">
+          <label>${escapeHtml(t("room_area_id"))}</label>
+          <input class="room-area-id" type="text" value="${escapeHtml(
+            room.area_id || ""
+          )}" />
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_control_profile"))}</label>
+          <select class="room-control-profile">
+            <option value="standard" ${
+              room.control_profile === "standard" ? "selected" : ""
+            }>${escapeHtml(t("control_profile_standard"))}</option>
+            <option value="self_regulating" ${
+              room.control_profile === "self_regulating" ? "selected" : ""
+            }>${escapeHtml(t("control_profile_self_regulating"))}</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_away_temperature"))}</label>
+          <input class="room-away-temperature" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+            room.away_temperature
+          )}" />
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_day_start"))}</label>
+          <input class="room-day-start" type="time" value="${escapeHtml(
+            room.day_start || ""
+          )}" />
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_night_start"))}</label>
+          <input class="room-night-start" type="time" value="${escapeHtml(
+            room.night_start || ""
+          )}" />
+        </div>
+
+        ${Object.keys(state.config.circuits || {}).length > 0 ? `
+        <div class="field">
+          <label>${escapeHtml(t("room_circuit"))}</label>
+          <select class="room-circuit-id">
+            ${getCircuitOptions().map((opt) => `
+              <option value="${escapeHtml(opt.value)}" ${
+                (room.circuit_id || "") === opt.value ? "selected" : ""
+              }>${escapeHtml(opt.label)}</option>
+            `).join("")}
+          </select>
+        </div>` : ""}
       </div>
-
-      <div class="field">
-        <label>${escapeHtml(t("room_day_start"))}</label>
-        <input class="room-day-start" type="time" value="${escapeHtml(
-          room.day_start || ""
-        )}" />
-      </div>
-
-      <div class="field">
-        <label>${escapeHtml(t("room_night_start"))}</label>
-        <input class="room-night-start" type="time" value="${escapeHtml(
-          room.night_start || ""
-        )}" />
-      </div>
-
-      ${Object.keys(state.config.circuits || {}).length > 0 ? `
-      <div class="field">
-        <label>${escapeHtml(t("room_circuit"))}</label>
-        <select class="room-circuit-id">
-          ${getCircuitOptions().map((opt) => `
-            <option value="${escapeHtml(opt.value)}" ${
-              (room.circuit_id || "") === opt.value ? "selected" : ""
-            }>${escapeHtml(opt.label)}</option>
-          `).join("")}
-        </select>
-      </div>` : ""}
     </div>
   `;
 
@@ -1567,6 +1580,17 @@ function createRoomCard(roomId, room) {
 
   wrapper.querySelector(".room-add-window-sensor-btn").addEventListener("click", () => {
     appendWindowSensorRow(windowSensorsList, roomId, "");
+  });
+
+  const advancedToggle = wrapper.querySelector(".room-advanced-toggle");
+  const advancedPanel = wrapper.querySelector(".room-advanced");
+  advancedToggle.addEventListener("click", () => {
+    const isOpen = !advancedPanel.classList.contains("hidden");
+    advancedPanel.classList.toggle("hidden", isOpen);
+    advancedToggle.querySelector(".room-advanced-chevron").style.transform = isOpen ? "" : "rotate(180deg)";
+    advancedToggle.querySelector(".room-advanced-toggle-label").textContent = isOpen
+      ? t("room_advanced_show")
+      : t("room_advanced_hide");
   });
 
   deleteBtn.addEventListener("click", () => {
