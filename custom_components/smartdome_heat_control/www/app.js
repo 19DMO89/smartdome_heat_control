@@ -89,8 +89,13 @@ const I18N = {
     btn_away_enable: "🚪 Enable away",
     btn_away_disable: "🚪 Disable away",
 
+    section_control: "Control",
+    section_thermostat: "Main thermostat",
+    section_heating: "Heating",
+    section_times: "Times",
+
     main_thermostat: "Main thermostat",
-    main_sensor: "Main thermostat temperature sensor",
+    main_sensor: "Temperature sensor",
     boost_delta: "Boost delta (°C)",
     tolerance: "Tolerance (°C)",
     heating_mode: "Heating mode",
@@ -100,8 +105,10 @@ const I18N = {
     morning_boost_start: "Global day start",
     morning_boost_end: "Morning boost end",
 
-    mode_hint:
-      "<strong>Comfort</strong> keeps valves open longer, <strong>Balanced</strong> is the recommended default, <strong>Energy</strong> closes earlier, <strong>Adaptive</strong> uses learned room behavior.",
+    mode_comfort_desc: "Valves stay open longer — less temperature fluctuation, comfort first.",
+    mode_balanced_desc: "Recommended default — good balance between comfort and efficiency.",
+    mode_energy_desc: "Valves close earlier — reduces overheating, energy saving first.",
+    mode_adaptive_desc: "Learns each room's behavior and stops heating early to avoid overshoot.",
 
     apply_times: "Apply global times to all rooms",
     footer_note:
@@ -218,19 +225,26 @@ const I18N = {
     btn_away_enable: "🚪 Nicht Zuhause aktivieren",
     btn_away_disable: "🚪 Nicht Zuhause deaktivieren",
 
+    section_control: "Steuerung",
+    section_thermostat: "Hauptthermostat",
+    section_heating: "Heizung",
+    section_times: "Zeiten",
+
     main_thermostat: "Hauptthermostat",
-    main_sensor: "Temperatursensor Hauptthermostat",
+    main_sensor: "Temperatursensor",
     boost_delta: "Boost-Delta (°C)",
     tolerance: "Toleranz (°C)",
     heating_mode: "Heizmodus",
-    energy_residual_heat_hold: "Restwärme-Nachlauf (s)",
+    energy_residual_heat_hold: "Nachlaufzeit Energy (s)",
     vacation_temperature: "Urlaubstemperatur (°C)",
     night_start: "Globale Nacht-Startzeit",
     morning_boost_start: "Globale Tag-Startzeit",
     morning_boost_end: "Morgen-Boost Ende",
 
-    mode_hint:
-      "<strong>Comfort</strong> hält Ventile länger offen, <strong>Balanced</strong> ist der empfohlene Standard, <strong>Energy</strong> schließt früher, <strong>Adaptive</strong> nutzt das gelernte Raumverhalten.",
+    mode_comfort_desc: "Ventile bleiben länger offen — weniger Temperaturschwankungen, Komfort im Vordergrund.",
+    mode_balanced_desc: "Empfohlener Standard — gute Balance aus Komfort und Energieeffizienz.",
+    mode_energy_desc: "Ventile schließen früher — reduziert Überhitzen, Energiesparen im Vordergrund.",
+    mode_adaptive_desc: "Lernt das Raumverhalten und stoppt die Heizung früher um Überschwingen zu vermeiden.",
 
     apply_times: "Globale Zeiten in alle Räume übernehmen",
     footer_note:
@@ -345,15 +359,14 @@ const els = {
   reloadRoomsBtn: document.getElementById("reloadRoomsBtn"),
   addRoomBtn: document.getElementById("addRoomBtn"),
   applyTimesToRoomsBtn: document.getElementById("applyTimesToRoomsBtn"),
-  toggleVacationBtn: document.getElementById("toggleVacationBtn"),
-  toggleAwayBtn: document.getElementById("toggleAwayBtn"),
   enabled: document.getElementById("enabled"),
   mainThermostatPicker: document.getElementById("main_thermostat_picker"),
   mainSensorPicker: document.getElementById("main_sensor_picker"),
   boostDelta: document.getElementById("boost_delta"),
   tolerance: document.getElementById("tolerance"),
-  heatingMode: document.getElementById("heating_mode"),
+  modePickerContainer: document.getElementById("heating_mode_picker"),
   energyResidualHeatHold: document.getElementById("energy_residual_heat_hold"),
+  energyHoldField: document.getElementById("energy_hold_field"),
   nightStart: document.getElementById("night_start"),
   morningBoostStart: document.getElementById("morning_boost_start"),
   morningBoostEnd: document.getElementById("morning_boost_end"),
@@ -398,18 +411,6 @@ function setButtonsDisabled(disabled) {
   els.reloadRoomsBtn.disabled = disabled;
   els.addRoomBtn.disabled = disabled;
   els.applyTimesToRoomsBtn.disabled = disabled;
-
-  if (els.toggleVacationBtn) {
-    els.toggleVacationBtn.disabled = disabled;
-  }
-
-  if (els.toggleAwayBtn) {
-    els.toggleAwayBtn.disabled = disabled;
-  }
-
-  if (els.heatingMode) {
-    els.heatingMode.disabled = disabled;
-  }
 
   if (els.energyResidualHeatHold) {
     els.energyResidualHeatHold.disabled = disabled;
@@ -734,42 +735,79 @@ function renderVersion() {
   }
 }
 
-function renderModeButtons() {
-  if (els.toggleVacationBtn) {
-    els.toggleVacationBtn.textContent = state.config.vacation_enabled
-      ? t("btn_vacation_disable")
-      : t("btn_vacation_enable");
-  }
+let modePickerValue = "balanced";
 
-  if (els.toggleAwayBtn) {
-    els.toggleAwayBtn.textContent = state.config.away_enabled
-      ? t("btn_away_disable")
-      : t("btn_away_enable");
-  }
+function getModePickerValue() {
+  return modePickerValue;
 }
 
-function renderHeatingMode() {
-  if (!els.heatingMode) {
-    return;
-  }
+function updateEnergyFieldVisibility() {
+  if (!els.energyHoldField) return;
+  els.energyHoldField.classList.toggle("hidden", modePickerValue !== "energy");
+}
 
-  const current = normalizeHeatingMode(state.config.heating_mode);
-  els.heatingMode.innerHTML = "";
+function createModePicker(currentValue) {
+  if (!els.modePickerContainer) return;
 
-  const options = [
-    { value: "comfort", label: t("mode_comfort") },
-    { value: "balanced", label: t("mode_balanced") },
-    { value: "energy", label: t("mode_energy") },
-    { value: "adaptive", label: t("mode_adaptive") },
+  modePickerValue = normalizeHeatingMode(currentValue);
+
+  const modes = [
+    { value: "comfort",  label: t("mode_comfort"),  desc: t("mode_comfort_desc") },
+    { value: "balanced", label: t("mode_balanced"), desc: t("mode_balanced_desc") },
+    { value: "energy",   label: t("mode_energy"),   desc: t("mode_energy_desc") },
+    { value: "adaptive", label: t("mode_adaptive"), desc: t("mode_adaptive_desc") },
   ];
 
-  for (const item of options) {
-    const option = document.createElement("option");
-    option.value = item.value;
-    option.textContent = item.label;
-    option.selected = item.value === current;
-    els.heatingMode.appendChild(option);
-  }
+  const current = modes.find((m) => m.value === modePickerValue) || modes[1];
+
+  els.modePickerContainer.innerHTML = `
+    <div class="mode-picker" id="mode_picker_root">
+      <button type="button" class="mode-picker-trigger">
+        <span class="mode-picker-trigger-label">${escapeHtml(current.label)}</span>
+        <span class="mode-picker-trigger-desc">${escapeHtml(current.desc)}</span>
+      </button>
+      <div class="mode-picker-dropdown">
+        ${modes.map((m) => `
+          <button type="button" class="mode-picker-option${m.value === modePickerValue ? " selected" : ""}" data-value="${m.value}">
+            <span class="mode-picker-option-label">${escapeHtml(m.label)}</span>
+            <span class="mode-picker-option-desc">${escapeHtml(m.desc)}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+
+  const root = els.modePickerContainer.querySelector("#mode_picker_root");
+  const trigger = root.querySelector(".mode-picker-trigger");
+  const dropdown = root.querySelector(".mode-picker-dropdown");
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    root.classList.toggle("open");
+  });
+
+  root.addEventListener("click", (e) => e.stopPropagation());
+
+  root.querySelectorAll(".mode-picker-option").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      modePickerValue = btn.dataset.value;
+      root.classList.remove("open");
+
+      const selected = modes.find((m) => m.value === modePickerValue) || modes[1];
+      trigger.querySelector(".mode-picker-trigger-label").textContent = selected.label;
+      trigger.querySelector(".mode-picker-trigger-desc").textContent = selected.desc;
+
+      root.querySelectorAll(".mode-picker-option").forEach((b) => {
+        b.classList.toggle("selected", b.dataset.value === modePickerValue);
+      });
+
+      updateEnergyFieldVisibility();
+    });
+  });
+
+  document.addEventListener("click", () => root.classList.remove("open"), { once: false });
+
+  updateEnergyFieldVisibility();
 }
 
 function getEntityIcon(entityId) {
@@ -1097,8 +1135,7 @@ function renderGlobalSettings() {
     onChange: () => {},
   });
 
-  renderHeatingMode();
-  renderModeButtons();
+  createModePicker(cfg.heating_mode);
 }
 
 function createRoomCard(roomId, room) {
@@ -1312,9 +1349,7 @@ function collectFormState() {
   cfg.main_sensor = getEntityPickerValue("global_main_sensor_picker");
   cfg.boost_delta = normalizeNumber(els.boostDelta.value, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(els.tolerance.value, DEFAULTS.tolerance);
-  cfg.heating_mode = els.heatingMode
-    ? normalizeHeatingMode(els.heatingMode.value)
-    : DEFAULTS.heating_mode;
+  cfg.heating_mode = normalizeHeatingMode(getModePickerValue());
   cfg.energy_residual_heat_hold = els.energyResidualHeatHold
     ? normalizeNumber(
         els.energyResidualHeatHold.value,
@@ -1420,53 +1455,6 @@ function applyGlobalTimesToAllRooms() {
 
   state.config = collectFormState();
   setStatus(t("status_apply_times_ok"), "ok");
-}
-
-async function toggleVacationMode() {
-  try {
-    setButtonsDisabled(true);
-
-    const newValue = !state.config.vacation_enabled;
-
-    await callService(DOMAIN, "update_config", {
-      config: {
-        vacation_enabled: newValue,
-      },
-    });
-
-    await refreshAll();
-    setStatus(
-      newValue ? t("status_vacation_on") : t("status_vacation_off"),
-      "ok"
-    );
-  } catch (error) {
-    console.error(error);
-    setStatus(`${t("status_vacation_failed")}: ${error.message}`, "err");
-  } finally {
-    setButtonsDisabled(false);
-  }
-}
-
-async function toggleAwayMode() {
-  try {
-    setButtonsDisabled(true);
-
-    const newValue = !state.config.away_enabled;
-
-    await callService(DOMAIN, "update_config", {
-      config: {
-        away_enabled: newValue,
-      },
-    });
-
-    await refreshAll();
-    setStatus(newValue ? t("status_away_on") : t("status_away_off"), "ok");
-  } catch (error) {
-    console.error(error);
-    setStatus(`${t("status_away_failed")}: ${error.message}`, "err");
-  } finally {
-    setButtonsDisabled(false);
-  }
 }
 
 async function saveConfig() {
@@ -1817,14 +1805,6 @@ function bindEvents() {
     "click",
     applyGlobalTimesToAllRooms
   );
-
-  if (els.toggleVacationBtn) {
-    els.toggleVacationBtn.addEventListener("click", toggleVacationMode);
-  }
-
-  if (els.toggleAwayBtn) {
-    els.toggleAwayBtn.addEventListener("click", toggleAwayMode);
-  }
 
   bindScheduleEvents();
 

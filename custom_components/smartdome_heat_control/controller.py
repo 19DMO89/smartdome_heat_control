@@ -16,6 +16,8 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ADAPTIVE_BUCKET_MEDIUM_MAX_SECS,
+    ADAPTIVE_BUCKET_SHORT_MAX_SECS,
     CONF_AWAY_ENABLED,
     CONF_BOOST_DELTA,
     CONF_ENERGY_RESIDUAL_HEAT_HOLD,
@@ -28,11 +30,15 @@ from .const import (
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_CONTROL_PROFILE,
     CONF_ROOM_CYCLE_PEAK_TEMP,
+    CONF_ROOM_CYCLE_START_TS,
     CONF_ROOM_CYCLE_TARGET_TEMP,
     CONF_ROOM_DAY_START,
     CONF_ROOM_ENABLED,
     CONF_ROOM_HEATING_CYCLE_ACTIVE,
     CONF_ROOM_LEARNED_OVERSHOOT,
+    CONF_ROOM_LEARNED_OVERSHOOT_LONG,
+    CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM,
+    CONF_ROOM_LEARNED_OVERSHOOT_SHORT,
     CONF_ROOM_NIGHT_START,
     CONF_ROOM_SENSOR,
     CONF_ROOM_TARGET_DAY,
@@ -48,6 +54,9 @@ from .const import (
     CONTROL_PROFILE_SELF_REGULATING,
     CONTROL_PROFILE_STANDARD,
     DEFAULT_ADAPTIVE_OVERSHOOT,
+    DEFAULT_ADAPTIVE_OVERSHOOT_LONG,
+    DEFAULT_ADAPTIVE_OVERSHOOT_MEDIUM,
+    DEFAULT_ADAPTIVE_OVERSHOOT_SHORT,
     DEFAULT_AWAY_ENABLED,
     DEFAULT_BOOST_DELTA,
     DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
@@ -85,6 +94,7 @@ class SmartHeatingController:
     def __init__(self, hass: HomeAssistant, config: dict[str, Any]) -> None:
         self.hass = hass
         self.config = config
+        self._persist_callback: Any = None
         self._window_open_since: dict[str, float] = {}
         self._window_closed_since: dict[str, float] = {}
         self._window_paused_rooms: set[str] = set()
@@ -218,9 +228,22 @@ class SmartHeatingController:
                         CONF_ROOM_LEARNED_OVERSHOOT,
                         DEFAULT_ADAPTIVE_OVERSHOOT,
                     )
+                    room.setdefault(
+                        CONF_ROOM_LEARNED_OVERSHOOT_SHORT,
+                        DEFAULT_ADAPTIVE_OVERSHOOT_SHORT,
+                    )
+                    room.setdefault(
+                        CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM,
+                        DEFAULT_ADAPTIVE_OVERSHOOT_MEDIUM,
+                    )
+                    room.setdefault(
+                        CONF_ROOM_LEARNED_OVERSHOOT_LONG,
+                        DEFAULT_ADAPTIVE_OVERSHOOT_LONG,
+                    )
                     room.setdefault(CONF_ROOM_HEATING_CYCLE_ACTIVE, False)
                     room.setdefault(CONF_ROOM_CYCLE_TARGET_TEMP, None)
                     room.setdefault(CONF_ROOM_CYCLE_PEAK_TEMP, None)
+                    room.setdefault(CONF_ROOM_CYCLE_START_TS, None)
 
     def _unsubscribe_all(self) -> None:
         """Alle Listener entfernen."""
@@ -230,6 +253,15 @@ class SmartHeatingController:
             except Exception:
                 _LOGGER.exception("Fehler beim Entfernen eines Listeners")
         self._unsub.clear()
+
+    def set_persist_callback(self, callback: Any) -> None:
+        """Callback setzen der nach dem Lernen die Config persistiert."""
+        self._persist_callback = callback
+
+    def _persist_learned_values(self) -> None:
+        """Gelernte Werte in den Config Entry schreiben."""
+        if self._persist_callback is not None:
+            self.hass.async_create_task(self._persist_callback(dict(self.config)))
 
     def _as_entity_id(self, value: Any) -> str | None:
         """String als Entity-ID zurückgeben oder None."""
@@ -630,6 +662,45 @@ class SmartHeatingController:
             return int(DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD)
         return max(0, int(value))
 
+    def _get_bucket_key(self, duration_secs: float) -> str:
+        """Bucket-Schlüssel anhand der Heizdauer bestimmen."""
+        if duration_secs < ADAPTIVE_BUCKET_SHORT_MAX_SECS:
+            return "short"
+        if duration_secs < ADAPTIVE_BUCKET_MEDIUM_MAX_SECS:
+            return "medium"
+        return "long"
+
+    def _get_learned_overshoot_for_bucket(
+        self,
+        room: dict[str, Any],
+        bucket: str,
+    ) -> float:
+        """Gelernten Overshoot-Wert für einen bestimmten Bucket lesen."""
+        key_map = {
+            "short": (CONF_ROOM_LEARNED_OVERSHOOT_SHORT, DEFAULT_ADAPTIVE_OVERSHOOT_SHORT),
+            "medium": (CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM, DEFAULT_ADAPTIVE_OVERSHOOT_MEDIUM),
+            "long": (CONF_ROOM_LEARNED_OVERSHOOT_LONG, DEFAULT_ADAPTIVE_OVERSHOOT_LONG),
+        }
+        key, default = key_map[bucket]
+        return float(room.get(key, default))
+
+    def _get_predicted_overshoot(self, room: dict[str, Any], tolerance: float) -> float:
+        """Vorhergesagten Overshoot anhand der aktuellen Heizdauer bestimmen.
+
+        Wird auf tolerance * 0.9 begrenzt damit die Stoppbedingung immer
+        oberhalb der Startbedingung liegt und keine sofortige Oszillation
+        entsteht.
+        """
+        start_ts = room.get(CONF_ROOM_CYCLE_START_TS)
+        if start_ts is None:
+            bucket = "medium"
+        else:
+            duration = dt_util.now().timestamp() - float(start_ts)
+            bucket = self._get_bucket_key(duration)
+
+        predicted = self._get_learned_overshoot_for_bucket(room, bucket)
+        return min(predicted, tolerance * 0.9)
+
     def _get_idle_target_for_room(
         self,
         room_id: str,
@@ -652,11 +723,13 @@ class SmartHeatingController:
             return self._round_to_step(min_temp, step)
 
         if mode == HEATING_MODE_ADAPTIVE:
-            learned = float(
-                room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT)
-            )
-            learned = max(0.2, min(1.0, learned))
-            return self._round_to_step(max(min_temp, target_temp - learned), step)
+            avg_learned = (
+                self._get_learned_overshoot_for_bucket(room, "short")
+                + self._get_learned_overshoot_for_bucket(room, "medium")
+                + self._get_learned_overshoot_for_bucket(room, "long")
+            ) / 3.0
+            avg_learned = max(0.2, min(1.0, avg_learned))
+            return self._round_to_step(max(min_temp, target_temp - avg_learned), step)
 
         return self._round_to_step(target_temp, step)
 
@@ -735,6 +808,7 @@ class SmartHeatingController:
         actual: float | None,
         pause_active: bool,
         tolerance: float,
+        predicted_overshoot: float = 0.0,
     ) -> str:
         """Raumzustand bestimmen und nur bei echten Zustandswechseln ändern."""
         current_state = self._room_state.get(room_id, ROOM_STATE_IDLE)
@@ -752,7 +826,8 @@ class SmartHeatingController:
                 self._residual_heat_hold_until.pop(room_id, None)
                 return ROOM_STATE_HEATING
 
-        if current_state == ROOM_STATE_HEATING and actual >= target:
+        stop_at = target - predicted_overshoot
+        if current_state == ROOM_STATE_HEATING and actual >= stop_at:
             if mode == HEATING_MODE_ENERGY:
                 hold_seconds = self._get_energy_residual_heat_hold_seconds()
                 if hold_seconds > 0:
@@ -791,6 +866,7 @@ class SmartHeatingController:
         room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = True
         room[CONF_ROOM_CYCLE_TARGET_TEMP] = target_temp
         room[CONF_ROOM_CYCLE_PEAK_TEMP] = current_temp
+        room[CONF_ROOM_CYCLE_START_TS] = dt_util.now().timestamp()
 
     def _update_room_cycle_peak(
         self,
@@ -809,24 +885,43 @@ class SmartHeatingController:
             room[CONF_ROOM_CYCLE_PEAK_TEMP] = current_temp
 
     def _finish_room_heating_cycle(self, room: dict[str, Any]) -> None:
-        """Overshoot berechnen und gelernt abspeichern."""
+        """Overshoot messen, richtigen Bucket updaten und Werte persistieren."""
         if not room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE):
             return
 
         target = room.get(CONF_ROOM_CYCLE_TARGET_TEMP)
         peak = room.get(CONF_ROOM_CYCLE_PEAK_TEMP)
+        start_ts = room.get(CONF_ROOM_CYCLE_START_TS)
 
-        if target is not None and peak is not None:
+        if target is not None and peak is not None and start_ts is not None:
+            duration = dt_util.now().timestamp() - float(start_ts)
             overshoot = max(0.0, float(peak) - float(target))
-            old_value = float(
-                room.get(CONF_ROOM_LEARNED_OVERSHOOT, DEFAULT_ADAPTIVE_OVERSHOOT)
-            )
+            bucket = self._get_bucket_key(duration)
+
+            key_map = {
+                "short": (CONF_ROOM_LEARNED_OVERSHOOT_SHORT, DEFAULT_ADAPTIVE_OVERSHOOT_SHORT),
+                "medium": (CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM, DEFAULT_ADAPTIVE_OVERSHOOT_MEDIUM),
+                "long": (CONF_ROOM_LEARNED_OVERSHOOT_LONG, DEFAULT_ADAPTIVE_OVERSHOOT_LONG),
+            }
+            key, default = key_map[bucket]
+            old_value = float(room.get(key, default))
             new_value = (old_value * 0.7) + (overshoot * 0.3)
-            room[CONF_ROOM_LEARNED_OVERSHOOT] = round(new_value, 2)
+            room[key] = round(new_value, 2)
+
+            # Durchschnitt aller Buckets als Anzeigewert speichern
+            avg = (
+                self._get_learned_overshoot_for_bucket(room, "short")
+                + self._get_learned_overshoot_for_bucket(room, "medium")
+                + self._get_learned_overshoot_for_bucket(room, "long")
+            ) / 3.0
+            room[CONF_ROOM_LEARNED_OVERSHOOT] = round(avg, 2)
+
+            self._persist_learned_values()
 
         room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = False
         room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
         room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
+        room[CONF_ROOM_CYCLE_START_TS] = None
 
     def _evaluate(self) -> None:
         """Heizlogik auswerten."""
@@ -851,10 +946,18 @@ class SmartHeatingController:
 
         room_states: dict[str, dict[str, Any]] = {}
 
+        mode = self._get_heating_mode()
+
         for room_id, room in rooms.items():
             actual = self._room_temp(room)
             target = self._effective_target_for_room(room)
             pause_active = self._window_pause_active(room_id, room)
+
+            predicted_overshoot = (
+                self._get_predicted_overshoot(room, tolerance)
+                if mode == HEATING_MODE_ADAPTIVE
+                else 0.0
+            )
 
             state = self._update_room_state(
                 room_id=room_id,
@@ -862,6 +965,7 @@ class SmartHeatingController:
                 actual=actual,
                 pause_active=pause_active,
                 tolerance=tolerance,
+                predicted_overshoot=predicted_overshoot,
             )
 
             room_states[room_id] = {
