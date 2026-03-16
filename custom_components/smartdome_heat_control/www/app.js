@@ -798,6 +798,24 @@ function isThermostatHeating(thermostatId) {
   return entity?.attributes?.hvac_action === "heating";
 }
 
+function openEntityMoreInfo(entityId) {
+  if (!entityId) return;
+  try {
+    const haEl = window.parent?.document?.querySelector("home-assistant");
+    if (haEl) {
+      haEl.dispatchEvent(
+        new CustomEvent("hass-more-info", {
+          bubbles: true,
+          composed: true,
+          detail: { entityId },
+        })
+      );
+    }
+  } catch (_) {
+    // cross-origin or permission error — silently ignore
+  }
+}
+
 function isAnyWindowOpen(room) {
   const sensors = Array.isArray(room.window_sensors) ? room.window_sensors : [];
   return sensors.some((id) => isWindowOpen(id));
@@ -841,11 +859,14 @@ function updateMainLiveStatus() {
       const setpoint = getThermostatSetpoint(thermostatId);
       if (setpoint !== null) {
         thermostatLive.innerHTML = `${heating ? "🔥 " : ""}${escapeHtml(formatTemperature(setpoint))}`;
+        thermostatLive.dataset.entity = thermostatId;
       } else {
         thermostatLive.textContent = "";
+        delete thermostatLive.dataset.entity;
       }
     } else {
       thermostatLive.textContent = "";
+      delete thermostatLive.dataset.entity;
     }
   }
 
@@ -853,7 +874,13 @@ function updateMainLiveStatus() {
   if (sensorLive) {
     const tempSrc = sensorId || thermostatId;
     const temp = tempSrc ? getSensorTemperature(tempSrc) : null;
-    sensorLive.textContent = temp !== null ? formatTemperature(temp) : "";
+    if (temp !== null) {
+      sensorLive.textContent = formatTemperature(temp);
+      sensorLive.dataset.entity = tempSrc;
+    } else {
+      sensorLive.textContent = "";
+      delete sensorLive.dataset.entity;
+    }
   }
 }
 
@@ -1693,8 +1720,10 @@ function updateRoomLiveState() {
       const heating = isThermostatHeating(room.thermostat);
       if (setpoint !== null) {
         thermostatLive.innerHTML = `${heating ? "🔥 " : ""}${escapeHtml(formatTemperature(setpoint))}`;
+        thermostatLive.dataset.entity = room.thermostat;
       } else {
         thermostatLive.textContent = "";
+        delete thermostatLive.dataset.entity;
       }
     }
 
@@ -1703,7 +1732,13 @@ function updateRoomLiveState() {
     if (sensorLive) {
       const tempSrc = room.sensor || room.thermostat;
       const temp = getSensorTemperature(tempSrc);
-      sensorLive.textContent = temp !== null ? formatTemperature(temp) : "";
+      if (temp !== null) {
+        sensorLive.textContent = formatTemperature(temp);
+        sensorLive.dataset.entity = tempSrc;
+      } else {
+        sensorLive.textContent = "";
+        delete sensorLive.dataset.entity;
+      }
     }
 
     // update adaptive bucket display
@@ -2227,6 +2262,13 @@ function bindEvents() {
       renderEntityPickerModalList(els.entityPickerModalSearch.value);
     });
   }
+
+  document.addEventListener("click", (e) => {
+    const badge = e.target.closest(".label-live[data-entity]");
+    if (badge?.dataset.entity) {
+      openEntityMoreInfo(badge.dataset.entity);
+    }
+  });
 
   bindScheduleEvents();
 }

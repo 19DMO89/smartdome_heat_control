@@ -875,6 +875,16 @@
       white-space: nowrap;
     }
 
+    .label-live[data-entity] {
+      cursor: pointer;
+      text-decoration: underline dotted;
+      text-underline-offset: 3px;
+    }
+
+    .label-live[data-entity]:hover {
+      color: var(--text);
+    }
+
     /* Help modal */
     .help-modal-content {
       width: min(820px, 100%);
