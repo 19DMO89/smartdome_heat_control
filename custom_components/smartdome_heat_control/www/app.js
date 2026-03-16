@@ -173,6 +173,16 @@ const I18N = {
 
     picker_search_placeholder: "Search entity…",
     picker_no_results: "No matching entities found.",
+
+    section_circuits: "Heating circuits",
+    circuits_hint: "Only required if the building has multiple independent heating circuits, each with its own main thermostat.",
+    add_circuit: "Add heating circuit",
+    circuit_label: "Circuit name",
+    circuit_thermostat: "Main thermostat",
+    circuit_sensor: "Temperature sensor",
+    circuit_delete: "Delete",
+    room_circuit: "Heating circuit",
+    circuit_none: "— No circuit (global) —",
   },
 
   de: {
@@ -309,6 +319,16 @@ const I18N = {
 
     picker_search_placeholder: "Entity suchen…",
     picker_no_results: "Keine passenden Entities gefunden.",
+
+    section_circuits: "Heizkreise",
+    circuits_hint: "Nur erforderlich wenn das Gebäude mehrere unabhängige Heizkreise besitzt, die jeweils ein eigenes Hauptthermostat haben.",
+    add_circuit: "Heizkreis hinzufügen",
+    circuit_label: "Kreisbezeichnung",
+    circuit_thermostat: "Hauptthermostat",
+    circuit_sensor: "Temperatursensor",
+    circuit_delete: "Löschen",
+    room_circuit: "Heizkreis",
+    circuit_none: "— Kein Kreis (global) —",
   },
 };
 
@@ -340,6 +360,7 @@ const DEFAULTS = {
   vacation_temperature: 14.0,
   away_enabled: false,
   rooms: {},
+  circuits: {},
 };
 
 const state = {
@@ -375,6 +396,8 @@ const els = {
   awayEnabled: document.getElementById("away_enabled"),
   roomsContainer: document.getElementById("roomsContainer"),
   versionBadge: document.getElementById("versionBadge"),
+  circuitsList: document.getElementById("circuitsList"),
+  addCircuitBtn: document.getElementById("addCircuitBtn"),
 
   scheduleModal: document.getElementById("schedule-modal"),
   scheduleModalTitle: document.getElementById("schedule-modal-title"),
@@ -591,6 +614,7 @@ function normalizeRoom(roomId, room) {
     window_sensor:
       typeof room?.window_sensor === "string" ? room.window_sensor : "",
     control_profile: normalizeControlProfile(room?.control_profile),
+    circuit_id: typeof room?.circuit_id === "string" ? room.circuit_id : "",
     target_day: normalizeNumber(room?.target_day, 21.0),
     target_night: normalizeNumber(room?.target_night, 18.0),
     away_temperature: normalizeNumber(room?.away_temperature, 17.0),
@@ -599,6 +623,21 @@ function normalizeRoom(roomId, room) {
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
     learned_overshoot: normalizeNumber(room?.learned_overshoot, 0.3),
+  };
+}
+
+function normalizeCircuit(circuitId, circuit) {
+  return {
+    label:
+      typeof circuit?.label === "string" && circuit.label.trim()
+        ? circuit.label.trim()
+        : circuitId,
+    main_thermostat:
+      typeof circuit?.main_thermostat === "string"
+        ? circuit.main_thermostat
+        : "",
+    main_sensor:
+      typeof circuit?.main_sensor === "string" ? circuit.main_sensor : "",
   };
 }
 
@@ -643,8 +682,18 @@ function normalizeConfig(input) {
   for (const [roomId, room] of Object.entries(cfg.rooms)) {
     normalizedRooms[roomId] = normalizeRoom(roomId, room);
   }
-
   cfg.rooms = normalizedRooms;
+
+  if (!cfg.circuits || typeof cfg.circuits !== "object") {
+    cfg.circuits = {};
+  }
+
+  const normalizedCircuits = {};
+  for (const [circuitId, circuit] of Object.entries(cfg.circuits)) {
+    normalizedCircuits[circuitId] = normalizeCircuit(circuitId, circuit);
+  }
+  cfg.circuits = normalizedCircuits;
+
   return cfg;
 }
 
@@ -808,6 +857,107 @@ function createModePicker(currentValue) {
   document.addEventListener("click", () => root.classList.remove("open"), { once: false });
 
   updateEnergyFieldVisibility();
+}
+
+function generateCircuitId() {
+  return `circuit_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function addCircuit() {
+  const circuitId = generateCircuitId();
+  state.config.circuits[circuitId] = {
+    label: "",
+    main_thermostat: "",
+    main_sensor: "",
+  };
+  renderCircuits();
+}
+
+function createCircuitCard(circuitId, circuit) {
+  const card = document.createElement("div");
+  card.className = "circuit-card";
+  card.dataset.circuitId = circuitId;
+
+  card.innerHTML = `
+    <div class="circuit-card-header">
+      <input
+        class="circuit-label"
+        type="text"
+        placeholder="${escapeHtml(t("circuit_label"))}"
+        value="${escapeHtml(circuit.label || "")}"
+        style="flex:1; margin:0;"
+      />
+      <button type="button" class="danger circuit-delete-btn" style="padding:8px 12px; font-size:12px;">
+        ${escapeHtml(t("circuit_delete"))}
+      </button>
+    </div>
+    <div class="circuit-card-fields">
+      <div class="field">
+        <label>${escapeHtml(t("circuit_thermostat"))}</label>
+        <div class="circuit-thermostat-picker"></div>
+      </div>
+      <div class="field">
+        <label>${escapeHtml(t("circuit_sensor"))}</label>
+        <div class="circuit-sensor-picker"></div>
+      </div>
+    </div>
+  `;
+
+  createEntityPicker({
+    container: card.querySelector(".circuit-thermostat-picker"),
+    pickerId: `circuit_${circuitId}_thermostat_picker`,
+    items: state.climates,
+    selectedValue: circuit.main_thermostat || "",
+    emptyLabel: t("select_auto_none"),
+    onChange: () => {},
+  });
+
+  createEntityPicker({
+    container: card.querySelector(".circuit-sensor-picker"),
+    pickerId: `circuit_${circuitId}_sensor_picker`,
+    items: state.sensors,
+    selectedValue: circuit.main_sensor || "",
+    emptyLabel: t("select_auto_none"),
+    onChange: () => {},
+  });
+
+  card.querySelector(".circuit-delete-btn").addEventListener("click", () => {
+    delete state.config.circuits[circuitId];
+    // clear circuit_id on rooms that referenced this circuit
+    for (const room of Object.values(state.config.rooms)) {
+      if (room.circuit_id === circuitId) {
+        room.circuit_id = "";
+      }
+    }
+    renderCircuits();
+    renderRooms();
+  });
+
+  return card;
+}
+
+function renderCircuits() {
+  if (!els.circuitsList) return;
+
+  els.circuitsList.innerHTML = "";
+  const entries = Object.entries(state.config.circuits || {});
+
+  for (const [circuitId, circuit] of entries) {
+    els.circuitsList.appendChild(createCircuitCard(circuitId, circuit));
+  }
+}
+
+function getCircuitOptions() {
+  const options = [{ value: "", label: t("circuit_none") }];
+  for (const [circuitId, circuit] of Object.entries(
+    state.config.circuits || {}
+  )) {
+    options.push({
+      value: circuitId,
+      label: circuit.label || circuitId,
+    });
+  }
+  return options;
 }
 
 function getEntityIcon(entityId) {
@@ -1136,6 +1286,7 @@ function renderGlobalSettings() {
   });
 
   createModePicker(cfg.heating_mode);
+  renderCircuits();
 }
 
 function createRoomCard(roomId, room) {
@@ -1253,6 +1404,18 @@ function createRoomCard(roomId, room) {
           room.night_start || ""
         )}" />
       </div>
+
+      ${Object.keys(state.config.circuits || {}).length > 0 ? `
+      <div class="field">
+        <label>${escapeHtml(t("room_circuit"))}</label>
+        <select class="room-circuit-id">
+          ${getCircuitOptions().map((opt) => `
+            <option value="${escapeHtml(opt.value)}" ${
+              (room.circuit_id || "") === opt.value ? "selected" : ""
+            }>${escapeHtml(opt.label)}</option>
+          `).join("")}
+        </select>
+      </div>` : ""}
     </div>
   `;
 
@@ -1310,8 +1473,56 @@ function renderRooms() {
     return;
   }
 
+  const circuits = state.config.circuits || {};
+  const hasCircuits = Object.keys(circuits).length > 0;
+
+  if (!hasCircuits) {
+    for (const [roomId, room] of entries) {
+      els.roomsContainer.appendChild(createRoomCard(roomId, room));
+    }
+    return;
+  }
+
+  // Group rooms by circuit_id
+  const groups = {};
   for (const [roomId, room] of entries) {
-    els.roomsContainer.appendChild(createRoomCard(roomId, room));
+    const cid = room.circuit_id || "";
+    if (!groups[cid]) groups[cid] = [];
+    groups[cid].push([roomId, room]);
+  }
+
+  // Render circuit groups in circuit order, then ungrouped
+  const circuitOrder = Object.keys(circuits);
+  const renderedCids = new Set();
+
+  for (const cid of circuitOrder) {
+    if (!groups[cid]) continue;
+    renderedCids.add(cid);
+    const header = document.createElement("div");
+    header.className = "room-group-header";
+    header.textContent = circuits[cid]?.label || cid;
+    els.roomsContainer.appendChild(header);
+    for (const [roomId, room] of groups[cid]) {
+      els.roomsContainer.appendChild(createRoomCard(roomId, room));
+    }
+  }
+
+  // Rooms with no/invalid circuit_id
+  const unassigned = groups[""] || [];
+  for (const [cid, roomList] of Object.entries(groups)) {
+    if (!renderedCids.has(cid) && cid !== "") {
+      unassigned.push(...roomList);
+    }
+  }
+
+  if (unassigned.length) {
+    const header = document.createElement("div");
+    header.className = "room-group-header";
+    header.textContent = t("circuit_none");
+    els.roomsContainer.appendChild(header);
+    for (const [roomId, room] of unassigned) {
+      els.roomsContainer.appendChild(createRoomCard(roomId, room));
+    }
   }
 }
 
@@ -1400,10 +1611,29 @@ function collectFormState() {
       night_start: node.querySelector(".room-night-start").value || "",
       enabled: node.querySelector(".room-enabled").checked,
       learned_overshoot: existingRoom.learned_overshoot,
+      circuit_id: node.querySelector(".room-circuit-id")?.value || existingRoom.circuit_id || "",
     });
   }
 
   cfg.rooms = rooms;
+
+  // collect circuits
+  const circuits = {};
+  const circuitNodes = els.circuitsList
+    ? els.circuitsList.querySelectorAll(".circuit-card")
+    : [];
+  for (const node of circuitNodes) {
+    const circuitId = node.dataset.circuitId;
+    circuits[circuitId] = normalizeCircuit(circuitId, {
+      label: node.querySelector(".circuit-label")?.value?.trim() || "",
+      main_thermostat:
+        getEntityPickerValue(`circuit_${circuitId}_thermostat_picker`) || "",
+      main_sensor:
+        getEntityPickerValue(`circuit_${circuitId}_sensor_picker`) || "",
+    });
+  }
+  cfg.circuits = circuits;
+
   return normalizeConfig(cfg);
 }
 
@@ -1420,6 +1650,7 @@ function addRoom() {
     sensor: "",
     window_sensor: "",
     control_profile: "standard",
+    circuit_id: "",
     target_day: 21.0,
     target_night: 18.0,
     away_temperature: 17.0,
@@ -1805,6 +2036,9 @@ function bindEvents() {
     "click",
     applyGlobalTimesToAllRooms
   );
+  if (els.addCircuitBtn) {
+    els.addCircuitBtn.addEventListener("click", addCircuit);
+  }
 
   bindScheduleEvents();
 
