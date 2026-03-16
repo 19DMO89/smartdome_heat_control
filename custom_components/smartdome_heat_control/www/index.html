@@ -867,6 +867,113 @@
       }
     }
 
+    /* Live label badges */
+    .label-live {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    /* Help modal */
+    .help-modal-content {
+      width: min(820px, 100%);
+      max-height: 90vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .help-lang-toggle {
+      display: flex;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .help-lang-toggle button {
+      border-radius: 0;
+      border: none;
+      box-shadow: none;
+      padding: 7px 14px;
+      font-size: 13px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .help-lang-toggle button.active {
+      background: var(--accent);
+      color: #08111a;
+    }
+
+    .help-body {
+      padding-top: 4px;
+    }
+
+    .help-section {
+      padding: 18px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .help-section:last-child {
+      border-bottom: none;
+      padding-bottom: 4px;
+    }
+
+    .help-section h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .help-section p {
+      margin: 0 0 10px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+
+    .help-section p:last-child {
+      margin-bottom: 0;
+    }
+
+    .help-section ul {
+      margin: 0 0 10px;
+      padding-left: 20px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .help-section ul:last-child {
+      margin-bottom: 0;
+    }
+
+    .help-section li {
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--text);
+    }
+
+    .help-section li strong {
+      color: var(--text);
+    }
+
+    .help-tip {
+      background: rgba(77, 163, 255, 0.08);
+      border: 1px solid rgba(77, 163, 255, 0.25);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #9fd0ff;
+      margin-top: 10px;
+    }
+
     @media (max-width: 700px) {
       .fields,
       .room-grid,
@@ -906,6 +1013,9 @@
       </div>
 
       <div class="actions">
+        <button id="helpBtn" class="ghost" data-i18n="help_btn">
+          Hilfe
+        </button>
         <button id="reloadRoomsBtn" class="ghost" data-i18n="reload_rooms">
           Räume neu erkennen
         </button>
@@ -970,15 +1080,20 @@
             <div class="settings-group-label" data-i18n="section_thermostat">Hauptthermostat</div>
             <div class="fields">
               <div class="field">
-                <label for="main_thermostat_picker" data-i18n="main_thermostat">Hauptthermostat</label>
+                <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span data-i18n="main_thermostat">Hauptthermostat</span>
+                  <span id="global_thermostat_live" class="label-live"></span>
+                </label>
                 <div id="main_thermostat_picker"></div>
               </div>
               <div class="field">
-                <label for="main_sensor_picker" data-i18n="main_sensor">Temperatursensor</label>
+                <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span data-i18n="main_sensor">Temperatursensor</span>
+                  <span id="global_sensor_live" class="label-live"></span>
+                </label>
                 <div id="main_sensor_picker"></div>
               </div>
             </div>
-            <div id="main_live_status" class="live-status hidden"></div>
           </div>
 
           <!-- Heizung -->
@@ -1131,6 +1246,193 @@
         style="margin: 0;"
       />
       <div id="entity-picker-modal-list" class="entity-picker-list" style="max-height: 60vh; overflow-y: auto;"></div>
+    </div>
+  </div>
+
+  <!-- Help modal -->
+  <div id="help-modal" class="modal hidden">
+    <div class="modal-content help-modal-content">
+      <div class="modal-header">
+        <h2>Smartdome Heat Control</h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div class="help-lang-toggle">
+            <button id="help-lang-de">DE</button>
+            <button id="help-lang-en">EN</button>
+          </div>
+          <button id="help-modal-close" type="button" class="ghost">✕</button>
+        </div>
+      </div>
+
+      <div class="help-body">
+
+        <!-- ══ GERMAN ══════════════════════════════════════════════════════════ -->
+        <div class="help-lang-content" data-lang="de">
+
+          <div class="help-section">
+            <h3>🚀 Erste Schritte</h3>
+            <p>Nach der Installation über HACS erscheint die Integration unter <strong>Einstellungen → Integrationen</strong>. Füge sie dort hinzu — danach öffnet sich dieses Panel automatisch.</p>
+            <ul>
+              <li><strong>Steuerung aktiv</strong> muss eingeschaltet sein, damit die Integration Thermostate steuert.</li>
+              <li>Lege über <strong>Raum hinzufügen</strong> deine Räume an oder erkenne vorhandene über <strong>Räume neu erkennen</strong>.</li>
+              <li>Klicke auf <strong>Konfiguration speichern</strong> um alle Änderungen zu übernehmen.</li>
+            </ul>
+            <div class="help-tip">💡 Änderungen werden erst wirksam nachdem du gespeichert hast.</div>
+          </div>
+
+          <div class="help-section">
+            <h3>🌡️ Hauptthermostat &amp; Temperatursensor</h3>
+            <p>Beide Felder sind <strong>optional</strong> — du kannst die Integration auch nur mit Raumthermostaten nutzen.</p>
+            <ul>
+              <li><strong>Hauptthermostat:</strong> Steuert alle Räume, die keinen eigenen Thermostat haben. Er wird auf Solltemperatur gesetzt, sobald mindestens ein solcher Raum heizen möchte.</li>
+              <li><strong>Temperatursensor:</strong> Wird nur zum Messen verwendet — die Integration greift nicht in ihn ein. Nützlich wenn der Thermostat keinen guten eigenen Sensor hat.</li>
+            </ul>
+            <p>Als Sensor kann auch eine <strong>climate-Entity</strong> (z.B. ein Heizkörperthermostat) verwendet werden — die Integration liest dann automatisch das Attribut <code>current_temperature</code>.</p>
+            <div class="help-tip">💡 Wenn du mehrere Heizkreise hast (z.B. Erdgeschoss / Obergeschoss), kannst du unter <em>Heizkreise</em> jedem Kreis einen eigenen Hauptthermostat zuweisen.</div>
+          </div>
+
+          <div class="help-section">
+            <h3>⚙️ Heizmodi</h3>
+            <ul>
+              <li><strong>Comfort:</strong> Ventile bleiben länger offen. Weniger Temperaturschwankungen, Komfort im Vordergrund. Mehr Energieverbrauch möglich.</li>
+              <li><strong>Balanced:</strong> Empfohlener Standard. Gute Balance aus Komfort und Energieeffizienz.</li>
+              <li><strong>Energy:</strong> Ventile schließen früher. Reduziert Überhitzen, Energiesparen im Vordergrund. Leichte Temperaturschwankungen möglich.</li>
+              <li><strong>Adaptive:</strong> Lernt das Verhalten jedes Raums und stoppt die Heizung früh genug, damit die Restwärme den Raum exakt auf Solltemperatur bringt. Braucht einige Heizvorgänge zum Einlernen.</li>
+            </ul>
+          </div>
+
+          <div class="help-section">
+            <h3>🔁 Heizkreise</h3>
+            <p>Heizkreise sind <strong>nur notwendig</strong> wenn dein Gebäude mehrere physisch getrennte Heizkreise hat (z.B. Fußbodenheizung Erdgeschoss + Heizkörper Obergeschoss), die jeweils über ein eigenes Hauptthermostat oder eine eigene Pumpe gesteuert werden.</p>
+            <ul>
+              <li>Erstelle einen Heizkreis über <strong>Heizkreis hinzufügen</strong> und weise ihm einen Hauptthermostat zu.</li>
+              <li>Weise Räume diesem Kreis über das Feld <strong>Heizkreis</strong> im Raum zu.</li>
+              <li>Räume ohne Kreis verwenden weiterhin den globalen Hauptthermostat.</li>
+            </ul>
+            <div class="help-tip">💡 Wenn du nur einen Heizkreis hast, brauchst du hier nichts konfigurieren.</div>
+          </div>
+
+          <div class="help-section">
+            <h3>🏠 Räume</h3>
+            <ul>
+              <li><strong>Thermostat:</strong> Der Heizkörperthermostat dieses Raums. Wird direkt gesteuert.</li>
+              <li><strong>Temperatursensor:</strong> Optionaler externer Sensor (z.B. Wandsensor). Wird für die Regelung verwendet wenn gesetzt.</li>
+              <li><strong>Fensterkontakte:</strong> Beliebig viele Fenster- oder Türkontakte. Sobald <em>einer</em> offen meldet, pausiert die Heizung für diesen Raum.</li>
+              <li><strong>Zieltemperatur Tag / Nacht:</strong> Gewünschte Raumtemperatur je Tageszeit.</li>
+              <li><strong>Away-Temperatur:</strong> Temperatur wenn der Nicht-Zuhause-Modus aktiv ist.</li>
+              <li><strong>Wochenschema:</strong> Individuelle Zeitsteuerung für diesen Raum — überschreibt die globalen Zeiten.</li>
+            </ul>
+          </div>
+
+          <div class="help-section">
+            <h3>🧠 Adaptive Heizung</h3>
+            <p>Im Adaptive-Modus lernt die Integration wie stark jeder Raum nach dem Abschalten noch nachschwingt (Overshoot). Die Integration schaltet die Heizung früher ab, damit die Restwärme den Raum exakt auf Solltemperatur bringt.</p>
+            <p>Das Lernen passiert in <strong>drei Zeitbuckets</strong> — je nachdem wie lange der Raum heizt:</p>
+            <ul>
+              <li><strong>Kurz (&lt; 15 min):</strong> Wenig Restwärme, kleiner Overshoot-Wert.</li>
+              <li><strong>Mittel (15–45 min):</strong> Typischer Heizbetrieb.</li>
+              <li><strong>Lang (&gt; 45 min):</strong> Starkes Aufheizen, mehr Restwärme im System.</li>
+            </ul>
+            <p>Die gelernten Werte werden gespeichert und bleiben nach einem Neustart erhalten. Nach 5–10 Heizvorgängen je Bucket ist die Regelung spürbar genauer.</p>
+            <div class="help-tip">💡 Die aktuell gelernten Werte werden in der Raumkarte unter <em>Adaptive Overshoot</em> angezeigt.</div>
+          </div>
+
+          <div class="help-section">
+            <h3>💡 Tipps &amp; häufige Fragen</h3>
+            <ul>
+              <li><strong>Steuerung aktiv aus:</strong> Die Integration schreibt keinerlei Sollwerte auf Thermostate — sie greift komplett nicht ein.</li>
+              <li><strong>climate-Entity als Sensor:</strong> Trage eine climate-Entity als Temperatursensor ein — die Integration liest automatisch das Attribut <code>current_temperature</code> aus.</li>
+              <li><strong>Mehrere Fensterkontakte:</strong> Pro Raum können beliebig viele Sensoren hinzugefügt werden. Es reicht wenn <em>einer</em> offen ist um die Heizung zu pausieren.</li>
+              <li><strong>Räume verschwinden nach Reload:</strong> Nutze <em>Konfiguration speichern</em> bevor du <em>Neu laden</em> klickst — sonst gehen ungespeicherte Änderungen verloren.</li>
+              <li><strong>HACS-Update erscheint nicht:</strong> Stelle sicher dass die Versionsnummer in <code>manifest.json</code> mit dem GitHub-Release-Tag übereinstimmt.</li>
+            </ul>
+          </div>
+
+        </div>
+
+        <!-- ══ ENGLISH ════════════════════════════════════════════════════════ -->
+        <div class="help-lang-content hidden" data-lang="en">
+
+          <div class="help-section">
+            <h3>🚀 Getting Started</h3>
+            <p>After installing via HACS, the integration appears under <strong>Settings → Integrations</strong>. Add it there — this panel will open automatically.</p>
+            <ul>
+              <li><strong>Control enabled</strong> must be switched on for the integration to control thermostats.</li>
+              <li>Add rooms using <strong>Add room</strong> or discover existing areas via <strong>Reload rooms</strong>.</li>
+              <li>Click <strong>Save configuration</strong> to apply all changes.</li>
+            </ul>
+            <div class="help-tip">💡 Changes only take effect after you save.</div>
+          </div>
+
+          <div class="help-section">
+            <h3>🌡️ Main Thermostat &amp; Temperature Sensor</h3>
+            <p>Both fields are <strong>optional</strong> — you can use the integration with only per-room thermostats.</p>
+            <ul>
+              <li><strong>Main thermostat:</strong> Controls all rooms that have no dedicated thermostat. It is set to the target temperature as soon as at least one such room wants to heat.</li>
+              <li><strong>Temperature sensor:</strong> Used for measuring only — the integration never writes to it. Useful when the thermostat's built-in sensor is inaccurate.</li>
+            </ul>
+            <p>A <strong>climate entity</strong> (e.g. a radiator thermostat) can also be used as a sensor — the integration then reads the <code>current_temperature</code> attribute automatically.</p>
+            <div class="help-tip">💡 If you have multiple heating circuits (e.g. ground floor / upper floor), assign a dedicated main thermostat to each circuit under <em>Heating circuits</em>.</div>
+          </div>
+
+          <div class="help-section">
+            <h3>⚙️ Heating Modes</h3>
+            <ul>
+              <li><strong>Comfort:</strong> Valves stay open longer. Less temperature fluctuation, comfort first. Higher energy use possible.</li>
+              <li><strong>Balanced:</strong> Recommended default. Good balance of comfort and efficiency.</li>
+              <li><strong>Energy:</strong> Valves close earlier. Reduces overheating, energy saving first. Slight temperature swings possible.</li>
+              <li><strong>Adaptive:</strong> Learns each room's behavior and stops heating early enough for residual heat to bring the room exactly to the target temperature. Needs a few heating cycles to calibrate.</li>
+            </ul>
+          </div>
+
+          <div class="help-section">
+            <h3>🔁 Heating Circuits</h3>
+            <p>Heating circuits are <strong>only needed</strong> if your building has multiple physically separate circuits (e.g. underfloor heating ground floor + radiators upper floor), each controlled by its own main thermostat or pump.</p>
+            <ul>
+              <li>Create a circuit via <strong>Add heating circuit</strong> and assign a main thermostat to it.</li>
+              <li>Assign rooms to the circuit using the <strong>Heating circuit</strong> field in the room card.</li>
+              <li>Rooms without a circuit use the global main thermostat.</li>
+            </ul>
+            <div class="help-tip">💡 If you have only one heating circuit, you don't need to configure anything here.</div>
+          </div>
+
+          <div class="help-section">
+            <h3>🏠 Rooms</h3>
+            <ul>
+              <li><strong>Thermostat:</strong> The radiator thermostat for this room. Controlled directly by the integration.</li>
+              <li><strong>Temperature sensor:</strong> Optional external sensor (e.g. wall sensor). Used for control logic when set.</li>
+              <li><strong>Window sensors:</strong> Any number of window or door sensors. If <em>any one</em> reports open, heating is paused for that room.</li>
+              <li><strong>Day / Night target temperature:</strong> Desired room temperature for each time of day.</li>
+              <li><strong>Away temperature:</strong> Temperature when away mode is active.</li>
+              <li><strong>Weekly schedule:</strong> Individual time control for this room — overrides the global times.</li>
+            </ul>
+          </div>
+
+          <div class="help-section">
+            <h3>🧠 Adaptive Heating</h3>
+            <p>In Adaptive mode the integration learns how much each room overshoots after the heating stops. It switches off the heating early enough for residual heat to bring the room exactly to the target temperature.</p>
+            <p>Learning happens in <strong>three duration buckets</strong> — depending on how long the room has been heating:</p>
+            <ul>
+              <li><strong>Short (&lt; 15 min):</strong> Little residual heat, small overshoot value.</li>
+              <li><strong>Medium (15–45 min):</strong> Typical heating cycle.</li>
+              <li><strong>Long (&gt; 45 min):</strong> Heavy heating, more residual heat in the system.</li>
+            </ul>
+            <p>Learned values are persisted and survive restarts. After 5–10 heating cycles per bucket the control becomes noticeably more accurate.</p>
+            <div class="help-tip">💡 Current learned values are shown in the room card under <em>Adaptive Overshoot</em>.</div>
+          </div>
+
+          <div class="help-section">
+            <h3>💡 Tips &amp; FAQ</h3>
+            <ul>
+              <li><strong>Control disabled:</strong> The integration writes no setpoints to any thermostat — it does not intervene at all.</li>
+              <li><strong>Climate entity as sensor:</strong> Enter a climate entity as the temperature sensor — the integration automatically reads its <code>current_temperature</code> attribute.</li>
+              <li><strong>Multiple window sensors:</strong> Add as many sensors as you like per room. It only takes <em>one</em> to be open to pause heating.</li>
+              <li><strong>Rooms disappear after reload:</strong> Use <em>Save configuration</em> before clicking <em>Reload</em> — unsaved changes are lost otherwise.</li>
+              <li><strong>HACS update not showing:</strong> Make sure the version in <code>manifest.json</code> matches the GitHub release tag exactly.</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
     </div>
   </div>
 

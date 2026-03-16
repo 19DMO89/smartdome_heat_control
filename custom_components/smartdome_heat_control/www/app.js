@@ -175,6 +175,10 @@ const I18N = {
     picker_no_results: "No matching entities found.",
 
     add_window_sensor: "Add window sensor",
+    room_advanced_show: "Advanced",
+    room_advanced_hide: "Hide advanced",
+
+    help_btn: "Help",
 
     section_circuits: "Heating circuits",
     circuits_hint: "Only required if the building has multiple independent heating circuits, each with its own main thermostat.",
@@ -323,6 +327,10 @@ const I18N = {
     picker_no_results: "Keine passenden Entities gefunden.",
 
     add_window_sensor: "Fensterkontakt hinzufügen",
+    room_advanced_show: "Erweitert",
+    room_advanced_hide: "Erweitert ausblenden",
+
+    help_btn: "Hilfe",
 
     section_circuits: "Heizkreise",
     circuits_hint: "Nur erforderlich wenn das Gebäude mehrere unabhängige Heizkreise besitzt, die jeweils ein eigenes Hauptthermostat haben.",
@@ -402,8 +410,6 @@ const els = {
   versionBadge: document.getElementById("versionBadge"),
   circuitsList: document.getElementById("circuitsList"),
   addCircuitBtn: document.getElementById("addCircuitBtn"),
-  mainLiveStatus: document.getElementById("main_live_status"),
-
   entityPickerModal: document.getElementById("entity-picker-modal"),
   entityPickerModalTitle: document.getElementById("entity-picker-modal-title"),
   entityPickerModalClose: document.getElementById("entity-picker-modal-close"),
@@ -792,25 +798,16 @@ function isThermostatHeating(thermostatId) {
   return entity?.attributes?.hvac_action === "heating";
 }
 
+function isAnyWindowOpen(room) {
+  const sensors = Array.isArray(room.window_sensors) ? room.window_sensors : [];
+  return sensors.some((id) => isWindowOpen(id));
+}
+
 function roomTitleMeta(room) {
-  const temp = getSensorTemperature(room.sensor);
   const heating = isRoomHeating(room.thermostat);
-  const windowOpen = isWindowOpen(room.window_sensor);
-  const setpoint = getThermostatSetpoint(room.thermostat);
+  const windowOpen = isAnyWindowOpen(room);
 
   const metaParts = [];
-
-  if (temp !== null) {
-    metaParts.push(
-      `<span class="room-live-temp">${escapeHtml(formatTemperature(temp))}</span>`
-    );
-  }
-
-  if (setpoint !== null) {
-    metaParts.push(
-      `<span style="color:var(--muted);font-size:12px;" title="Thermostat setpoint">→ ${escapeHtml(formatTemperature(setpoint))}</span>`
-    );
-  }
 
   if (heating) {
     metaParts.push(
@@ -834,43 +831,29 @@ function renderVersion() {
 }
 
 function updateMainLiveStatus() {
-  if (!els.mainLiveStatus) return;
-
   const thermostatId = getEntityPickerValue("global_main_thermostat_picker");
   const sensorId = getEntityPickerValue("global_main_sensor_picker");
 
-  const chips = [];
-
-  if (thermostatId) {
-    const heating = isThermostatHeating(thermostatId);
-    const setpoint = getThermostatSetpoint(thermostatId);
-    const currentTemp = getSensorTemperature(thermostatId);
-
-    let thermostatChip = `<span class="live-chip">${heating ? "🔥" : "🌡️"}&nbsp;`;
-    if (currentTemp !== null) {
-      thermostatChip += `<span class="live-chip-value">${escapeHtml(formatTemperature(currentTemp))}</span>`;
-    }
-    if (setpoint !== null) {
-      thermostatChip += `<span style="color:var(--muted)"> → ${escapeHtml(formatTemperature(setpoint))}</span>`;
-    }
-    thermostatChip += `</span>`;
-    chips.push(thermostatChip);
-  }
-
-  if (sensorId && sensorId !== thermostatId) {
-    const sensorTemp = getSensorTemperature(sensorId);
-    if (sensorTemp !== null) {
-      chips.push(
-        `<span class="live-chip">🌡️&nbsp;<span class="live-chip-value">${escapeHtml(formatTemperature(sensorTemp))}</span></span>`
-      );
+  const thermostatLive = document.getElementById("global_thermostat_live");
+  if (thermostatLive) {
+    if (thermostatId) {
+      const heating = isThermostatHeating(thermostatId);
+      const setpoint = getThermostatSetpoint(thermostatId);
+      if (setpoint !== null) {
+        thermostatLive.innerHTML = `${heating ? "🔥 " : ""}${escapeHtml(formatTemperature(setpoint))}`;
+      } else {
+        thermostatLive.textContent = "";
+      }
+    } else {
+      thermostatLive.textContent = "";
     }
   }
 
-  if (chips.length) {
-    els.mainLiveStatus.innerHTML = chips.join("");
-    els.mainLiveStatus.classList.remove("hidden");
-  } else {
-    els.mainLiveStatus.classList.add("hidden");
+  const sensorLive = document.getElementById("global_sensor_live");
+  if (sensorLive) {
+    const tempSrc = sensorId || thermostatId;
+    const temp = tempSrc ? getSensorTemperature(tempSrc) : null;
+    sensorLive.textContent = temp !== null ? formatTemperature(temp) : "";
   }
 }
 
@@ -1465,19 +1448,18 @@ function createRoomCard(roomId, room) {
       </div>
 
       <div class="field">
-        <label>${escapeHtml(t("room_area_id"))}</label>
-        <input class="room-area-id" type="text" value="${escapeHtml(
-          room.area_id || ""
-        )}" />
-      </div>
-
-      <div class="field">
-        <label>${escapeHtml(t("room_thermostat"))}</label>
+        <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span>${escapeHtml(t("room_thermostat"))}</span>
+          <span class="label-live room-thermostat-live"></span>
+        </label>
         <div class="room-thermostat-picker"></div>
       </div>
 
       <div class="field">
-        <label>${escapeHtml(t("room_sensor"))}</label>
+        <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span>${escapeHtml(t("room_sensor"))}</span>
+          <span class="label-live room-sensor-live"></span>
+        </label>
         <div class="room-sensor-picker"></div>
       </div>
 
@@ -1487,18 +1469,6 @@ function createRoomCard(roomId, room) {
         <button type="button" class="ghost room-add-window-sensor-btn" style="width:100%; margin-top:6px; font-size:13px;">
           + ${escapeHtml(t("add_window_sensor"))}
         </button>
-      </div>
-
-      <div class="field">
-        <label>${escapeHtml(t("room_control_profile"))}</label>
-        <select class="room-control-profile">
-          <option value="standard" ${
-            room.control_profile === "standard" ? "selected" : ""
-          }>${escapeHtml(t("control_profile_standard"))}</option>
-          <option value="self_regulating" ${
-            room.control_profile === "self_regulating" ? "selected" : ""
-          }>${escapeHtml(t("control_profile_self_regulating"))}</option>
-        </select>
       </div>
 
       <div class="field">
@@ -1514,39 +1484,67 @@ function createRoomCard(roomId, room) {
           room.target_night
         )}" />
       </div>
+    </div>
 
-      <div class="field">
-        <label>${escapeHtml(t("room_away_temperature"))}</label>
-        <input class="room-away-temperature" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
-          room.away_temperature
-        )}" />
+    <button type="button" class="ghost room-advanced-toggle" style="width:100%; margin-top:10px; font-size:12px; color:var(--muted); padding:8px;">
+      <span class="room-advanced-toggle-label">${escapeHtml(t("room_advanced_show"))}</span>
+      <span class="room-advanced-chevron" style="margin-left:6px; display:inline-block; transition:transform 0.2s;">▾</span>
+    </button>
+
+    <div class="room-advanced hidden">
+      <div class="room-grid" style="margin-top:12px;">
+        <div class="field">
+          <label>${escapeHtml(t("room_area_id"))}</label>
+          <input class="room-area-id" type="text" value="${escapeHtml(
+            room.area_id || ""
+          )}" />
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_control_profile"))}</label>
+          <select class="room-control-profile">
+            <option value="standard" ${
+              room.control_profile === "standard" ? "selected" : ""
+            }>${escapeHtml(t("control_profile_standard"))}</option>
+            <option value="self_regulating" ${
+              room.control_profile === "self_regulating" ? "selected" : ""
+            }>${escapeHtml(t("control_profile_self_regulating"))}</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_away_temperature"))}</label>
+          <input class="room-away-temperature" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+            room.away_temperature
+          )}" />
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_day_start"))}</label>
+          <input class="room-day-start" type="time" value="${escapeHtml(
+            room.day_start || ""
+          )}" />
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_night_start"))}</label>
+          <input class="room-night-start" type="time" value="${escapeHtml(
+            room.night_start || ""
+          )}" />
+        </div>
+
+        ${Object.keys(state.config.circuits || {}).length > 0 ? `
+        <div class="field">
+          <label>${escapeHtml(t("room_circuit"))}</label>
+          <select class="room-circuit-id">
+            ${getCircuitOptions().map((opt) => `
+              <option value="${escapeHtml(opt.value)}" ${
+                (room.circuit_id || "") === opt.value ? "selected" : ""
+              }>${escapeHtml(opt.label)}</option>
+            `).join("")}
+          </select>
+        </div>` : ""}
       </div>
-
-      <div class="field">
-        <label>${escapeHtml(t("room_day_start"))}</label>
-        <input class="room-day-start" type="time" value="${escapeHtml(
-          room.day_start || ""
-        )}" />
-      </div>
-
-      <div class="field">
-        <label>${escapeHtml(t("room_night_start"))}</label>
-        <input class="room-night-start" type="time" value="${escapeHtml(
-          room.night_start || ""
-        )}" />
-      </div>
-
-      ${Object.keys(state.config.circuits || {}).length > 0 ? `
-      <div class="field">
-        <label>${escapeHtml(t("room_circuit"))}</label>
-        <select class="room-circuit-id">
-          ${getCircuitOptions().map((opt) => `
-            <option value="${escapeHtml(opt.value)}" ${
-              (room.circuit_id || "") === opt.value ? "selected" : ""
-            }>${escapeHtml(opt.label)}</option>
-          `).join("")}
-        </select>
-      </div>` : ""}
     </div>
   `;
 
@@ -1582,6 +1580,17 @@ function createRoomCard(roomId, room) {
 
   wrapper.querySelector(".room-add-window-sensor-btn").addEventListener("click", () => {
     appendWindowSensorRow(windowSensorsList, roomId, "");
+  });
+
+  const advancedToggle = wrapper.querySelector(".room-advanced-toggle");
+  const advancedPanel = wrapper.querySelector(".room-advanced");
+  advancedToggle.addEventListener("click", () => {
+    const isOpen = !advancedPanel.classList.contains("hidden");
+    advancedPanel.classList.toggle("hidden", isOpen);
+    advancedToggle.querySelector(".room-advanced-chevron").style.transform = isOpen ? "" : "rotate(180deg)";
+    advancedToggle.querySelector(".room-advanced-toggle-label").textContent = isOpen
+      ? t("room_advanced_show")
+      : t("room_advanced_hide");
   });
 
   deleteBtn.addEventListener("click", () => {
@@ -1675,6 +1684,26 @@ function updateRoomLiveState() {
     const titleMeta = node.querySelector(".room-title-meta");
     if (titleMeta) {
       titleMeta.innerHTML = roomTitleMeta(room);
+    }
+
+    // live thermostat label: setpoint + heating indicator
+    const thermostatLive = node.querySelector(".room-thermostat-live");
+    if (thermostatLive) {
+      const setpoint = getThermostatSetpoint(room.thermostat);
+      const heating = isThermostatHeating(room.thermostat);
+      if (setpoint !== null) {
+        thermostatLive.innerHTML = `${heating ? "🔥 " : ""}${escapeHtml(formatTemperature(setpoint))}`;
+      } else {
+        thermostatLive.textContent = "";
+      }
+    }
+
+    // live sensor label: current measured temperature
+    const sensorLive = node.querySelector(".room-sensor-live");
+    if (sensorLive) {
+      const tempSrc = room.sensor || room.thermostat;
+      const temp = getSensorTemperature(tempSrc);
+      sensorLive.textContent = temp !== null ? formatTemperature(temp) : "";
     }
 
     // update adaptive bucket display
@@ -2319,4 +2348,40 @@ async function init() {
   }
 }
 
+// ─── Help modal ──────────────────────────────────────────────────────────────
+function setupHelpModal() {
+  const modal = document.getElementById("help-modal");
+  if (!modal) return;
+
+  let helpLang = UI_LANG;
+
+  function setHelpLang(lang) {
+    helpLang = lang;
+    modal.querySelectorAll(".help-lang-content").forEach((el) => {
+      el.classList.toggle("hidden", el.dataset.lang !== lang);
+    });
+    document.getElementById("help-lang-de").classList.toggle("active", lang === "de");
+    document.getElementById("help-lang-en").classList.toggle("active", lang === "en");
+  }
+
+  document.getElementById("helpBtn").addEventListener("click", () => {
+    modal.classList.remove("hidden");
+    setHelpLang(helpLang);
+  });
+
+  document.getElementById("help-modal-close").addEventListener("click", () => {
+    modal.classList.add("hidden");
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.add("hidden");
+  });
+
+  document.getElementById("help-lang-de").addEventListener("click", () => setHelpLang("de"));
+  document.getElementById("help-lang-en").addEventListener("click", () => setHelpLang("en"));
+
+  setHelpLang(UI_LANG);
+}
+
+setupHelpModal();
 init();
