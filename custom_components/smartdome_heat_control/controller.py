@@ -624,6 +624,13 @@ class SmartHeatingController:
         """Prüfen, ob ein selbst regelndes Thermostat trotz Drosselung sofort
         aktualisiert werden soll, weil sich der berechnete Zielwert geändert hat.
         """
+        # Wenn ein anderer Pfad (z.B. Haupt-Thermostat-Logik) denselben Thermostat
+        # zwischenzeitlich auf einen anderen Wert gesetzt hat, sofort korrigieren.
+        last_sent = self._desired_targets.get(thermostat)
+        if last_sent is not None and abs(last_sent - desired) >= 0.5:
+            self._last_computed_targets[thermostat] = desired
+            return True
+
         previous_computed = self._last_computed_targets.get(thermostat)
 
         if previous_computed is None:
