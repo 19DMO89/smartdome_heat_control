@@ -1011,6 +1011,7 @@ function createCircuitCard(circuitId, circuit) {
     container: card.querySelector(".circuit-thermostat-picker"),
     pickerId: `circuit_${circuitId}_thermostat_picker`,
     items: state.climates,
+    getItems: () => state.climates,
     selectedValue: circuit.main_thermostat || "",
     emptyLabel: t("select_auto_none"),
     onChange: () => {},
@@ -1020,6 +1021,7 @@ function createCircuitCard(circuitId, circuit) {
     container: card.querySelector(".circuit-sensor-picker"),
     pickerId: `circuit_${circuitId}_sensor_picker`,
     items: state.sensors,
+    getItems: () => state.sensors,
     selectedValue: circuit.main_sensor || "",
     emptyLabel: t("select_auto_none"),
     onChange: () => {},
@@ -1122,13 +1124,15 @@ function renderEntityPickerModalList(query = "") {
 
   const q = String(query || "").trim().toLowerCase();
 
+  const currentItems = config.getItems ? config.getItems() : config.items;
+
   const entries = [
     {
       entity_id: "",
       attributes: { friendly_name: config.emptyLabel },
       __empty: true,
     },
-    ...config.items,
+    ...currentItems,
   ].filter((item) => {
     if (!q) return true;
     const haystack = `${item.entity_id} ${getEntityTitle(item)}`.toLowerCase();
@@ -1198,6 +1202,7 @@ function createEntityPicker({
   container,
   pickerId,
   items,
+  getItems,
   selectedValue,
   emptyLabel,
   onChange,
@@ -1207,6 +1212,7 @@ function createEntityPicker({
   const normalizedItems = Array.isArray(items) ? items : [];
   entityPickerState.set(pickerId, {
     items: normalizedItems,
+    getItems: getItems || null,
     selectedValue: selectedValue || "",
     onChange,
     emptyLabel,
@@ -1365,6 +1371,7 @@ function renderGlobalSettings() {
     container: els.mainThermostatPicker,
     pickerId: "global_main_thermostat_picker",
     items: state.climates,
+    getItems: () => state.climates,
     selectedValue: cfg.main_thermostat,
     emptyLabel: t("select_choose"),
     onChange: () => {},
@@ -1374,6 +1381,7 @@ function renderGlobalSettings() {
     container: els.mainSensorPicker,
     pickerId: "global_main_sensor_picker",
     items: state.sensors,
+    getItems: () => state.sensors,
     selectedValue: cfg.main_sensor,
     emptyLabel: t("select_auto_none"),
     onChange: () => {},
@@ -1410,6 +1418,7 @@ function appendWindowSensorRow(listEl, roomId, sensorId) {
     container: pickerContainer,
     pickerId,
     items: state.binarySensors,
+    getItems: () => state.binarySensors,
     selectedValue: sensorId || "",
     emptyLabel: t("select_not_set"),
     onChange: () => {},
@@ -1586,6 +1595,7 @@ function createRoomCard(roomId, room) {
     container: wrapper.querySelector(".room-thermostat-picker"),
     pickerId: `room_${roomId}_thermostat_picker`,
     items: state.climates,
+    getItems: () => state.climates,
     selectedValue: room.thermostat || "",
     emptyLabel: t("select_not_set"),
     onChange: () => {},
@@ -1595,6 +1605,7 @@ function createRoomCard(roomId, room) {
     container: wrapper.querySelector(".room-sensor-picker"),
     pickerId: `room_${roomId}_sensor_picker`,
     items: state.sensors,
+    getItems: () => state.sensors,
     selectedValue: room.sensor || "",
     emptyLabel: t("select_not_set"),
     onChange: () => {},
