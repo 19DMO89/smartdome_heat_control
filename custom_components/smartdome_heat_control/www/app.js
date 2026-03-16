@@ -398,6 +398,13 @@ const els = {
   versionBadge: document.getElementById("versionBadge"),
   circuitsList: document.getElementById("circuitsList"),
   addCircuitBtn: document.getElementById("addCircuitBtn"),
+  mainLiveStatus: document.getElementById("main_live_status"),
+
+  entityPickerModal: document.getElementById("entity-picker-modal"),
+  entityPickerModalTitle: document.getElementById("entity-picker-modal-title"),
+  entityPickerModalClose: document.getElementById("entity-picker-modal-close"),
+  entityPickerModalSearch: document.getElementById("entity-picker-modal-search"),
+  entityPickerModalList: document.getElementById("entity-picker-modal-list"),
 
   scheduleModal: document.getElementById("schedule-modal"),
   scheduleModalTitle: document.getElementById("schedule-modal-title"),
@@ -419,6 +426,7 @@ const els = {
 
 let unsubscribeStateChanged = null;
 let isEditing = false;
+let activeEntityPickerId = null;
 let scheduleRoomId = null;
 let currentScheduleDay = "monday";
 let draftWeeklySchedule = null;
@@ -629,6 +637,9 @@ function normalizeRoom(roomId, room) {
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
     learned_overshoot: normalizeNumber(room?.learned_overshoot, 0.3),
+    learned_overshoot_short: normalizeNumber(room?.learned_overshoot_short, 0.2),
+    learned_overshoot_medium: normalizeNumber(room?.learned_overshoot_medium, 0.4),
+    learned_overshoot_long: normalizeNumber(room?.learned_overshoot_long, 0.7),
   };
 }
 
@@ -757,10 +768,23 @@ function isWindowOpen(windowSensorId) {
   return value === "on" || value === "open" || value === "true";
 }
 
+function getThermostatSetpoint(thermostatId) {
+  const entity = findState(thermostatId);
+  if (!entity) return null;
+  const val = Number(entity.attributes?.temperature);
+  return Number.isFinite(val) ? val : null;
+}
+
+function isThermostatHeating(thermostatId) {
+  const entity = findState(thermostatId);
+  return entity?.attributes?.hvac_action === "heating";
+}
+
 function roomTitleMeta(room) {
   const temp = getSensorTemperature(room.sensor);
   const heating = isRoomHeating(room.thermostat);
   const windowOpen = isWindowOpen(room.window_sensor);
+  const setpoint = getThermostatSetpoint(room.thermostat);
 
   const metaParts = [];
 
@@ -770,19 +794,21 @@ function roomTitleMeta(room) {
     );
   }
 
+  if (setpoint !== null) {
+    metaParts.push(
+      `<span style="color:var(--muted);font-size:12px;" title="Thermostat setpoint">→ ${escapeHtml(formatTemperature(setpoint))}</span>`
+    );
+  }
+
   if (heating) {
     metaParts.push(
-      `<span class="room-heating" title="${escapeHtml(
-        t("room_heating_now")
-      )}">🔥</span>`
+      `<span class="room-heating" title="${escapeHtml(t("room_heating_now"))}">🔥</span>`
     );
   }
 
   if (windowOpen) {
     metaParts.push(
-      `<span class="room-window-open" title="${escapeHtml(
-        t("room_window_open")
-      )}">🪟</span>`
+      `<span class="room-window-open" title="${escapeHtml(t("room_window_open"))}">🪟</span>`
     );
   }
 
@@ -792,6 +818,47 @@ function roomTitleMeta(room) {
 function renderVersion() {
   if (els.versionBadge) {
     els.versionBadge.textContent = `${t("version")} ${PANEL_VERSION}`;
+  }
+}
+
+function updateMainLiveStatus() {
+  if (!els.mainLiveStatus) return;
+
+  const thermostatId = getEntityPickerValue("global_main_thermostat_picker");
+  const sensorId = getEntityPickerValue("global_main_sensor_picker");
+
+  const chips = [];
+
+  if (thermostatId) {
+    const heating = isThermostatHeating(thermostatId);
+    const setpoint = getThermostatSetpoint(thermostatId);
+    const currentTemp = getSensorTemperature(thermostatId);
+
+    let thermostatChip = `<span class="live-chip">${heating ? "🔥" : "🌡️"}&nbsp;`;
+    if (currentTemp !== null) {
+      thermostatChip += `<span class="live-chip-value">${escapeHtml(formatTemperature(currentTemp))}</span>`;
+    }
+    if (setpoint !== null) {
+      thermostatChip += `<span style="color:var(--muted)"> → ${escapeHtml(formatTemperature(setpoint))}</span>`;
+    }
+    thermostatChip += `</span>`;
+    chips.push(thermostatChip);
+  }
+
+  if (sensorId && sensorId !== thermostatId) {
+    const sensorTemp = getSensorTemperature(sensorId);
+    if (sensorTemp !== null) {
+      chips.push(
+        `<span class="live-chip">🌡️&nbsp;<span class="live-chip-value">${escapeHtml(formatTemperature(sensorTemp))}</span></span>`
+      );
+    }
+  }
+
+  if (chips.length) {
+    els.mainLiveStatus.innerHTML = chips.join("");
+    els.mainLiveStatus.classList.remove("hidden");
+  } else {
+    els.mainLiveStatus.classList.add("hidden");
   }
 }
 
@@ -992,97 +1059,41 @@ function getEntityTitle(item) {
 }
 
 function closeAllEntityPickers() {
-  entityPickerState.forEach((_, id) => {
-    const root = document.getElementById(id);
-    if (root) {
-      root.classList.remove("open");
-    }
-  });
+  closeEntityPickerModal();
 }
 
-function createEntityPicker({
-  container,
-  pickerId,
-  items,
-  selectedValue,
-  emptyLabel,
-  onChange,
-}) {
-  if (!container) {
-    return;
-  }
-
-  const normalizedItems = Array.isArray(items) ? items : [];
-  entityPickerState.set(pickerId, {
-    items: normalizedItems,
-    selectedValue: selectedValue || "",
-    onChange,
-    emptyLabel,
-  });
-
-  const selectedItem =
-    normalizedItems.find((item) => item.entity_id === selectedValue) || null;
-
-  container.innerHTML = `
-    <div class="entity-picker" id="${pickerId}">
-      <button type="button" class="entity-picker-trigger">
-        <span class="entity-picker-icon">${
-          selectedItem ? getEntityIcon(selectedItem.entity_id) : "—"
-        }</span>
-        <span class="entity-picker-label ${
-          selectedItem ? "" : "entity-picker-empty"
-        }">${
-          selectedItem
-            ? escapeHtml(getEntityTitle(selectedItem))
-            : escapeHtml(emptyLabel)
-        }</span>
-      </button>
-      <div class="entity-picker-dropdown">
-        <input
-          type="text"
-          class="entity-picker-search"
-          placeholder="${escapeHtml(t("picker_search_placeholder"))}"
-        />
-        <div class="entity-picker-list"></div>
-      </div>
-    </div>
-  `;
-
-  const root = container.querySelector(".entity-picker");
-  const trigger = root.querySelector(".entity-picker-trigger");
-  const searchInput = root.querySelector(".entity-picker-search");
-
-  trigger.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const willOpen = !root.classList.contains("open");
-    closeAllEntityPickers();
-    if (willOpen) {
-      root.classList.add("open");
-      renderEntityPickerOptions(pickerId, "");
-      searchInput.value = "";
-      setTimeout(() => searchInput.focus(), 0);
-    }
-  });
-
-  searchInput.addEventListener("input", () => {
-    renderEntityPickerOptions(pickerId, searchInput.value);
-  });
-
-  root.addEventListener("click", (event) => {
-    event.stopPropagation();
-  });
-
-  renderEntityPickerOptions(pickerId, "");
-}
-
-function renderEntityPickerOptions(pickerId, query = "") {
+function openEntityPickerModal(pickerId) {
   const config = entityPickerState.get(pickerId);
-  const root = document.getElementById(pickerId);
-  if (!config || !root) {
-    return;
+  if (!config || !els.entityPickerModal) return;
+
+  activeEntityPickerId = pickerId;
+
+  if (els.entityPickerModalTitle) {
+    els.entityPickerModalTitle.textContent = config.emptyLabel || t("select_choose");
+  }
+  if (els.entityPickerModalSearch) {
+    els.entityPickerModalSearch.value = "";
+    els.entityPickerModalSearch.placeholder = t("picker_search_placeholder");
   }
 
-  const list = root.querySelector(".entity-picker-list");
+  renderEntityPickerModalList("");
+  els.entityPickerModal.classList.remove("hidden");
+  setTimeout(() => els.entityPickerModalSearch?.focus(), 50);
+}
+
+function closeEntityPickerModal() {
+  if (els.entityPickerModal) {
+    els.entityPickerModal.classList.add("hidden");
+  }
+  activeEntityPickerId = null;
+}
+
+function renderEntityPickerModalList(query = "") {
+  if (!activeEntityPickerId || !els.entityPickerModalList) return;
+
+  const config = entityPickerState.get(activeEntityPickerId);
+  if (!config) return;
+
   const q = String(query || "").trim().toLowerCase();
 
   const entries = [
@@ -1093,20 +1104,18 @@ function renderEntityPickerOptions(pickerId, query = "") {
     },
     ...config.items,
   ].filter((item) => {
-    if (!q) {
-      return true;
-    }
+    if (!q) return true;
     const haystack = `${item.entity_id} ${getEntityTitle(item)}`.toLowerCase();
     return haystack.includes(q);
   });
 
-  list.innerHTML = "";
+  els.entityPickerModalList.innerHTML = "";
 
   if (!entries.length) {
     const empty = document.createElement("div");
     empty.className = "entity-picker-no-results";
     empty.textContent = t("picker_no_results");
-    list.appendChild(empty);
+    els.entityPickerModalList.appendChild(empty);
     return;
   }
 
@@ -1133,29 +1142,77 @@ function renderEntityPickerOptions(pickerId, query = "") {
     `;
 
     option.addEventListener("click", () => {
+      const pickerId = activeEntityPickerId;
       config.selectedValue = item.entity_id || "";
 
       if (typeof config.onChange === "function") {
         config.onChange(config.selectedValue);
       }
 
-      const triggerIcon = root.querySelector(
-        ".entity-picker-trigger .entity-picker-icon"
-      );
-      const triggerLabel = root.querySelector(
-        ".entity-picker-trigger .entity-picker-label"
-      );
+      // update trigger display
+      const root = document.getElementById(pickerId);
+      if (root) {
+        const triggerIcon = root.querySelector(".entity-picker-trigger .entity-picker-icon");
+        const triggerLabel = root.querySelector(".entity-picker-trigger .entity-picker-label");
+        if (triggerIcon) triggerIcon.textContent = item.__empty ? "—" : icon;
+        if (triggerLabel) {
+          triggerLabel.textContent = title;
+          triggerLabel.classList.toggle("entity-picker-empty", !!item.__empty);
+        }
+      }
 
-      triggerIcon.textContent = item.__empty ? "—" : icon;
-      triggerLabel.textContent = title;
-      triggerLabel.classList.toggle("entity-picker-empty", !!item.__empty);
-
-      closeAllEntityPickers();
-      renderEntityPickerOptions(pickerId, "");
+      closeEntityPickerModal();
     });
 
-    list.appendChild(option);
+    els.entityPickerModalList.appendChild(option);
   }
+}
+
+function createEntityPicker({
+  container,
+  pickerId,
+  items,
+  selectedValue,
+  emptyLabel,
+  onChange,
+}) {
+  if (!container) return;
+
+  const normalizedItems = Array.isArray(items) ? items : [];
+  entityPickerState.set(pickerId, {
+    items: normalizedItems,
+    selectedValue: selectedValue || "",
+    onChange,
+    emptyLabel,
+  });
+
+  const selectedItem =
+    normalizedItems.find((item) => item.entity_id === selectedValue) || null;
+
+  container.innerHTML = `
+    <div class="entity-picker" id="${pickerId}">
+      <button type="button" class="entity-picker-trigger">
+        <span class="entity-picker-icon">${
+          selectedItem ? getEntityIcon(selectedItem.entity_id) : "—"
+        }</span>
+        <span class="entity-picker-label ${
+          selectedItem ? "" : "entity-picker-empty"
+        }">${
+          selectedItem
+            ? escapeHtml(getEntityTitle(selectedItem))
+            : escapeHtml(emptyLabel)
+        }</span>
+      </button>
+    </div>
+  `;
+
+  const root = container.querySelector(".entity-picker");
+  const trigger = root.querySelector(".entity-picker-trigger");
+
+  trigger.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openEntityPickerModal(pickerId);
+  });
 }
 
 function getEntityPickerValue(pickerId) {
@@ -1298,6 +1355,7 @@ function renderGlobalSettings() {
 
   createModePicker(cfg.heating_mode);
   renderCircuits();
+  updateMainLiveStatus();
 }
 
 function createRoomCard(roomId, room) {
@@ -1307,7 +1365,10 @@ function createRoomCard(roomId, room) {
 
   const areaText = room.area_id ? `Area: ${room.area_id}` : t("room_manual");
   const roomMeta = roomTitleMeta(room);
-  const learnedOvershoot = normalizeNumber(room.learned_overshoot, 0.3);
+  const isAdaptive = getModePickerValue() === "adaptive";
+  const ovShort = normalizeNumber(room.learned_overshoot_short, 0.2);
+  const ovMedium = normalizeNumber(room.learned_overshoot_medium, 0.4);
+  const ovLong = normalizeNumber(room.learned_overshoot_long, 0.7);
 
   wrapper.innerHTML = `
     <div class="room-top">
@@ -1319,9 +1380,21 @@ function createRoomCard(roomId, room) {
           </div>
         </div>
         <div class="room-subtitle">${escapeHtml(areaText)}</div>
-        <div class="room-subtitle">${escapeHtml(t("room_overshoot"))}: ${escapeHtml(
-          learnedOvershoot.toFixed(1)
-        )} °C</div>
+        ${isAdaptive ? `
+        <div class="room-adaptive room-adaptive-display">
+          <span class="adaptive-bucket">
+            <span style="color:var(--muted)">▲ &lt;15min</span>
+            <span class="adaptive-bucket-value">${ovShort.toFixed(2)} °C</span>
+          </span>
+          <span class="adaptive-bucket">
+            <span style="color:var(--muted)">▲ 15–45min</span>
+            <span class="adaptive-bucket-value">${ovMedium.toFixed(2)} °C</span>
+          </span>
+          <span class="adaptive-bucket">
+            <span style="color:var(--muted)">▲ &gt;45min</span>
+            <span class="adaptive-bucket-value">${ovLong.toFixed(2)} °C</span>
+          </span>
+        </div>` : ""}
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <span class="pill">
@@ -1553,14 +1626,22 @@ function updateRoomLiveState() {
       titleMeta.innerHTML = roomTitleMeta(room);
     }
 
-    const subtitleNodes = node.querySelectorAll(".room-subtitle");
-    if (subtitleNodes.length >= 2) {
-      const learnedOvershoot = normalizeNumber(room.learned_overshoot, 0.3);
-      subtitleNodes[1].textContent = `${t("room_overshoot")}: ${learnedOvershoot.toFixed(
-        1
-      )} °C`;
+    // update adaptive bucket display
+    const adaptiveDiv = node.querySelector(".room-adaptive-display");
+    if (adaptiveDiv) {
+      const ovShort = normalizeNumber(room.learned_overshoot_short, 0.2);
+      const ovMedium = normalizeNumber(room.learned_overshoot_medium, 0.4);
+      const ovLong = normalizeNumber(room.learned_overshoot_long, 0.7);
+      const buckets = adaptiveDiv.querySelectorAll(".adaptive-bucket-value");
+      if (buckets.length === 3) {
+        buckets[0].textContent = `${ovShort.toFixed(2)} °C`;
+        buckets[1].textContent = `${ovMedium.toFixed(2)} °C`;
+        buckets[2].textContent = `${ovLong.toFixed(2)} °C`;
+      }
     }
   }
+
+  updateMainLiveStatus();
 }
 
 function collectFormState() {
@@ -2051,11 +2132,21 @@ function bindEvents() {
     els.addCircuitBtn.addEventListener("click", addCircuit);
   }
 
-  bindScheduleEvents();
+  if (els.entityPickerModalClose) {
+    els.entityPickerModalClose.addEventListener("click", closeEntityPickerModal);
+  }
+  if (els.entityPickerModal) {
+    els.entityPickerModal.addEventListener("click", (e) => {
+      if (e.target === els.entityPickerModal) closeEntityPickerModal();
+    });
+  }
+  if (els.entityPickerModalSearch) {
+    els.entityPickerModalSearch.addEventListener("input", () => {
+      renderEntityPickerModalList(els.entityPickerModalSearch.value);
+    });
+  }
 
-  document.addEventListener("click", () => {
-    closeAllEntityPickers();
-  });
+  bindScheduleEvents();
 }
 
 function enableEditTracking() {
