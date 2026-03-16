@@ -174,6 +174,8 @@ const I18N = {
     picker_search_placeholder: "Search entity…",
     picker_no_results: "No matching entities found.",
 
+    add_window_sensor: "Add window sensor",
+
     section_circuits: "Heating circuits",
     circuits_hint: "Only required if the building has multiple independent heating circuits, each with its own main thermostat.",
     add_circuit: "Add heating circuit",
@@ -319,6 +321,8 @@ const I18N = {
 
     picker_search_placeholder: "Entity suchen…",
     picker_no_results: "Keine passenden Entities gefunden.",
+
+    add_window_sensor: "Fensterkontakt hinzufügen",
 
     section_circuits: "Heizkreise",
     circuits_hint: "Nur erforderlich wenn das Gebäude mehrere unabhängige Heizkreise besitzt, die jeweils ein eigenes Hauptthermostat haben.",
@@ -627,6 +631,14 @@ function normalizeRoom(roomId, room) {
     sensor: typeof room?.sensor === "string" ? room.sensor : "",
     window_sensor:
       typeof room?.window_sensor === "string" ? room.window_sensor : "",
+    window_sensors: (() => {
+      if (Array.isArray(room?.window_sensors)) {
+        return room.window_sensors.filter((s) => typeof s === "string" && s);
+      }
+      // migrate legacy single field
+      const old = typeof room?.window_sensor === "string" ? room.window_sensor : "";
+      return old ? [old] : [];
+    })(),
     control_profile: normalizeControlProfile(room?.control_profile),
     circuit_id: typeof room?.circuit_id === "string" ? room.circuit_id : "",
     target_day: normalizeNumber(room?.target_day, 21.0),
@@ -1358,6 +1370,38 @@ function renderGlobalSettings() {
   updateMainLiveStatus();
 }
 
+function appendWindowSensorRow(listEl, roomId, sensorId) {
+  const pickerId = `room_${roomId}_ws_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`;
+
+  const row = document.createElement("div");
+  row.className = "room-window-sensor-row";
+  row.style.cssText = "display:flex; gap:8px; align-items:center; margin-bottom:6px;";
+  row.dataset.wsPickerId = pickerId;
+
+  const pickerContainer = document.createElement("div");
+  pickerContainer.style.flex = "1";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "ghost";
+  removeBtn.style.cssText = "padding:8px 10px; flex-shrink:0;";
+  removeBtn.textContent = "✕";
+  removeBtn.addEventListener("click", () => row.remove());
+
+  row.appendChild(pickerContainer);
+  row.appendChild(removeBtn);
+  listEl.appendChild(row);
+
+  createEntityPicker({
+    container: pickerContainer,
+    pickerId,
+    items: state.binarySensors,
+    selectedValue: sensorId || "",
+    emptyLabel: t("select_not_set"),
+    onChange: () => {},
+  });
+}
+
 function createRoomCard(roomId, room) {
   const wrapper = document.createElement("div");
   wrapper.className = "room";
@@ -1437,9 +1481,12 @@ function createRoomCard(roomId, room) {
         <div class="room-sensor-picker"></div>
       </div>
 
-      <div class="field">
+      <div class="field full">
         <label>${escapeHtml(t("room_window_sensor"))}</label>
-        <div class="room-window-sensor-picker"></div>
+        <div class="room-window-sensors-list"></div>
+        <button type="button" class="ghost room-add-window-sensor-btn" style="width:100%; margin-top:6px; font-size:13px;">
+          + ${escapeHtml(t("add_window_sensor"))}
+        </button>
       </div>
 
       <div class="field">
@@ -1524,13 +1571,17 @@ function createRoomCard(roomId, room) {
     onChange: () => {},
   });
 
-  createEntityPicker({
-    container: wrapper.querySelector(".room-window-sensor-picker"),
-    pickerId: `room_${roomId}_window_sensor_picker`,
-    items: state.binarySensors,
-    selectedValue: room.window_sensor || "",
-    emptyLabel: t("select_not_set"),
-    onChange: () => {},
+  const windowSensorsList = wrapper.querySelector(".room-window-sensors-list");
+  const initialSensors = Array.isArray(room.window_sensors) && room.window_sensors.length
+    ? room.window_sensors
+    : (room.window_sensor ? [room.window_sensor] : [""]);
+
+  for (const sensorId of initialSensors) {
+    appendWindowSensorRow(windowSensorsList, roomId, sensorId);
+  }
+
+  wrapper.querySelector(".room-add-window-sensor-btn").addEventListener("click", () => {
+    appendWindowSensorRow(windowSensorsList, roomId, "");
   });
 
   deleteBtn.addEventListener("click", () => {
@@ -1691,8 +1742,9 @@ function collectFormState() {
       area_id: node.querySelector(".room-area-id").value.trim(),
       thermostat: getEntityPickerValue(`room_${roomId}_thermostat_picker`) || "",
       sensor: getEntityPickerValue(`room_${roomId}_sensor_picker`) || "",
-      window_sensor:
-        getEntityPickerValue(`room_${roomId}_window_sensor_picker`) || "",
+      window_sensors: [...node.querySelectorAll(".room-window-sensor-row")].map(
+        (row) => getEntityPickerValue(row.dataset.wsPickerId)
+      ).filter(Boolean),
       control_profile:
         node.querySelector(".room-control-profile")?.value || "standard",
       target_day: node.querySelector(".room-target-day").value,
@@ -1741,6 +1793,7 @@ function addRoom() {
     thermostat: "",
     sensor: "",
     window_sensor: "",
+    window_sensors: [],
     control_profile: "standard",
     circuit_id: "",
     target_day: 21.0,

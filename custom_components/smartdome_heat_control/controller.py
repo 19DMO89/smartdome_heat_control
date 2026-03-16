@@ -50,6 +50,7 @@ from .const import (
     CONF_ROOM_THERMOSTAT,
     CONF_ROOM_WEEKLY_SCHEDULE,
     CONF_ROOM_WINDOW_SENSOR,
+    CONF_ROOM_WINDOW_SENSORS,
     CONF_TOLERANCE,
     CONF_VACATION_ENABLED,
     CONF_VACATION_TEMPERATURE,
@@ -150,12 +151,13 @@ class SmartHeatingController:
 
         for room in self._active_rooms().values():
             room_sensor = self._as_entity_id(room.get(CONF_ROOM_SENSOR))
-            room_window_sensor = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
-
             if room_sensor:
                 watch_entities.add(room_sensor)
-            if room_window_sensor:
-                watch_entities.add(room_window_sensor)
+
+            for ws in room.get(CONF_ROOM_WINDOW_SENSORS, []):
+                ws_id = self._as_entity_id(ws)
+                if ws_id:
+                    watch_entities.add(ws_id)
 
         if watch_entities:
             self._unsub.append(
@@ -317,22 +319,25 @@ class SmartHeatingController:
         return self._get_state_float(self._as_entity_id(room.get(CONF_ROOM_SENSOR)))
 
     def _is_window_open(self, room: dict[str, Any]) -> bool:
-        """Prüfen, ob das Fenster im Raum offen ist."""
-        entity_id = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
-        if not entity_id:
-            return False
-
-        state = self.hass.states.get(entity_id)
-        if not state:
-            return False
-
-        raw = str(state.state).lower()
-        return raw in {"on", "open", "true"}
+        """Prüfen, ob mindestens ein Fensterkontakt im Raum offen ist."""
+        sensors = room.get(CONF_ROOM_WINDOW_SENSORS, [])
+        if not isinstance(sensors, list):
+            sensors = []
+        for entity_id in sensors:
+            if not entity_id:
+                continue
+            state = self.hass.states.get(entity_id)
+            if not state:
+                continue
+            if str(state.state).lower() in {"on", "open", "true"}:
+                return True
+        return False
 
     def _window_pause_active(self, room_id: str, room: dict[str, Any]) -> bool:
         """Fensterlogik mit Open-/Close-Delay."""
-        sensor = self._as_entity_id(room.get(CONF_ROOM_WINDOW_SENSOR))
-        if not sensor:
+        sensors = room.get(CONF_ROOM_WINDOW_SENSORS, [])
+        has_sensor = isinstance(sensors, list) and any(s for s in sensors if s)
+        if not has_sensor:
             self._window_open_since.pop(room_id, None)
             self._window_closed_since.pop(room_id, None)
             self._window_paused_rooms.discard(room_id)
