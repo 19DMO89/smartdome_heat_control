@@ -1044,7 +1044,7 @@ class SmartHeatingController:
                 if not circuit_room_states:
                     continue
                 any_circuit_needs_heat = any(
-                    rs["state"] in (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD)
+                    rs["state"] == ROOM_STATE_HEATING
                     for rs in circuit_room_states.values()
                 )
                 circuit_base_target = max(
@@ -1058,7 +1058,7 @@ class SmartHeatingController:
         else:
             # Single-circuit fallback: use global main_thermostat
             any_room_needs_heat = any(
-                rs["state"] in (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD)
+                rs["state"] == ROOM_STATE_HEATING
                 for rs in room_states.values()
             )
             main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
