@@ -61,6 +61,19 @@ You can define different time slots for every day of the week, each with its own
 
 ---
 
+### Thermostat Control Profiles
+
+Each room can be assigned one of two control profiles depending on the type of thermostat used:
+
+| Profile | Description |
+|---|---|
+| **Standard** | Smartdome controls the thermostat by setting the target temperature above the desired value (boost) to force the valve open. Recommended for most thermostats (e.g. Shelly TRV, Tado, etc.). |
+| **Self-Regulating** | Smartdome only sets the exact target temperature and does not apply a boost. The thermostat handles valve control autonomously. Required for thermostats that self-regulate and must not receive override commands. |
+
+> **Homematic / Homematic IP via CCU (OCCU):** These thermostats regulate themselves internally and react negatively to frequent target temperature overrides. **Always use the Self-Regulating profile for Homematic thermostats connected via OCCU.** Smartdome will then only send the exact target temperature and respect a minimum 120-second interval between commands.
+
+---
+
 ### Window Open Detection
 
 When a window sensor detects an open window:
@@ -302,6 +315,19 @@ Jeder Raum unterstützt ein frei konfigurierbares Wochenschema.
 ![Wochenschema](images/weekschedule.png)
 
 Für jeden Wochentag können individuelle Zeitslots mit eigener Zieltemperatur definiert werden. So lässt sich zum Beispiel morgens und abends wärmer heizen und tagsüber kühler halten.
+
+---
+
+### Thermostat-Regelprofile
+
+Jedem Raum kann eines von zwei Regelprofilen zugewiesen werden, je nach verwendetem Thermostattyp:
+
+| Profil | Beschreibung |
+|---|---|
+| **Standard** | Smartdome steuert das Thermostat, indem es die Zieltemperatur über den gewünschten Wert anhebt (Boost), um das Ventil zu öffnen. Empfohlen für die meisten Thermostate (z.B. Shelly TRV, Tado, etc.). |
+| **Selbst regelnd** | Smartdome setzt nur die exakte Zieltemperatur und wendet keinen Boost an. Das Thermostat übernimmt die Ventilsteuerung eigenständig. Erforderlich für Thermostate, die sich selbst regeln und keine Überschreibungsbefehle vertragen. |
+
+> **Homematic / Homematic IP über CCU (OCCU):** Diese Thermostate regeln sich intern selbst und reagieren negativ auf häufige Sollwertüberschreibungen. **Für alle Homematic-Thermostate, die über die OCCU eingebunden sind, muss das Profil „Selbst regelnd" verwendet werden.** Smartdome sendet dann nur die exakte Zieltemperatur und hält einen Mindestabstand von 120 Sekunden zwischen Befehlen ein.
 
 ---
 

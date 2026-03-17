@@ -73,7 +73,8 @@
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
           "delete_room": "Raum löschen",
-          "window_sensor": "Fensterkontakt"
+          "window_sensor": "Fensterkontakt",
+          "control_profile": "Thermostat-Regelprofil"
         }
       },
       "add_room": {
@@ -89,7 +90,8 @@
           "day_start": "Tag-Start",
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
-          "window_sensor": "Fensterkontakt"
+          "window_sensor": "Fensterkontakt",
+          "control_profile": "Thermostat-Regelprofil"
         }
       }
     }
@@ -100,6 +102,12 @@
         "global": "⚙️ Globale Einstellungen",
         "rooms": "🏠 Räume verwalten",
         "discover": "🔎 Räume neu erkennen"
+      }
+    },
+    "control_profile": {
+      "options": {
+        "standard": "Standard-Thermostat",
+        "self_regulating": "Selbst regelndes Thermostat (z.B. Homematic OCCU)"
       }
     }
   }
