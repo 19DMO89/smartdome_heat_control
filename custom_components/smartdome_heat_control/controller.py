@@ -667,24 +667,11 @@ class SmartHeatingController:
         desired = self._round_to_step(float(temp), step)
         previous = self._desired_targets.get(entity_id)
 
+        if previous is not None and abs(previous - desired) < 0.01:
+            return
+
         now_ts = dt_util.now().timestamp()
         last_sent = self._last_command_sent_at.get(entity_id, 0.0)
-
-        if previous is not None and abs(previous - desired) < 0.01:
-            # Desired hasn't changed — but check whether the thermostat entity
-            # was reset externally (e.g. CCU weekly programme, manual override).
-            # Only re-sync after a cooldown so we don't fight a just-sent command.
-            if (now_ts - last_sent) < 90.0:
-                return
-            entity_state = self.hass.states.get(entity_id)
-            if entity_state:
-                entity_setpoint = self._safe_float(
-                    entity_state.attributes.get("temperature")
-                )
-                if entity_setpoint is None or abs(entity_setpoint - desired) < 0.5:
-                    return  # entity matches desired — nothing to do
-            else:
-                return  # entity unavailable — skip
 
         if min_interval > 0 and (now_ts - last_sent) < min_interval:
             return
