@@ -1042,13 +1042,15 @@ class SmartHeatingController:
                 ):
                     self._finish_room_heating_cycle(room)
 
-        # Thermostats that are managed by self-regulating rooms handle their own
-        # min-temp setpoint via the room step.  If the main thermostat entity is
-        # one of these, skip it here to avoid both code paths fighting each other.
-        self_regulating_thermostats = {
+        # Any thermostat entity that is already managed as a room thermostat
+        # handles its own idle setpoint via the room step (_get_idle_target_for_room).
+        # If the main thermostat entity is one of these, skip it here to avoid
+        # both code paths fighting each other.  This applies to all control
+        # profiles (self-regulating and non-self-regulating alike).
+        room_managed_thermostats = {
             self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
             for room in rooms.values()
-            if self._is_self_regulating_room(room) and room.get(CONF_ROOM_THERMOSTAT)
+            if room.get(CONF_ROOM_THERMOSTAT)
         }
 
         circuits = self.config.get(CONF_CIRCUITS, {})
@@ -1058,7 +1060,7 @@ class SmartHeatingController:
                 if not isinstance(circuit, dict):
                     continue
                 ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
-                if not ct or ct in self_regulating_thermostats:
+                if not ct or ct in room_managed_thermostats:
                     continue
                 circuit_room_states = {
                     rid: rs for rid, rs in room_states.items()
@@ -1085,7 +1087,7 @@ class SmartHeatingController:
                 for rs in room_states.values()
             )
             main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
-            if main_thermostat and main_thermostat not in self_regulating_thermostats:
+            if main_thermostat and main_thermostat not in room_managed_thermostats:
                 if any_room_needs_heat:
                     main_base_target = max(
                         rs["target"] for rs in room_states.values()
