@@ -100,6 +100,7 @@ class SmartHeatingController:
         self.hass = hass
         self.config = config
         self._persist_callback: Any = None
+        self._state_callback: Any = None
         self._window_open_since: dict[str, float] = {}
         self._window_closed_since: dict[str, float] = {}
         self._window_paused_rooms: set[str] = set()
@@ -276,6 +277,10 @@ class SmartHeatingController:
     def set_persist_callback(self, callback: Any) -> None:
         """Callback setzen der nach dem Lernen die Config persistiert."""
         self._persist_callback = callback
+
+    def set_state_callback(self, callback: Any) -> None:
+        """Callback setzen der nach jeder Auswertung den Raumzustand publiziert."""
+        self._state_callback = callback
 
     def _persist_learned_values(self) -> None:
         """Gelernte Werte in den Config Entry schreiben."""
@@ -1169,6 +1174,9 @@ class SmartHeatingController:
                     min_interval=min_interval,
                 )
                 self._last_applied_room_state[room_id] = effective_state
+
+        if self._state_callback is not None:
+            self._state_callback(dict(self._room_state))
 
     @callback
     def _on_state_change(self, event: Event) -> None:

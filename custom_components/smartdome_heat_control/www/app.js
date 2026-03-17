@@ -770,14 +770,15 @@ function formatTemperature(temp) {
   return `${temp.toFixed(1)} °C`;
 }
 
-function isRoomHeating(thermostatId) {
-  const thermostat = findState(thermostatId);
-  if (!thermostat) {
-    return false;
+function isRoomHeating(roomId) {
+  const roomState = state.config.room_states?.[roomId];
+  if (roomState !== undefined) {
+    return roomState === "heating";
   }
-
-  const hvacAction = thermostat.attributes?.hvac_action;
-  return hvacAction === "heating";
+  // Fallback: hvac_action vom Thermostat-Entity
+  const room = state.config.rooms?.[roomId];
+  const thermostat = findState(room?.thermostat);
+  return thermostat?.attributes?.hvac_action === "heating";
 }
 
 function isWindowOpen(windowSensorId) {
@@ -825,8 +826,8 @@ function isAnyWindowOpen(room) {
   return sensors.some((id) => isWindowOpen(id));
 }
 
-function roomTitleMeta(room) {
-  const heating = isRoomHeating(room.thermostat);
+function roomTitleMeta(room, roomId) {
+  const heating = isRoomHeating(roomId);
   const windowOpen = isAnyWindowOpen(room);
 
   const metaParts = [];
@@ -1431,7 +1432,7 @@ function createRoomCard(roomId, room) {
   wrapper.dataset.roomId = roomId;
 
   const areaText = room.area_id ? `Area: ${room.area_id}` : t("room_manual");
-  const roomMeta = roomTitleMeta(room);
+  const roomMeta = roomTitleMeta(room, roomId);
   const isAdaptive = getModePickerValue() === "adaptive";
   const ovShort = normalizeNumber(room.learned_overshoot_short, 0.2);
   const ovMedium = normalizeNumber(room.learned_overshoot_medium, 0.4);
@@ -1726,14 +1727,14 @@ function updateRoomLiveState() {
 
     const titleMeta = node.querySelector(".room-title-meta");
     if (titleMeta) {
-      titleMeta.innerHTML = roomTitleMeta(room);
+      titleMeta.innerHTML = roomTitleMeta(room, roomId);
     }
 
     // live thermostat label: setpoint + heating indicator
     const thermostatLive = node.querySelector(".room-thermostat-live");
     if (thermostatLive) {
       const setpoint = getThermostatSetpoint(room.thermostat);
-      const heating = isThermostatHeating(room.thermostat);
+      const heating = isRoomHeating(roomId);
       if (setpoint !== null) {
         thermostatLive.innerHTML = `${heating ? "🔥 " : ""}${escapeHtml(formatTemperature(setpoint))}`;
         thermostatLive.dataset.entity = room.thermostat;
