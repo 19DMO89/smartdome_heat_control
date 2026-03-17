@@ -845,28 +845,13 @@ class SmartHeatingController:
                 ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
                 if not ct:
                     continue
-                circuit_rooms = [
-                    r for r in rooms.values()
-                    if r.get(CONF_ROOM_CIRCUIT_ID) == next(
-                        (cid for cid, c in circuits.items() if c is circuit), None
-                    )
-                ]
-                if circuit_rooms:
-                    try:
-                        target = max(self._effective_target_for_room(r) for r in circuit_rooms)
-                        self._set_temp_if_needed(ct, target)
-                    except ValueError:
-                        pass
+                self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
         else:
             main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
             if main_thermostat:
-                try:
-                    main_target = max(
-                        self._effective_target_for_room(room) for room in rooms.values()
-                    )
-                    self._set_temp_if_needed(main_thermostat, main_target)
-                except ValueError:
-                    pass
+                self._set_temp_if_needed(
+                    main_thermostat, self._thermostat_min_temp(main_thermostat)
+                )
 
     def _update_room_state(
         self,
