@@ -17,10 +17,16 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import (
     CONF_AWAY_ENABLED,
+    CONF_CIRCUIT_CONTROL_TYPE,
     CONF_CIRCUIT_LABEL,
     CONF_CIRCUIT_MAIN_SENSOR,
+    CONF_CIRCUIT_MAIN_SWITCH,
     CONF_CIRCUIT_MAIN_THERMOSTAT,
     CONF_CIRCUITS,
+    CONF_MAIN_CONTROL_TYPE,
+    CONF_MAIN_SWITCH,
+    CONTROL_TYPE_THERMOSTAT,
+    DEFAULT_MAIN_CONTROL_TYPE,
     CONF_HEATING_MODE,
     CONF_ROOMS,
     CONF_ROOM_CIRCUIT_ID,
@@ -301,7 +307,9 @@ def _normalize_circuits(circuits: Any) -> dict[str, dict[str, Any]]:
             continue
         normalized[circuit_id] = {
             CONF_CIRCUIT_LABEL: circuit.get(CONF_CIRCUIT_LABEL, circuit_id),
+            CONF_CIRCUIT_CONTROL_TYPE: circuit.get(CONF_CIRCUIT_CONTROL_TYPE, CONTROL_TYPE_THERMOSTAT),
             CONF_CIRCUIT_MAIN_THERMOSTAT: circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT, ""),
+            CONF_CIRCUIT_MAIN_SWITCH: circuit.get(CONF_CIRCUIT_MAIN_SWITCH, ""),
             CONF_CIRCUIT_MAIN_SENSOR: circuit.get(CONF_CIRCUIT_MAIN_SENSOR, ""),
         }
     return normalized
@@ -311,6 +319,8 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     """Gesamte Config normalisieren."""
     normalized = dict(cfg)
     normalized.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
+    normalized.setdefault(CONF_MAIN_CONTROL_TYPE, DEFAULT_MAIN_CONTROL_TYPE)
+    normalized.setdefault(CONF_MAIN_SWITCH, "")
     normalized.setdefault(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
     normalized.setdefault(CONF_VACATION_TEMPERATURE, DEFAULT_VACATION_TEMPERATURE)
     normalized.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)

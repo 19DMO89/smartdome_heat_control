@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import ATTR_TEMPERATURE, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import (
@@ -20,9 +21,14 @@ from .const import (
     ADAPTIVE_BUCKET_SHORT_MAX_SECS,
     CONF_AWAY_ENABLED,
     CONF_BOOST_DELTA,
+    CONF_CIRCUIT_CONTROL_TYPE,
     CONF_CIRCUIT_MAIN_SENSOR,
+    CONF_CIRCUIT_MAIN_SWITCH,
     CONF_CIRCUIT_MAIN_THERMOSTAT,
     CONF_CIRCUITS,
+    CONF_MAIN_CONTROL_TYPE,
+    CONF_MAIN_SWITCH,
+    CONTROL_TYPE_SWITCH,
     CONF_ENERGY_RESIDUAL_HEAT_HOLD,
     CONF_HEATING_MODE,
     CONF_MAIN_SENSOR,
@@ -691,6 +697,22 @@ class SmartHeatingController:
             )
         )
 
+    def _turn_switch_if_needed(self, entity_id: str, turn_on: bool) -> None:
+        """Switch ein- oder ausschalten, aber nur wenn sich der Zustand ändert."""
+        last = self._desired_targets.get(entity_id)
+        desired = 1.0 if turn_on else 0.0
+        if last is not None and abs(last - desired) < 0.01:
+            return
+        self._desired_targets[entity_id] = desired
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                SWITCH_DOMAIN,
+                "turn_on" if turn_on else "turn_off",
+                {"entity_id": entity_id},
+                blocking=True,
+            )
+        )
+
     def _get_heating_mode(self) -> str:
         """Aktuellen Heizmodus lesen."""
         return str(self.config.get(CONF_HEATING_MODE, DEFAULT_HEATING_MODE))
@@ -1047,11 +1069,15 @@ class SmartHeatingController:
 
         circuits = self.config.get(CONF_CIRCUITS, {})
         if circuits and isinstance(circuits, dict):
-            # Multi-circuit mode: each circuit controls its own main thermostat
+            # Multi-circuit mode: each circuit controls its own main thermostat or switch
             for circuit_id, circuit in circuits.items():
                 if not isinstance(circuit, dict):
                     continue
-                ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
+                circuit_control_type = circuit.get(CONF_CIRCUIT_CONTROL_TYPE, "thermostat")
+                if circuit_control_type == CONTROL_TYPE_SWITCH:
+                    ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_SWITCH))
+                else:
+                    ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
                 if not ct or ct in room_managed_thermostats:
                     continue
                 circuit_room_states = {
@@ -1059,102 +1085,113 @@ class SmartHeatingController:
                     if rooms[rid].get(CONF_ROOM_CIRCUIT_ID) == circuit_id
                 }
                 if not circuit_room_states:
-                    # Keine Räume in diesem Kreis → Hauptthermostat auf min_temp setzen
+                    # Keine Räume in diesem Kreis → Schalten ausschalten / min_temp
                     self._desired_targets.pop(ct, None)
-                    self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
+                    if circuit_control_type == CONTROL_TYPE_SWITCH:
+                        self._turn_switch_if_needed(ct, False)
+                    else:
+                        self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
                     continue
                 any_circuit_needs_heat = any(
                     rs["state"] == ROOM_STATE_HEATING
                     for rs in circuit_room_states.values()
                 )
                 # Übergang heating → idle: _desired_targets löschen damit
-                # min_temp-Befehl garantiert gesendet wird.
+                # Befehl garantiert gesendet wird.
                 was_heating = self._circuit_heating_active.get(circuit_id, False)
                 if was_heating and not any_circuit_needs_heat:
                     self._desired_targets.pop(ct, None)
                 self._circuit_heating_active[circuit_id] = any_circuit_needs_heat
 
-                # Read circuit sensor once – used for both heating and idle target.
-                ct_sensor_id = self._as_entity_id(
-                    circuit.get(CONF_CIRCUIT_MAIN_SENSOR)
-                )
-                ct_current = (
-                    self._get_state_float(ct_sensor_id) if ct_sensor_id else None
-                )
-                if ct_current is None:
-                    ct_state = self.hass.states.get(ct)
-                    if ct_state:
-                        ct_current = self._safe_float(
-                            ct_state.attributes.get("current_temperature")
-                        )
-                if any_circuit_needs_heat:
-                    # Dynamic boost: setpoint = current sensor + boost_delta so the
-                    # heating circuit turns ON reliably regardless of room targets.
-                    if ct_current is not None:
-                        circuit_target = ct_current + boost_delta
-                    else:
-                        circuit_target = (
-                            max(rs["target"] for rs in circuit_room_states.values())
-                            + boost_delta
-                        )
+                if circuit_control_type == CONTROL_TYPE_SWITCH:
+                    self._turn_switch_if_needed(ct, any_circuit_needs_heat)
                 else:
-                    # Idle: set 5°C below current sensor so the circuit shuts off
-                    # reliably even if the thermostat has no min_temp attribute.
-                    if ct_current is not None:
-                        circuit_target = ct_current - 5.0
+                    # Read circuit sensor once – used for both heating and idle target.
+                    ct_sensor_id = self._as_entity_id(
+                        circuit.get(CONF_CIRCUIT_MAIN_SENSOR)
+                    )
+                    ct_current = (
+                        self._get_state_float(ct_sensor_id) if ct_sensor_id else None
+                    )
+                    if ct_current is None:
+                        ct_state = self.hass.states.get(ct)
+                        if ct_state:
+                            ct_current = self._safe_float(
+                                ct_state.attributes.get("current_temperature")
+                            )
+                    if any_circuit_needs_heat:
+                        # Dynamic boost: setpoint = current sensor + boost_delta so the
+                        # heating circuit turns ON reliably regardless of room targets.
+                        if ct_current is not None:
+                            circuit_target = ct_current + boost_delta
+                        else:
+                            circuit_target = (
+                                max(rs["target"] for rs in circuit_room_states.values())
+                                + boost_delta
+                            )
                     else:
-                        circuit_target = self._thermostat_min_temp(ct)
-                self._set_temp_if_needed(ct, circuit_target)
+                        # Idle: set 5°C below current sensor so the circuit shuts off
+                        # reliably even if the thermostat has no min_temp attribute.
+                        if ct_current is not None:
+                            circuit_target = ct_current - 5.0
+                        else:
+                            circuit_target = self._thermostat_min_temp(ct)
+                    self._set_temp_if_needed(ct, circuit_target)
         else:
-            # Single-circuit fallback: use global main_thermostat
+            # Single-circuit fallback: use global main_thermostat or main_switch
             any_room_needs_heat = any(
                 rs["state"] == ROOM_STATE_HEATING
                 for rs in room_states.values()
             )
-            main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
-            if main_thermostat and main_thermostat not in room_managed_thermostats:
+            main_control_type = self.config.get(CONF_MAIN_CONTROL_TYPE, "thermostat")
+            if main_control_type == CONTROL_TYPE_SWITCH:
+                main_entity = self._as_entity_id(self.config.get(CONF_MAIN_SWITCH))
+            else:
+                main_entity = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+            if main_entity and main_entity not in room_managed_thermostats:
                 # Übergang heating → idle: _desired_targets löschen damit
-                # min_temp-Befehl garantiert gesendet wird.
-                was_heating = self._circuit_heating_active.get(
-                    main_thermostat, False
-                )
+                # Befehl garantiert gesendet wird.
+                was_heating = self._circuit_heating_active.get(main_entity, False)
                 if was_heating and not any_room_needs_heat:
-                    self._desired_targets.pop(main_thermostat, None)
-                self._circuit_heating_active[main_thermostat] = any_room_needs_heat
+                    self._desired_targets.pop(main_entity, None)
+                self._circuit_heating_active[main_entity] = any_room_needs_heat
 
-                # Read main sensor once – used for both heating and idle target.
-                main_sensor_id = self._as_entity_id(
-                    self.config.get(CONF_MAIN_SENSOR)
-                )
-                main_current = (
-                    self._get_state_float(main_sensor_id)
-                    if main_sensor_id
-                    else None
-                )
-                if main_current is None:
-                    mt_state = self.hass.states.get(main_thermostat)
-                    if mt_state:
-                        main_current = self._safe_float(
-                            mt_state.attributes.get("current_temperature")
-                        )
-                if any_room_needs_heat:
-                    # Dynamic boost: setpoint = current sensor + boost_delta so the
-                    # heating circuit turns ON reliably regardless of room targets.
-                    if main_current is not None:
-                        main_target = main_current + boost_delta
-                    else:
-                        main_target = (
-                            max(rs["target"] for rs in room_states.values())
-                            + boost_delta
-                        )
+                if main_control_type == CONTROL_TYPE_SWITCH:
+                    self._turn_switch_if_needed(main_entity, any_room_needs_heat)
                 else:
-                    # Idle: set 5°C below current sensor so the circuit shuts off
-                    # reliably even if the thermostat has no min_temp attribute.
-                    if main_current is not None:
-                        main_target = main_current - 5.0
+                    # Read main sensor once – used for both heating and idle target.
+                    main_sensor_id = self._as_entity_id(
+                        self.config.get(CONF_MAIN_SENSOR)
+                    )
+                    main_current = (
+                        self._get_state_float(main_sensor_id)
+                        if main_sensor_id
+                        else None
+                    )
+                    if main_current is None:
+                        mt_state = self.hass.states.get(main_entity)
+                        if mt_state:
+                            main_current = self._safe_float(
+                                mt_state.attributes.get("current_temperature")
+                            )
+                    if any_room_needs_heat:
+                        # Dynamic boost: setpoint = current sensor + boost_delta so the
+                        # heating circuit turns ON reliably regardless of room targets.
+                        if main_current is not None:
+                            main_target = main_current + boost_delta
+                        else:
+                            main_target = (
+                                max(rs["target"] for rs in room_states.values())
+                                + boost_delta
+                            )
                     else:
-                        main_target = self._thermostat_min_temp(main_thermostat)
-                self._set_temp_if_needed(main_thermostat, main_target)
+                        # Idle: set 5°C below current sensor so the circuit shuts off
+                        # reliably even if the thermostat has no min_temp attribute.
+                        if main_current is not None:
+                            main_target = main_current - 5.0
+                        else:
+                            main_target = self._thermostat_min_temp(main_entity)
+                    self._set_temp_if_needed(main_entity, main_target)
 
         for room_id, room in rooms.items():
             thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))

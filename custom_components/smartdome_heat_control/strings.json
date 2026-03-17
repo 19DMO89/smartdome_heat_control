@@ -40,7 +40,9 @@
         "title": "Globale Einstellungen",
         "description": "Passe Hauptthermostat, Hauptsensor und allgemeine Regeln an.",
         "data": {
+          "main_control_type": "Steuertyp",
           "main_thermostat": "Hauptthermostat",
+          "main_switch": "Hauptschalter (Switch)",
           "main_sensor": "Temperatursensor Hauptthermostat",
           "boost_delta": "Boost-Delta",
           "tolerance": "Toleranz",
@@ -108,6 +110,12 @@
       "options": {
         "standard": "Standard-Thermostat",
         "self_regulating": "Selbst regelndes Thermostat (z.B. Homematic OCCU)"
+      }
+    },
+    "main_control_type": {
+      "options": {
+        "thermostat": "Thermostat",
+        "switch": "Smarter Schalter (Switch)"
       }
     }
   }

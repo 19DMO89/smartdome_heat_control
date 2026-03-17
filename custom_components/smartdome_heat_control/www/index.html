@@ -1085,18 +1085,32 @@
             </div>
           </div>
 
-          <!-- Hauptthermostat -->
+          <!-- Hauptthermostat / Hauptschalter -->
           <div class="settings-group">
             <div class="settings-group-label" data-i18n="section_thermostat">Hauptthermostat</div>
             <div class="fields">
-              <div class="field">
+              <div class="field full">
+                <label for="main_control_type" data-i18n="main_control_type">Steuertyp</label>
+                <select id="main_control_type">
+                  <option value="thermostat" data-i18n="control_type_thermostat">Thermostat</option>
+                  <option value="switch" data-i18n="control_type_switch">Smarter Schalter (Switch)</option>
+                </select>
+              </div>
+              <div class="field" id="main_thermostat_field">
                 <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   <span data-i18n="main_thermostat">Hauptthermostat</span>
                   <span id="global_thermostat_live" class="label-live"></span>
                 </label>
                 <div id="main_thermostat_picker"></div>
               </div>
-              <div class="field">
+              <div class="field" id="main_switch_field" style="display:none;">
+                <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span data-i18n="main_switch">Hauptschalter (Switch)</span>
+                  <span id="global_switch_live" class="label-live"></span>
+                </label>
+                <div id="main_switch_picker"></div>
+              </div>
+              <div class="field" id="main_sensor_field">
                 <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                   <span data-i18n="main_sensor">Temperatursensor</span>
                   <span id="global_sensor_live" class="label-live"></span>
