@@ -4,9 +4,11 @@
     "step": {
       "user": {
         "title": "Set up Smartdome Heat Control",
-        "description": "Select the main thermostat and the global heating parameters.",
+        "description": "First select the **controller type** for the central heating:\n\n- **Thermostat** – You have a smart heating controller or climate entity that Smartdome controls via target temperature (e.g. Lambdatronic, Fröling, Viessmann, etc.)\n- **Smart switch** – You have no thermostat but a smart on/off switch (e.g. Shelly, Sonoff) that directly switches the heating on and off\n\nIf you have neither a main thermostat nor a main switch, leave the field empty — Smartdome will then only control the individual room thermostats.",
         "data": {
-          "main_thermostat": "Main thermostat",
+          "main_control_type": "Controller type",
+          "main_thermostat": "Main thermostat (climate entity)",
+          "main_switch": "Main switch (switch entity)",
           "main_sensor": "Main thermostat temperature sensor",
           "boost_delta": "Boost delta",
           "tolerance": "Tolerance",
@@ -39,9 +41,11 @@
       },
       "global": {
         "title": "Global settings",
-        "description": "Adjust the main thermostat, main sensor, and general rules.",
+        "description": "Select the **controller type** for the central main controller:\n\n- **Thermostat** – Smartdome controls a heating circuit controller or climate entity via target temperature. No room-level boost needed — the controller handles circuit activation autonomously.\n- **Smart switch** – Smartdome switches a switch directly on (heating on) or off (heating off). No temperature sensor at the main controller required.\n\nIf no central controller is present, simply leave the field empty.",
         "data": {
-          "main_thermostat": "Main thermostat",
+          "main_control_type": "Controller type",
+          "main_thermostat": "Main thermostat (climate entity)",
+          "main_switch": "Main switch (switch entity)",
           "main_sensor": "Main thermostat temperature sensor",
           "boost_delta": "Boost delta",
           "tolerance": "Tolerance",
@@ -62,7 +66,7 @@
       },
       "edit_room": {
         "title": "Edit room",
-        "description": "Edit thermostat, sensor, temperatures, and schedule for this room.",
+        "description": "Edit thermostat, sensor, temperatures, and schedule for this room.\n\n**No thermostat?** Leave the field empty — the room will operate in **sensor-only mode**: it contributes to the central heating signal but cannot be individually controlled.",
         "data": {
           "label": "Label",
           "thermostat": "Thermostat",
@@ -74,12 +78,13 @@
           "night_start": "Night start",
           "enabled": "Room enabled",
           "delete_room": "Delete room",
-          "window_sensor": "Window sensor"
+          "window_sensor": "Window sensor",
+          "control_profile": "Thermostat control profile"
         }
       },
       "add_room": {
         "title": "Add room",
-        "description": "Create a new room manually.",
+        "description": "Create a new room manually.\n\n**No thermostat?** Leave the field empty — the room will operate in **sensor-only mode**: it contributes to the central heating signal but cannot be individually controlled.",
         "data": {
           "label": "Label",
           "thermostat": "Thermostat",
@@ -90,7 +95,8 @@
           "day_start": "Day start",
           "night_start": "Night start",
           "enabled": "Room enabled",
-          "window_sensor": "Window sensor"
+          "window_sensor": "Window sensor",
+          "control_profile": "Thermostat control profile"
         }
       }
     },
@@ -102,6 +108,18 @@
         "global": "⚙️ Global settings",
         "rooms": "🏠 Manage rooms",
         "discover": "🔎 Rediscover rooms"
+      }
+    },
+    "control_profile": {
+      "options": {
+        "standard": "Standard thermostat",
+        "self_regulating": "Self-regulating thermostat (e.g. Homematic OCCU)"
+      }
+    },
+    "main_control_type": {
+      "options": {
+        "thermostat": "Thermostat",
+        "switch": "Smart switch"
       }
     }
   }

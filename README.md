@@ -41,13 +41,27 @@ Each room is monitored individually using a temperature sensor and a radiator th
 
 Each room can be configured individually with:
 
-- Radiator thermostat
+- Radiator thermostat *(optional — see Sensor-only Rooms below)*
 - Temperature sensor
 - Day and night target temperatures
 - Day/night schedule or weekly schedule
 - Window contact sensor
 - Away temperature
 - Enable/disable per room
+
+---
+
+### Sensor-only Rooms
+
+Rooms **without a smart thermostat** can still be integrated using only a temperature sensor. In sensor-only mode:
+
+- The room **contributes to the central heating signal** — if it falls below its target temperature, the main controller is activated
+- **No thermostat commands are sent** — individual valve control is not possible
+- Mechanical TRVs and the central heating system handle heat distribution naturally
+
+To enable: configure the room with a sensor and target temperature, leave the thermostat field empty.
+
+> **Note:** Smartdome cannot prevent an overheated sensor-only room from receiving heat when another room triggers the heating system. Mechanical TRVs will limit this naturally once their set temperature is reached.
 
 ---
 
@@ -207,7 +221,7 @@ Configure:
 
 Configure each room individually:
 
-- Thermostat, sensor, window sensor
+- Thermostat *(optional — leave empty for sensor-only mode)*, sensor, window sensor
 - Day/night target temperatures
 - Away temperature
 - Day/night schedule or weekly schedule
@@ -312,13 +326,27 @@ Jeder Raum wird individuell über einen Temperatursensor und ein Heizkörperther
 
 Jeder Raum kann individuell konfiguriert werden mit:
 
-- Heizkörperthermostat
+- Heizkörperthermostat *(optional — siehe Sensor-only Räume)*
 - Temperatursensor
 - Tag- und Nacht-Zieltemperaturen
 - Tag/Nacht-Zeitplan oder Wochenschema
 - Fensterkontaktsensor
 - Abwesenheitstemperatur
 - Aktivieren/Deaktivieren pro Raum
+
+---
+
+### Sensor-only Räume
+
+Räume **ohne smarten Thermostat** können allein über einen Temperatursensor eingebunden werden. Im Sensor-only Modus:
+
+- Trägt der Raum zum **Heiz-Signal des Zentralreglers** bei — fällt er unter die Zieltemperatur, wird der Hauptregler aktiviert
+- Werden **keine Thermostat-Befehle gesendet** — eine individuelle Ventilsteuerung ist nicht möglich
+- Übernehmen mechanische TRVs und der Zentralregler die Wärmeverteilung
+
+Einrichten: Raum mit Sensor und Zieltemperatur konfigurieren, Thermostat-Feld leer lassen.
+
+> **Hinweis:** Smartdome kann nicht verhindern, dass ein überhitzter Sensor-only Raum Wärme bekommt, wenn ein anderer Raum den Kessel auslöst. Mechanische TRVs begrenzen dies natürlich, sobald ihre eingestellte Temperatur erreicht ist.
 
 ---
 
@@ -478,7 +506,7 @@ Konfigurierbar:
 
 Jeden Raum einzeln konfigurieren:
 
-- Thermostat, Sensor, Fensterkontakt
+- Thermostat *(optional — leer lassen für Sensor-only Modus)*, Sensor, Fensterkontakt
 - Tag/Nacht-Zieltemperaturen
 - Abwesenheitstemperatur
 - Tag/Nacht-Zeitplan oder Wochenschema

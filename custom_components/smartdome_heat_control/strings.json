@@ -65,7 +65,7 @@
       },
       "edit_room": {
         "title": "Raum bearbeiten",
-        "description": "Bearbeite Thermostat, Sensor und Zieltemperaturen dieses Raums.",
+        "description": "Bearbeite Thermostat, Sensor und Zieltemperaturen dieses Raums.\n\n**Kein Thermostat vorhanden?** Lass das Feld leer — der Raum arbeitet dann im **Sensor-only Modus**: Er trägt zum Heiz-Signal des Zentralreglers bei, kann aber nicht individuell gesteuert werden.",
         "data": {
           "label": "Bezeichnung",
           "thermostat": "Thermostat",
@@ -83,7 +83,7 @@
       },
       "add_room": {
         "title": "Raum hinzufügen",
-        "description": "Lege einen neuen Raum manuell an.",
+        "description": "Lege einen neuen Raum manuell an.\n\n**Kein Thermostat vorhanden?** Lass das Feld leer — der Raum arbeitet dann im **Sensor-only Modus**: Er trägt zum Heiz-Signal des Zentralreglers bei, kann aber nicht individuell gesteuert werden.",
         "data": {
           "label": "Bezeichnung",
           "thermostat": "Thermostat",
