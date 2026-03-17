@@ -114,6 +114,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     controller.set_persist_callback(_persist_learned)
 
+    def _on_room_states_updated(room_states: dict[str, str]) -> None:
+        _push_state(hass, domain_data["config"], room_states=room_states)
+
+    controller.set_state_callback(_on_room_states_updated)
+
     await _async_register_frontend(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -554,9 +559,15 @@ def _get_single_entry(hass: HomeAssistant) -> ConfigEntry | None:
     return None
 
 
-def _push_state(hass: HomeAssistant, cfg: dict[str, Any]) -> None:
+def _push_state(
+    hass: HomeAssistant,
+    cfg: dict[str, Any],
+    room_states: dict[str, str] | None = None,
+) -> None:
     """Globalen UI-State aktualisieren."""
     state_cfg = _normalize_config(cfg)
+    if room_states is not None:
+        state_cfg["room_states"] = room_states
 
     hass.states.async_set(
         f"{DOMAIN}.config",

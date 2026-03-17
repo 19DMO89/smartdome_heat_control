@@ -100,6 +100,7 @@ class SmartHeatingController:
         self.hass = hass
         self.config = config
         self._persist_callback: Any = None
+        self._state_callback: Any = None
         self._window_open_since: dict[str, float] = {}
         self._window_closed_since: dict[str, float] = {}
         self._window_paused_rooms: set[str] = set()
@@ -276,6 +277,10 @@ class SmartHeatingController:
     def set_persist_callback(self, callback: Any) -> None:
         """Callback setzen der nach dem Lernen die Config persistiert."""
         self._persist_callback = callback
+
+    def set_state_callback(self, callback: Any) -> None:
+        """Callback setzen der nach jeder Auswertung den Raumzustand publiziert."""
+        self._state_callback = callback
 
     def _persist_learned_values(self) -> None:
         """Gelernte Werte in den Config Entry schreiben."""
@@ -1042,6 +1047,17 @@ class SmartHeatingController:
                 ):
                     self._finish_room_heating_cycle(room)
 
+        # Any thermostat entity that is already managed as a room thermostat
+        # handles its own idle setpoint via the room step (_get_idle_target_for_room).
+        # If the main thermostat entity is one of these, skip it here to avoid
+        # both code paths fighting each other.  This applies to all control
+        # profiles (self-regulating and non-self-regulating alike).
+        room_managed_thermostats = {
+            self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
+            for room in rooms.values()
+            if room.get(CONF_ROOM_THERMOSTAT)
+        }
+
         circuits = self.config.get(CONF_CIRCUITS, {})
         if circuits and isinstance(circuits, dict):
             # Multi-circuit mode: each circuit controls its own main thermostat
@@ -1049,7 +1065,7 @@ class SmartHeatingController:
                 if not isinstance(circuit, dict):
                     continue
                 ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
-                if not ct:
+                if not ct or ct in room_managed_thermostats:
                     continue
                 circuit_room_states = {
                     rid: rs for rid, rs in room_states.items()
@@ -1076,7 +1092,7 @@ class SmartHeatingController:
                 for rs in room_states.values()
             )
             main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
-            if main_thermostat:
+            if main_thermostat and main_thermostat not in room_managed_thermostats:
                 if any_room_needs_heat:
                     main_base_target = max(
                         rs["target"] for rs in room_states.values()
@@ -1158,6 +1174,9 @@ class SmartHeatingController:
                     min_interval=min_interval,
                 )
                 self._last_applied_room_state[room_id] = effective_state
+
+        if self._state_callback is not None:
+            self._state_callback(dict(self._room_state))
 
     @callback
     def _on_state_change(self, event: Event) -> None:
