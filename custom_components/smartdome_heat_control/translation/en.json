@@ -4,12 +4,12 @@
     "step": {
       "user": {
         "title": "Set up Smartdome Heat Control",
-        "description": "First select the **controller type** for the central heating:\n\n- **Thermostat** – You have a smart heating controller or climate entity that Smartdome controls via target temperature (e.g. Lambdatronic, Fröling, Viessmann, etc.)\n- **Smart switch** – You have no thermostat but a smart on/off switch (e.g. Shelly, Sonoff) that directly switches the heating on and off\n\nIf you have neither a main thermostat nor a main switch, leave the field empty — Smartdome will then only control the individual room thermostats.",
+        "description": "First select the **controller type** for the heating pump controller:\n\n- **Thermostat (climate entity)** – You have a smart heating circuit controller (e.g. Lambdatronic, Fröling, Viessmann). Smartdome sends target temperatures to the climate entity to activate or deactivate the heating. The boost delta value is used to temporarily raise the target temperature to switch the heating circuit on. An optional temperature sensor enables additional monitoring.\n- **Smart switch** – You have no heating circuit controller, only a smart on/off switch (e.g. Shelly, Sonoff). Smartdome switches it directly on or off — no temperature sensor required, no boost delta needed.\n\nIf you have no heating pump controller, leave the field empty — Smartdome will then only control the individual radiator valves.",
         "data": {
-          "main_control_type": "Controller type",
-          "main_thermostat": "Main thermostat (climate entity)",
-          "main_switch": "Main switch (switch entity)",
-          "main_sensor": "Main thermostat temperature sensor",
+          "main_control_type": "Heating pump controller type",
+          "main_thermostat": "Heating pump controller (climate entity)",
+          "main_switch": "Heating pump controller (switch entity)",
+          "main_sensor": "Heating pump controller temperature sensor",
           "boost_delta": "Boost delta",
           "tolerance": "Tolerance",
           "night_start": "Night start",
@@ -41,12 +41,12 @@
       },
       "global": {
         "title": "Global settings",
-        "description": "Select the **controller type** for the central main controller:\n\n- **Thermostat** – Smartdome controls a heating circuit controller or climate entity via target temperature. No room-level boost needed — the controller handles circuit activation autonomously.\n- **Smart switch** – Smartdome switches a switch directly on (heating on) or off (heating off). No temperature sensor at the main controller required.\n\nIf no central controller is present, simply leave the field empty.",
+        "description": "Select the **controller type** for the heating pump controller:\n\n- **Thermostat (climate entity)** – Smartdome controls a heating circuit controller or climate entity via target temperature. Smartdome raises the target temperature by the boost delta value to switch the heating circuit on, and lowers it again to switch it off. An optional temperature sensor enables monitoring.\n- **Smart switch** – Smartdome switches a switch directly on (heating on) or off (heating off). No temperature sensor required, no boost delta needed — control is purely binary.\n\nIf no heating pump controller is present, simply leave the field empty.",
         "data": {
-          "main_control_type": "Controller type",
-          "main_thermostat": "Main thermostat (climate entity)",
-          "main_switch": "Main switch (switch entity)",
-          "main_sensor": "Main thermostat temperature sensor",
+          "main_control_type": "Heating pump controller type",
+          "main_thermostat": "Heating pump controller (climate entity)",
+          "main_switch": "Heating pump controller (switch entity)",
+          "main_sensor": "Heating pump controller temperature sensor",
           "boost_delta": "Boost delta",
           "tolerance": "Tolerance",
           "night_start": "Global night start",
@@ -66,11 +66,11 @@
       },
       "edit_room": {
         "title": "Edit room",
-        "description": "Edit thermostat, sensor, temperatures, and schedule for this room.\n\n**No thermostat?** Leave the field empty — the room will operate in **sensor-only mode**: it contributes to the central heating signal but cannot be individually controlled.",
+        "description": "Edit radiator valve, room temperature sensor, temperatures, and schedule for this room.\n\n**No smart radiator valve?** Leave the field empty — the room will operate in **sensor-only mode**: it contributes to the central heating signal but cannot be individually controlled.",
         "data": {
           "label": "Label",
-          "thermostat": "Thermostat",
-          "sensor": "Temperature sensor",
+          "thermostat": "Radiator valve",
+          "sensor": "Room temperature sensor",
           "target_day": "Day target temperature",
           "target_night": "Night target temperature",
           "away_temperature": "Away temperature",
@@ -84,11 +84,11 @@
       },
       "add_room": {
         "title": "Add room",
-        "description": "Create a new room manually.\n\n**No thermostat?** Leave the field empty — the room will operate in **sensor-only mode**: it contributes to the central heating signal but cannot be individually controlled.",
+        "description": "Create a new room manually.\n\n**No smart radiator valve?** Leave the field empty — the room will operate in **sensor-only mode**: it contributes to the central heating signal but cannot be individually controlled.",
         "data": {
           "label": "Label",
-          "thermostat": "Thermostat",
-          "sensor": "Temperature sensor",
+          "thermostat": "Radiator valve",
+          "sensor": "Room temperature sensor",
           "target_day": "Day target temperature",
           "target_night": "Night target temperature",
           "away_temperature": "Away temperature",
