@@ -1074,21 +1074,22 @@ class SmartHeatingController:
                     self._desired_targets.pop(ct, None)
                 self._circuit_heating_active[circuit_id] = any_circuit_needs_heat
 
+                # Read circuit sensor once – used for both heating and idle target.
+                ct_sensor_id = self._as_entity_id(
+                    circuit.get(CONF_CIRCUIT_MAIN_SENSOR)
+                )
+                ct_current = (
+                    self._get_state_float(ct_sensor_id) if ct_sensor_id else None
+                )
+                if ct_current is None:
+                    ct_state = self.hass.states.get(ct)
+                    if ct_state:
+                        ct_current = self._safe_float(
+                            ct_state.attributes.get("current_temperature")
+                        )
                 if any_circuit_needs_heat:
                     # Dynamic boost: setpoint = current sensor + boost_delta so the
                     # heating circuit turns ON reliably regardless of room targets.
-                    ct_sensor_id = self._as_entity_id(
-                        circuit.get(CONF_CIRCUIT_MAIN_SENSOR)
-                    )
-                    ct_current = (
-                        self._get_state_float(ct_sensor_id) if ct_sensor_id else None
-                    )
-                    if ct_current is None:
-                        ct_state = self.hass.states.get(ct)
-                        if ct_state:
-                            ct_current = self._safe_float(
-                                ct_state.attributes.get("current_temperature")
-                            )
                     if ct_current is not None:
                         circuit_target = ct_current + boost_delta
                     else:
@@ -1097,7 +1098,12 @@ class SmartHeatingController:
                             + boost_delta
                         )
                 else:
-                    circuit_target = self._thermostat_min_temp(ct)
+                    # Idle: set 5°C below current sensor so the circuit shuts off
+                    # reliably even if the thermostat has no min_temp attribute.
+                    if ct_current is not None:
+                        circuit_target = ct_current - 5.0
+                    else:
+                        circuit_target = self._thermostat_min_temp(ct)
                 self._set_temp_if_needed(ct, circuit_target)
         else:
             # Single-circuit fallback: use global main_thermostat
@@ -1116,23 +1122,24 @@ class SmartHeatingController:
                     self._desired_targets.pop(main_thermostat, None)
                 self._circuit_heating_active[main_thermostat] = any_room_needs_heat
 
+                # Read main sensor once – used for both heating and idle target.
+                main_sensor_id = self._as_entity_id(
+                    self.config.get(CONF_MAIN_SENSOR)
+                )
+                main_current = (
+                    self._get_state_float(main_sensor_id)
+                    if main_sensor_id
+                    else None
+                )
+                if main_current is None:
+                    mt_state = self.hass.states.get(main_thermostat)
+                    if mt_state:
+                        main_current = self._safe_float(
+                            mt_state.attributes.get("current_temperature")
+                        )
                 if any_room_needs_heat:
                     # Dynamic boost: setpoint = current sensor + boost_delta so the
                     # heating circuit turns ON reliably regardless of room targets.
-                    main_sensor_id = self._as_entity_id(
-                        self.config.get(CONF_MAIN_SENSOR)
-                    )
-                    main_current = (
-                        self._get_state_float(main_sensor_id)
-                        if main_sensor_id
-                        else None
-                    )
-                    if main_current is None:
-                        mt_state = self.hass.states.get(main_thermostat)
-                        if mt_state:
-                            main_current = self._safe_float(
-                                mt_state.attributes.get("current_temperature")
-                            )
                     if main_current is not None:
                         main_target = main_current + boost_delta
                     else:
@@ -1141,7 +1148,12 @@ class SmartHeatingController:
                             + boost_delta
                         )
                 else:
-                    main_target = self._thermostat_min_temp(main_thermostat)
+                    # Idle: set 5°C below current sensor so the circuit shuts off
+                    # reliably even if the thermostat has no min_temp attribute.
+                    if main_current is not None:
+                        main_target = main_current - 5.0
+                    else:
+                        main_target = self._thermostat_min_temp(main_thermostat)
                 self._set_temp_if_needed(main_thermostat, main_target)
 
         for room_id, room in rooms.items():
