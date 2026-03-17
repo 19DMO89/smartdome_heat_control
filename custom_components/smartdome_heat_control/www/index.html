@@ -1085,9 +1085,9 @@
             </div>
           </div>
 
-          <!-- Hauptthermostat / Hauptschalter -->
+          <!-- Heizpumpensteuerung -->
           <div class="settings-group">
-            <div class="settings-group-label" data-i18n="section_thermostat">Hauptthermostat</div>
+            <div class="settings-group-label" data-i18n="section_thermostat">Heizpumpensteuerung</div>
             <div class="fields">
               <div class="field full">
                 <label for="main_control_type" data-i18n="main_control_type">Steuertyp</label>
@@ -1098,14 +1098,14 @@
               </div>
               <div class="field" id="main_thermostat_field">
                 <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                  <span data-i18n="main_thermostat">Hauptthermostat</span>
+                  <span data-i18n="main_thermostat">Heizpumpensteuerung (Climate-Entity)</span>
                   <span id="global_thermostat_live" class="label-live"></span>
                 </label>
                 <div id="main_thermostat_picker"></div>
               </div>
               <div class="field" id="main_switch_field" style="display:none;">
                 <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                  <span data-i18n="main_switch">Hauptschalter (Switch)</span>
+                  <span data-i18n="main_switch">Heizpumpensteuerung (Switch-Entity)</span>
                   <span id="global_switch_live" class="label-live"></span>
                 </label>
                 <div id="main_switch_picker"></div>
@@ -1179,7 +1179,7 @@
             <div class="settings-group-label" data-i18n="section_circuits">Heizkreise</div>
             <div class="footer-note" style="margin-top:0; margin-bottom:12px;" data-i18n="circuits_hint">
               Nur erforderlich wenn das Gebäude mehrere unabhängige Heizkreise besitzt,
-              die jeweils ein eigenes Hauptthermostat haben.
+              die jeweils eine eigene Heizpumpensteuerung haben.
             </div>
             <div id="circuitsList" class="circuits-list"></div>
             <button id="addCircuitBtn" class="ghost" data-i18n="add_circuit" style="width:100%;">
@@ -1304,14 +1304,14 @@
           </div>
 
           <div class="help-section">
-            <h3>🌡️ Hauptthermostat &amp; Temperatursensor</h3>
-            <p>Beide Felder sind <strong>optional</strong> — du kannst die Integration auch nur mit Raumthermostaten nutzen.</p>
+            <h3>🌡️ Heizpumpensteuerung</h3>
+            <p>Alle Felder sind <strong>optional</strong> — du kannst die Integration auch nur mit Heizkörperventilen ohne zentrale Steuerung nutzen.</p>
             <ul>
-              <li><strong>Hauptthermostat:</strong> Steuert alle Räume, die keinen eigenen Thermostat haben. Er wird auf Solltemperatur gesetzt, sobald mindestens ein solcher Raum heizen möchte.</li>
-              <li><strong>Temperatursensor:</strong> Wird nur zum Messen verwendet — die Integration greift nicht in ihn ein. Nützlich wenn der Thermostat keinen guten eigenen Sensor hat.</li>
+              <li><strong>Thermostat (Climate-Entity):</strong> Smartdome steuert einen Heizkreisregler (z.B. Lambdatronic, Fröling, Viessmann) per Solltemperatur. Der Boost-Delta-Wert hebt die Solltemperatur an, sobald ein Raum heizt, und senkt sie wieder wenn alle Räume warm sind.</li>
+              <li><strong>Switch:</strong> Smartdome schaltet einen smarten Schalter (z.B. Shelly, Sonoff) direkt ein oder aus — kein Temperatursensor notwendig, kein Boost-Delta erforderlich.</li>
+              <li><strong>Temperatursensor:</strong> Optional — wird nur zum Monitoring verwendet. Nützlich wenn die Climate-Entity keinen guten internen Sensor hat.</li>
             </ul>
-            <p>Als Sensor kann auch eine <strong>climate-Entity</strong> (z.B. ein Heizkörperthermostat) verwendet werden — die Integration liest dann automatisch das Attribut <code>current_temperature</code>.</p>
-            <div class="help-tip">💡 Wenn du mehrere Heizkreise hast (z.B. Erdgeschoss / Obergeschoss), kannst du unter <em>Heizkreise</em> jedem Kreis einen eigenen Hauptthermostat zuweisen.</div>
+            <div class="help-tip">💡 Wenn du mehrere Heizkreise hast (z.B. Erdgeschoss / Obergeschoss), kannst du unter <em>Heizkreise</em> jedem Kreis eine eigene Heizpumpensteuerung zuweisen.</div>
           </div>
 
           <div class="help-section">
@@ -1326,11 +1326,11 @@
 
           <div class="help-section">
             <h3>🔁 Heizkreise</h3>
-            <p>Heizkreise sind <strong>nur notwendig</strong> wenn dein Gebäude mehrere physisch getrennte Heizkreise hat (z.B. Fußbodenheizung Erdgeschoss + Heizkörper Obergeschoss), die jeweils über ein eigenes Hauptthermostat oder eine eigene Pumpe gesteuert werden.</p>
+            <p>Heizkreise sind <strong>nur notwendig</strong> wenn dein Gebäude mehrere physisch getrennte Heizkreise hat (z.B. Fußbodenheizung Erdgeschoss + Heizkörper Obergeschoss), die jeweils über eine eigene Heizpumpensteuerung gesteuert werden.</p>
             <ul>
-              <li>Erstelle einen Heizkreis über <strong>Heizkreis hinzufügen</strong> und weise ihm einen Hauptthermostat zu.</li>
+              <li>Erstelle einen Heizkreis über <strong>Heizkreis hinzufügen</strong> und weise ihm eine Heizpumpensteuerung zu.</li>
               <li>Weise Räume diesem Kreis über das Feld <strong>Heizkreis</strong> im Raum zu.</li>
-              <li>Räume ohne Kreis verwenden weiterhin den globalen Hauptthermostat.</li>
+              <li>Räume ohne Kreis verwenden weiterhin die globale Heizpumpensteuerung.</li>
             </ul>
             <div class="help-tip">💡 Wenn du nur einen Heizkreis hast, brauchst du hier nichts konfigurieren.</div>
           </div>
