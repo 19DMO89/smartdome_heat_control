@@ -1090,11 +1090,28 @@ class SmartHeatingController:
                     rs["state"] == ROOM_STATE_HEATING
                     for rs in circuit_room_states.values()
                 )
-                circuit_base_target = max(
-                    rs["target"] for rs in circuit_room_states.values()
-                )
                 if any_circuit_needs_heat:
-                    circuit_target = circuit_base_target + boost_delta
+                    # Dynamic boost: setpoint = current sensor + boost_delta so the
+                    # heating circuit turns ON reliably regardless of room targets.
+                    ct_sensor_id = self._as_entity_id(
+                        circuit.get(CONF_CIRCUIT_MAIN_SENSOR)
+                    )
+                    ct_current = (
+                        self._get_state_float(ct_sensor_id) if ct_sensor_id else None
+                    )
+                    if ct_current is None:
+                        ct_state = self.hass.states.get(ct)
+                        if ct_state:
+                            ct_current = self._safe_float(
+                                ct_state.attributes.get("current_temperature")
+                            )
+                    if ct_current is not None:
+                        circuit_target = ct_current + boost_delta
+                    else:
+                        circuit_target = (
+                            max(rs["target"] for rs in circuit_room_states.values())
+                            + boost_delta
+                        )
                 else:
                     circuit_target = self._thermostat_min_temp(ct)
                 self._set_temp_if_needed(ct, circuit_target)
@@ -1107,10 +1124,29 @@ class SmartHeatingController:
             main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
             if main_thermostat and main_thermostat not in room_managed_thermostats:
                 if any_room_needs_heat:
-                    main_base_target = max(
-                        rs["target"] for rs in room_states.values()
+                    # Dynamic boost: setpoint = current sensor + boost_delta so the
+                    # heating circuit turns ON reliably regardless of room targets.
+                    main_sensor_id = self._as_entity_id(
+                        self.config.get(CONF_MAIN_SENSOR)
                     )
-                    main_target = main_base_target + boost_delta
+                    main_current = (
+                        self._get_state_float(main_sensor_id)
+                        if main_sensor_id
+                        else None
+                    )
+                    if main_current is None:
+                        mt_state = self.hass.states.get(main_thermostat)
+                        if mt_state:
+                            main_current = self._safe_float(
+                                mt_state.attributes.get("current_temperature")
+                            )
+                    if main_current is not None:
+                        main_target = main_current + boost_delta
+                    else:
+                        main_target = (
+                            max(rs["target"] for rs in room_states.values())
+                            + boost_delta
+                        )
                 else:
                     main_target = self._thermostat_min_temp(main_thermostat)
                 self._set_temp_if_needed(main_thermostat, main_target)
