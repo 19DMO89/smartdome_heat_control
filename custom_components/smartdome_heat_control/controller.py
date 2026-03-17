@@ -815,8 +815,6 @@ class SmartHeatingController:
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
         rooms = self._active_rooms()
-        if not rooms:
-            return
 
         for room_id, room in rooms.items():
             thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
@@ -981,8 +979,6 @@ class SmartHeatingController:
             return
 
         rooms = self._active_rooms()
-        if not rooms:
-            return
 
         boost_delta = self._safe_float(
             self.config.get(CONF_BOOST_DELTA, DEFAULT_BOOST_DELTA)
@@ -1063,6 +1059,9 @@ class SmartHeatingController:
                     if rooms[rid].get(CONF_ROOM_CIRCUIT_ID) == circuit_id
                 }
                 if not circuit_room_states:
+                    # Keine Räume in diesem Kreis → Hauptthermostat auf min_temp setzen
+                    self._desired_targets.pop(ct, None)
+                    self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
                     continue
                 any_circuit_needs_heat = any(
                     rs["state"] == ROOM_STATE_HEATING
