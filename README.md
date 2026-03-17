@@ -6,6 +6,7 @@ Smartdome Heat Control
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2026.1%2B-blue.svg)](https://home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-PayPal-blue.svg)](https://www.paypal.me/DominikSchremser)
 
 Smartdome Heat Control is an advanced **multi-room heating controller for Home Assistant**.
 
