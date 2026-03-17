@@ -4,9 +4,11 @@
     "step": {
       "user": {
         "title": "Smartdome Heat Control einrichten",
-        "description": "Wähle das Hauptthermostat und die globalen Heizungsparameter.",
+        "description": "Wähle zuerst den **Steuertyp** für die zentrale Heizungssteuerung:\n\n- **Thermostat** – Du hast einen smarten Heizkreisregler oder ein Climate-Entity, das Smartdome per Solltemperatur steuert (z.B. Lambdatronic, Fröling, Viessmann, etc.)\n- **Smarter Schalter (Switch)** – Du hast keinen Thermostat, sondern nur einen smarten Ein-/Ausschalter (z.B. Shelly, Sonoff), der die Heizung ein- und ausschaltet\n\nFalls du weder ein Hauptthermostat noch einen Hauptschalter hast, lass das Feld leer – Smartdome steuert dann nur die einzelnen Raumthermostate.",
         "data": {
-          "main_thermostat": "Hauptthermostat",
+          "main_control_type": "Steuertyp Hauptregler",
+          "main_thermostat": "Hauptthermostat (Climate-Entity)",
+          "main_switch": "Hauptschalter (Switch-Entity)",
           "main_sensor": "Temperatursensor Hauptthermostat",
           "boost_delta": "Boost-Delta",
           "tolerance": "Toleranz",
@@ -38,11 +40,11 @@
       },
       "global": {
         "title": "Globale Einstellungen",
-        "description": "Passe Hauptthermostat, Hauptsensor und allgemeine Regeln an.",
+        "description": "Wähle hier den **Steuertyp** für den zentralen Hauptregler:\n\n- **Thermostat** – Smartdome steuert einen Heizkreisregler oder ein Climate-Entity per Solltemperatur. Dafür wird kein Boost auf Raumebene benötigt – der Regler schaltet den Heizkreis selbständig ein/aus.\n- **Smarter Schalter (Switch)** – Smartdome schaltet einen Switch direkt ein (Heizung an) oder aus (Heizung aus). Kein Temperatursensor am Hauptregler notwendig.\n\nFalls kein zentraler Regler vorhanden ist, einfach leer lassen.",
         "data": {
-          "main_control_type": "Steuertyp",
-          "main_thermostat": "Hauptthermostat",
-          "main_switch": "Hauptschalter (Switch)",
+          "main_control_type": "Steuertyp Hauptregler",
+          "main_thermostat": "Hauptthermostat (Climate-Entity)",
+          "main_switch": "Hauptschalter (Switch-Entity)",
           "main_sensor": "Temperatursensor Hauptthermostat",
           "boost_delta": "Boost-Delta",
           "tolerance": "Toleranz",
