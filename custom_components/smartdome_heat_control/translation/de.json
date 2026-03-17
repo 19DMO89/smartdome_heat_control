@@ -4,9 +4,11 @@
     "step": {
       "user": {
         "title": "Smartdome Heat Control einrichten",
-        "description": "Wähle das Hauptthermostat und die globalen Heizungsparameter.",
+        "description": "Wähle zuerst den **Steuertyp** für die zentrale Heizungssteuerung:\n\n- **Thermostat** – Du hast einen smarten Heizkreisregler oder ein Climate-Entity, das Smartdome per Solltemperatur steuert (z.B. Lambdatronic, Fröling, Viessmann, etc.)\n- **Smarter Schalter (Switch)** – Du hast keinen Thermostat, sondern nur einen smarten Ein-/Ausschalter (z.B. Shelly, Sonoff), der die Heizung ein- und ausschaltet\n\nFalls du weder ein Hauptthermostat noch einen Hauptschalter hast, lass das Feld leer – Smartdome steuert dann nur die einzelnen Raumthermostate.",
         "data": {
-          "main_thermostat": "Hauptthermostat",
+          "main_control_type": "Steuertyp Hauptregler",
+          "main_thermostat": "Hauptthermostat (Climate-Entity)",
+          "main_switch": "Hauptschalter (Switch-Entity)",
           "main_sensor": "Temperatursensor Hauptthermostat",
           "boost_delta": "Boost-Delta",
           "tolerance": "Toleranz",
@@ -39,9 +41,11 @@
       },
       "global": {
         "title": "Globale Einstellungen",
-        "description": "Passe Hauptthermostat, Hauptsensor und allgemeine Regeln an.",
+        "description": "Wähle hier den **Steuertyp** für den zentralen Hauptregler:\n\n- **Thermostat** – Smartdome steuert einen Heizkreisregler oder ein Climate-Entity per Solltemperatur. Dafür wird kein Boost auf Raumebene benötigt – der Regler schaltet den Heizkreis selbständig ein/aus.\n- **Smarter Schalter (Switch)** – Smartdome schaltet einen Switch direkt ein (Heizung an) oder aus (Heizung aus). Kein Temperatursensor am Hauptregler notwendig.\n\nFalls kein zentraler Regler vorhanden ist, einfach leer lassen.",
         "data": {
-          "main_thermostat": "Hauptthermostat",
+          "main_control_type": "Steuertyp Hauptregler",
+          "main_thermostat": "Hauptthermostat (Climate-Entity)",
+          "main_switch": "Hauptschalter (Switch-Entity)",
           "main_sensor": "Temperatursensor Hauptthermostat",
           "boost_delta": "Boost-Delta",
           "tolerance": "Toleranz",
@@ -62,7 +66,7 @@
       },
       "edit_room": {
         "title": "Raum bearbeiten",
-        "description": "Bearbeite Thermostat, Sensor, Temperaturen und Zeiten dieses Raums.",
+        "description": "Bearbeite Thermostat, Sensor und Zieltemperaturen dieses Raums.\n\n**Kein Thermostat vorhanden?** Lass das Feld leer — der Raum arbeitet dann im **Sensor-only Modus**: Er trägt zum Heiz-Signal des Zentralreglers bei, kann aber nicht individuell gesteuert werden.",
         "data": {
           "label": "Bezeichnung",
           "thermostat": "Thermostat",
@@ -74,12 +78,13 @@
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
           "delete_room": "Raum löschen",
-          "window_sensor": "Fensterkontakt"
+          "window_sensor": "Fensterkontakt",
+          "control_profile": "Thermostat-Regelprofil"
         }
       },
       "add_room": {
         "title": "Raum hinzufügen",
-        "description": "Lege einen neuen Raum manuell an.",
+        "description": "Lege einen neuen Raum manuell an.\n\n**Kein Thermostat vorhanden?** Lass das Feld leer — der Raum arbeitet dann im **Sensor-only Modus**: Er trägt zum Heiz-Signal des Zentralreglers bei, kann aber nicht individuell gesteuert werden.",
         "data": {
           "label": "Bezeichnung",
           "thermostat": "Thermostat",
@@ -90,7 +95,8 @@
           "day_start": "Tag-Start",
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
-          "window_sensor": "Fensterkontakt"
+          "window_sensor": "Fensterkontakt",
+          "control_profile": "Thermostat-Regelprofil"
         }
       }
     },
@@ -102,6 +108,18 @@
         "global": "⚙️ Globale Einstellungen",
         "rooms": "🏠 Räume verwalten",
         "discover": "🔎 Räume neu erkennen"
+      }
+    },
+    "control_profile": {
+      "options": {
+        "standard": "Standard-Thermostat",
+        "self_regulating": "Selbst regelndes Thermostat (z.B. Homematic OCCU)"
+      }
+    },
+    "main_control_type": {
+      "options": {
+        "thermostat": "Thermostat",
+        "switch": "Smarter Schalter (Switch)"
       }
     }
   }
