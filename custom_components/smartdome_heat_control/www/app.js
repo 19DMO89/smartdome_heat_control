@@ -94,7 +94,11 @@ const I18N = {
     section_heating: "Heating",
     section_times: "Times",
 
+    main_control_type: "Control type",
+    control_type_thermostat: "Thermostat",
+    control_type_switch: "Smart switch",
     main_thermostat: "Main thermostat",
+    main_switch: "Main switch",
     main_sensor: "Temperature sensor",
     boost_delta: "Boost delta (°C)",
     tolerance: "Tolerance (°C)",
@@ -246,7 +250,11 @@ const I18N = {
     section_heating: "Heizung",
     section_times: "Zeiten",
 
+    main_control_type: "Steuertyp",
+    control_type_thermostat: "Thermostat",
+    control_type_switch: "Smarter Schalter (Switch)",
     main_thermostat: "Hauptthermostat",
+    main_switch: "Hauptschalter (Switch)",
     main_sensor: "Temperatursensor",
     boost_delta: "Boost-Delta (°C)",
     tolerance: "Toleranz (°C)",
@@ -359,7 +367,9 @@ const CONTROL_PROFILES = ["standard", "self_regulating"];
 
 const DEFAULTS = {
   enabled: true,
+  main_control_type: "thermostat",
   main_thermostat: "",
+  main_switch: "",
   main_sensor: "",
   boost_delta: 2.0,
   tolerance: 0.5,
@@ -379,6 +389,7 @@ const state = {
   config: structuredClone(DEFAULTS),
   climates: [],
   sensors: [],
+  switches: [],
   binarySensors: [],
   allStates: [],
 };
@@ -396,7 +407,12 @@ function initEls() {
     addRoomBtn: document.getElementById("addRoomBtn"),
     applyTimesToRoomsBtn: document.getElementById("applyTimesToRoomsBtn"),
     enabled: document.getElementById("enabled"),
+    mainControlType: document.getElementById("main_control_type"),
+    mainThermostatField: document.getElementById("main_thermostat_field"),
     mainThermostatPicker: document.getElementById("main_thermostat_picker"),
+    mainSwitchField: document.getElementById("main_switch_field"),
+    mainSwitchPicker: document.getElementById("main_switch_picker"),
+    mainSensorField: document.getElementById("main_sensor_field"),
     mainSensorPicker: document.getElementById("main_sensor_picker"),
     boostDelta: document.getElementById("boost_delta"),
     tolerance: document.getElementById("tolerance"),
@@ -671,10 +687,14 @@ function normalizeCircuit(circuitId, circuit) {
       typeof circuit?.label === "string" && circuit.label.trim()
         ? circuit.label.trim()
         : circuitId,
+    control_type:
+      circuit?.control_type === "switch" ? "switch" : "thermostat",
     main_thermostat:
       typeof circuit?.main_thermostat === "string"
         ? circuit.main_thermostat
         : "",
+    main_switch:
+      typeof circuit?.main_switch === "string" ? circuit.main_switch : "",
     main_sensor:
       typeof circuit?.main_sensor === "string" ? circuit.main_sensor : "",
   };
@@ -687,8 +707,12 @@ function normalizeConfig(input) {
   };
 
   cfg.enabled = cfg.enabled !== false;
+  cfg.main_control_type =
+    cfg.main_control_type === "switch" ? "switch" : "thermostat";
   cfg.main_thermostat =
     typeof cfg.main_thermostat === "string" ? cfg.main_thermostat : "";
+  cfg.main_switch =
+    typeof cfg.main_switch === "string" ? cfg.main_switch : "";
   cfg.main_sensor = typeof cfg.main_sensor === "string" ? cfg.main_sensor : "";
   cfg.boost_delta = normalizeNumber(cfg.boost_delta, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(cfg.tolerance, DEFAULTS.tolerance);
@@ -997,16 +1021,35 @@ function createCircuitCard(circuitId, circuit) {
       </button>
     </div>
     <div class="circuit-card-fields">
-      <div class="field">
+      <div class="field full">
+        <label>${escapeHtml(t("main_control_type"))}</label>
+        <select class="circuit-control-type">
+          <option value="thermostat"${circuit.control_type !== "switch" ? " selected" : ""}>${escapeHtml(t("control_type_thermostat"))}</option>
+          <option value="switch"${circuit.control_type === "switch" ? " selected" : ""}>${escapeHtml(t("control_type_switch"))}</option>
+        </select>
+      </div>
+      <div class="field circuit-thermostat-field"${circuit.control_type === "switch" ? ' style="display:none;"' : ""}>
         <label>${escapeHtml(t("circuit_thermostat"))}</label>
         <div class="circuit-thermostat-picker"></div>
       </div>
-      <div class="field">
+      <div class="field circuit-switch-field"${circuit.control_type !== "switch" ? ' style="display:none;"' : ""}>
+        <label>${escapeHtml(t("main_switch"))}</label>
+        <div class="circuit-switch-picker"></div>
+      </div>
+      <div class="field circuit-sensor-field"${circuit.control_type === "switch" ? ' style="display:none;"' : ""}>
         <label>${escapeHtml(t("circuit_sensor"))}</label>
         <div class="circuit-sensor-picker"></div>
       </div>
     </div>
   `;
+
+  const ctSelect = card.querySelector(".circuit-control-type");
+  ctSelect.addEventListener("change", () => {
+    const isSwitch = ctSelect.value === "switch";
+    card.querySelector(".circuit-thermostat-field").style.display = isSwitch ? "none" : "";
+    card.querySelector(".circuit-switch-field").style.display = isSwitch ? "" : "none";
+    card.querySelector(".circuit-sensor-field").style.display = isSwitch ? "none" : "";
+  });
 
   createEntityPicker({
     container: card.querySelector(".circuit-thermostat-picker"),
@@ -1014,6 +1057,16 @@ function createCircuitCard(circuitId, circuit) {
     items: state.climates,
     getItems: () => state.climates,
     selectedValue: circuit.main_thermostat || "",
+    emptyLabel: t("select_auto_none"),
+    onChange: () => {},
+  });
+
+  createEntityPicker({
+    container: card.querySelector(".circuit-switch-picker"),
+    pickerId: `circuit_${circuitId}_switch_picker`,
+    items: state.switches,
+    getItems: () => state.switches,
+    selectedValue: circuit.main_switch || "",
     emptyLabel: t("select_auto_none"),
     onChange: () => {},
   });
@@ -1317,6 +1370,10 @@ async function loadAllStates() {
     state.allStates.filter((item) => isTemperatureSensor(item))
   );
 
+  state.switches = sortByEntityId(
+    state.allStates.filter((item) => item.entity_id?.startsWith("switch."))
+  );
+
   state.binarySensors = sortByEntityId(
     state.allStates.filter((item) =>
       item.entity_id?.startsWith("binary_sensor.")
@@ -1335,6 +1392,13 @@ async function loadConfig() {
     }
     throw error;
   }
+}
+
+function updateMainControlTypeVisibility(type) {
+  const isSwitch = type === "switch";
+  if (els.mainThermostatField) els.mainThermostatField.style.display = isSwitch ? "none" : "";
+  if (els.mainSwitchField) els.mainSwitchField.style.display = isSwitch ? "" : "none";
+  if (els.mainSensorField) els.mainSensorField.style.display = isSwitch ? "none" : "";
 }
 
 function renderGlobalSettings() {
@@ -1368,12 +1432,30 @@ function renderGlobalSettings() {
     els.awayEnabled.checked = cfg.away_enabled;
   }
 
+  if (els.mainControlType) {
+    els.mainControlType.value = cfg.main_control_type || "thermostat";
+    updateMainControlTypeVisibility(cfg.main_control_type);
+    els.mainControlType.onchange = () => {
+      updateMainControlTypeVisibility(els.mainControlType.value);
+    };
+  }
+
   createEntityPicker({
     container: els.mainThermostatPicker,
     pickerId: "global_main_thermostat_picker",
     items: state.climates,
     getItems: () => state.climates,
     selectedValue: cfg.main_thermostat,
+    emptyLabel: t("select_choose"),
+    onChange: () => {},
+  });
+
+  createEntityPicker({
+    container: els.mainSwitchPicker,
+    pickerId: "global_main_switch_picker",
+    items: state.switches,
+    getItems: () => state.switches,
+    selectedValue: cfg.main_switch,
     emptyLabel: t("select_choose"),
     onChange: () => {},
   });
@@ -1780,7 +1862,9 @@ function collectFormState() {
   const cfg = structuredClone(state.config);
 
   cfg.enabled = els.enabled.checked;
+  cfg.main_control_type = els.mainControlType?.value || "thermostat";
   cfg.main_thermostat = getEntityPickerValue("global_main_thermostat_picker");
+  cfg.main_switch = getEntityPickerValue("global_main_switch_picker");
   cfg.main_sensor = getEntityPickerValue("global_main_sensor_picker");
   cfg.boost_delta = normalizeNumber(els.boostDelta.value, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(els.tolerance.value, DEFAULTS.tolerance);
@@ -1851,8 +1935,11 @@ function collectFormState() {
     const circuitId = node.dataset.circuitId;
     circuits[circuitId] = normalizeCircuit(circuitId, {
       label: node.querySelector(".circuit-label")?.value?.trim() || "",
+      control_type: node.querySelector(".circuit-control-type")?.value || "thermostat",
       main_thermostat:
         getEntityPickerValue(`circuit_${circuitId}_thermostat_picker`) || "",
+      main_switch:
+        getEntityPickerValue(`circuit_${circuitId}_switch_picker`) || "",
       main_sensor:
         getEntityPickerValue(`circuit_${circuitId}_sensor_picker`) || "",
     });
@@ -2335,6 +2422,10 @@ function updateStateInMemory(entity) {
 
   state.sensors = sortByEntityId(
     state.allStates.filter((item) => isTemperatureSensor(item))
+  );
+
+  state.switches = sortByEntityId(
+    state.allStates.filter((item) => item.entity_id?.startsWith("switch."))
   );
 
   state.binarySensors = sortByEntityId(

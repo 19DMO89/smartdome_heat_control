@@ -61,6 +61,19 @@ You can define different time slots for every day of the week, each with its own
 
 ---
 
+### Thermostat Control Profiles
+
+Each room can be assigned one of two control profiles depending on the type of thermostat used:
+
+| Profile | Description |
+|---|---|
+| **Standard** | Smartdome controls the thermostat by setting the target temperature above the desired value (boost) to force the valve open. Recommended for most thermostats (e.g. Shelly TRV, Tado, etc.). |
+| **Self-Regulating** | Smartdome only sets the exact target temperature and does not apply a boost. The thermostat handles valve control autonomously. Required for thermostats that self-regulate and must not receive override commands. |
+
+> **Homematic / Homematic IP via CCU (OCCU):** These thermostats regulate themselves internally and react negatively to frequent target temperature overrides. **Always use the Self-Regulating profile for Homematic thermostats connected via OCCU.** Smartdome will then only send the exact target temperature and respect a minimum 120-second interval between commands.
+
+---
+
 ### Window Open Detection
 
 When a window sensor detects an open window:
@@ -134,14 +147,27 @@ Learned values are persisted across Home Assistant restarts.
 
 ---
 
+### Main Controller Type
+
+Smartdome supports two types of central heating control. You choose the type once in the global settings — it applies to the main controller and can be set independently for each heating circuit.
+
+| Type | When to use | How it works |
+|---|---|---|
+| **Thermostat** | You have a smart heating controller (e.g. Lambdatronic, Fröling, Viessmann, Nilan) connected as a `climate` entity | Smartdome sets the target temperature above the current sensor value to activate the circuit, and below to deactivate it |
+| **Smart switch** | You have no thermostat but a simple smart relay or switch (e.g. Shelly, Sonoff, WLED) that directly powers the heating pump or boiler | Smartdome calls `switch.turn_on` when any room needs heat and `switch.turn_off` when no room needs heat — no sensor required |
+
+> If you have no central controller at all, simply leave the field empty. Smartdome will then only control the individual room thermostats.
+
+---
+
 ### Heating Circuits
 
-For buildings with **multiple independent heating circuits** (e.g. underfloor + radiators, or different floors), each circuit can be configured with its own main thermostat and sensor.
+For buildings with **multiple independent heating circuits** (e.g. underfloor + radiators, or different floors), each circuit can be configured with its own main controller (thermostat **or** switch) and sensor.
 
 | Setup | Description |
 |---|---|
-| **No circuits configured** | Works exactly as before — one global main thermostat for all rooms. |
-| **Circuits configured** | Each circuit has its own main thermostat. Rooms are assigned to circuits and grouped accordingly in the UI. |
+| **No circuits configured** | Works with the global main controller setting for all rooms. |
+| **Circuits configured** | Each circuit has its own main controller. Rooms are assigned to circuits and grouped accordingly in the UI. Each circuit can independently use a thermostat or a switch. |
 
 > Circuits are only needed if the building has multiple physically separate heating systems. For most homes, no circuits need to be configured.
 
@@ -163,8 +189,9 @@ The main dashboard shows all rooms and global settings at a glance.
 
 Configure:
 
-- Main thermostat *(optional)*
-- Main temperature sensor *(optional)*
+- **Controller type** — Thermostat or Smart switch *(optional)*
+- Main thermostat or main switch *(optional)*
+- Main temperature sensor *(optional, thermostat mode only)*
 - Boost delta
 - Temperature tolerance
 - Global day/night times
@@ -305,6 +332,19 @@ Für jeden Wochentag können individuelle Zeitslots mit eigener Zieltemperatur d
 
 ---
 
+### Thermostat-Regelprofile
+
+Jedem Raum kann eines von zwei Regelprofilen zugewiesen werden, je nach verwendetem Thermostattyp:
+
+| Profil | Beschreibung |
+|---|---|
+| **Standard** | Smartdome steuert das Thermostat, indem es die Zieltemperatur über den gewünschten Wert anhebt (Boost), um das Ventil zu öffnen. Empfohlen für die meisten Thermostate (z.B. Shelly TRV, Tado, etc.). |
+| **Selbst regelnd** | Smartdome setzt nur die exakte Zieltemperatur und wendet keinen Boost an. Das Thermostat übernimmt die Ventilsteuerung eigenständig. Erforderlich für Thermostate, die sich selbst regeln und keine Überschreibungsbefehle vertragen. |
+
+> **Homematic / Homematic IP über CCU (OCCU):** Diese Thermostate regeln sich intern selbst und reagieren negativ auf häufige Sollwertüberschreibungen. **Für alle Homematic-Thermostate, die über die OCCU eingebunden sind, muss das Profil „Selbst regelnd" verwendet werden.** Smartdome sendet dann nur die exakte Zieltemperatur und hält einen Mindestabstand von 120 Sekunden zwischen Befehlen ein.
+
+---
+
 ### Fenster-Erkennung
 
 Wenn ein Fensterkontakt ein geöffnetes Fenster meldet:
@@ -378,14 +418,27 @@ Gelernte Werte bleiben über Home Assistant-Neustarts hinweg erhalten.
 
 ---
 
+### Steuertyp Hauptregler
+
+Smartdome unterstützt zwei Arten der zentralen Heizungssteuerung. Der Typ wird einmalig in den globalen Einstellungen gewählt — pro Heizkreis kann er unabhängig festgelegt werden.
+
+| Typ | Wann verwenden | Wie es funktioniert |
+|---|---|---|
+| **Thermostat** | Du hast einen smarten Heizkreisregler (z.B. Lambdatronic, Fröling, Viessmann, Nilan) als `climate`-Entity eingebunden | Smartdome setzt den Sollwert über den aktuellen Sensorwert um den Kreis zu aktivieren, und darunter um ihn abzuschalten |
+| **Smarter Schalter (Switch)** | Du hast kein Thermostat sondern ein smarten Relais oder Schalter (z.B. Shelly, Sonoff), der die Heizungspumpe oder den Kessel direkt schaltet | Smartdome ruft `switch.turn_on` auf wenn ein Raum Wärme braucht und `switch.turn_off` wenn kein Raum mehr heizt — kein Sensor erforderlich |
+
+> Wenn kein zentraler Regler vorhanden ist, das Feld einfach leer lassen. Smartdome steuert dann nur die einzelnen Raumthermostate.
+
+---
+
 ### Heizkreise
 
-Für Gebäude mit **mehreren unabhängigen Heizkreisen** (z.B. Fußbodenheizung + Heizkörper oder verschiedene Etagen) kann jeder Heizkreis mit eigenem Hauptthermostat und Sensor konfiguriert werden.
+Für Gebäude mit **mehreren unabhängigen Heizkreisen** (z.B. Fußbodenheizung + Heizkörper oder verschiedene Etagen) kann jeder Heizkreis mit eigenem Hauptregler (Thermostat **oder** Switch) und Sensor konfiguriert werden.
 
 | Setup | Beschreibung |
 |---|---|
-| **Keine Heizkreise konfiguriert** | Funktioniert wie bisher — ein globales Hauptthermostat für alle Räume. |
-| **Heizkreise konfiguriert** | Jeder Kreis hat sein eigenes Hauptthermostat. Räume werden Kreisen zugewiesen und im Dashboard entsprechend gruppiert angezeigt. |
+| **Keine Heizkreise konfiguriert** | Nutzt den globalen Hauptregler für alle Räume. |
+| **Heizkreise konfiguriert** | Jeder Kreis hat seinen eigenen Hauptregler. Räume werden Kreisen zugewiesen und im Dashboard entsprechend gruppiert. Jeder Kreis kann unabhängig einen Thermostat oder einen Switch verwenden. |
 
 > Heizkreise werden nur benötigt, wenn das Gebäude mehrere physisch getrennte Heizsysteme besitzt. In den meisten Häusern ist keine Konfiguration von Heizkreisen erforderlich.
 
@@ -407,8 +460,9 @@ Das Dashboard zeigt alle Räume und globale Einstellungen auf einen Blick.
 
 Konfigurierbar:
 
-- Hauptthermostat *(optional)*
-- Haupttemperatursensor *(optional)*
+- **Steuertyp** — Thermostat oder Smarter Schalter *(optional)*
+- Hauptthermostat oder Hauptschalter *(optional)*
+- Haupttemperatursensor *(optional, nur im Thermostat-Modus)*
 - Boost-Delta
 - Temperaturtoleranz
 - Globale Tag/Nacht-Zeiten

@@ -80,6 +80,17 @@ CONTROL_PROFILE_SELF_REGULATING = "self_regulating"
 
 DEFAULT_ROOM_CONTROL_PROFILE = CONTROL_PROFILE_STANDARD
 
+# Steuertyp Hauptthermostat / Heizkreis (Thermostat oder Switch)
+CONF_MAIN_CONTROL_TYPE = "main_control_type"
+CONF_MAIN_SWITCH = "main_switch"
+CONF_CIRCUIT_CONTROL_TYPE = "control_type"
+CONF_CIRCUIT_MAIN_SWITCH = "main_switch"
+
+CONTROL_TYPE_THERMOSTAT = "thermostat"
+CONTROL_TYPE_SWITCH = "switch"
+
+DEFAULT_MAIN_CONTROL_TYPE = CONTROL_TYPE_THERMOSTAT
+
 #Wochenplan
 CONF_ROOM_WEEKLY_SCHEDULE = "weekly_schedule"
 
