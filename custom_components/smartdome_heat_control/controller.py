@@ -123,6 +123,11 @@ class SmartHeatingController:
         # Zuletzt wirklich angewendeter effektiver Zustand pro Raum
         self._last_applied_room_state: dict[str, str] = {}
 
+        # Ob der Heizkreis-Hauptthermostat im letzten Zyklus aktiv war
+        # (True = mind. ein Raum heizte). Wird genutzt um beim Übergang
+        # heating→idle einen garantierten min_temp-Befehl zu senden.
+        self._circuit_heating_active: dict[str, bool] = {}
+
         self._apply_config_defaults()
 
     async def async_start(self) -> None:
@@ -818,6 +823,7 @@ class SmartHeatingController:
         self._residual_heat_hold_until.clear()
         self._last_command_sent_at.clear()
         self._last_applied_room_state.clear()
+        self._circuit_heating_active.clear()
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
@@ -1090,6 +1096,13 @@ class SmartHeatingController:
                     rs["state"] == ROOM_STATE_HEATING
                     for rs in circuit_room_states.values()
                 )
+                # Übergang heating → idle: _desired_targets löschen damit
+                # min_temp-Befehl garantiert gesendet wird.
+                was_heating = self._circuit_heating_active.get(circuit_id, False)
+                if was_heating and not any_circuit_needs_heat:
+                    self._desired_targets.pop(ct, None)
+                self._circuit_heating_active[circuit_id] = any_circuit_needs_heat
+
                 if any_circuit_needs_heat:
                     # Dynamic boost: setpoint = current sensor + boost_delta so the
                     # heating circuit turns ON reliably regardless of room targets.
@@ -1123,6 +1136,15 @@ class SmartHeatingController:
             )
             main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
             if main_thermostat and main_thermostat not in room_managed_thermostats:
+                # Übergang heating → idle: _desired_targets löschen damit
+                # min_temp-Befehl garantiert gesendet wird.
+                was_heating = self._circuit_heating_active.get(
+                    main_thermostat, False
+                )
+                if was_heating and not any_room_needs_heat:
+                    self._desired_targets.pop(main_thermostat, None)
+                self._circuit_heating_active[main_thermostat] = any_room_needs_heat
+
                 if any_room_needs_heat:
                     # Dynamic boost: setpoint = current sensor + boost_delta so the
                     # heating circuit turns ON reliably regardless of room targets.
