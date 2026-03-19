@@ -3,121 +3,123 @@
   "config": {
     "step": {
       "user": {
-        "title": "Smartdome Heat Control einrichten",
-        "description": "Wähle zuerst den **Steuertyp** für die Heizpumpensteuerung:\n\n- **Thermostat (Climate-Entity)** – Du hast einen smarten Heizkreisregler (z.B. Lambdatronic, Fröling, Viessmann). Smartdome sendet Solltemperaturen an das Climate-Entity, um die Heizung zu aktivieren oder zu deaktivieren. Der Boost-Delta-Wert wird verwendet, um die Solltemperatur gezielt anzuheben und so den Heizkreis einzuschalten. Ein optionaler Temperatursensor ermöglicht zusätzliches Monitoring.\n- **Smarter Schalter (Switch)** – Du hast keinen Heizkreisregler, sondern nur einen smarten Ein-/Ausschalter (z.B. Shelly, Sonoff). Smartdome schaltet diesen direkt ein oder aus — kein Temperatursensor notwendig, kein Boost-Delta erforderlich.\n\nFalls du keine Heizpumpensteuerung hast, lass das Feld leer – Smartdome steuert dann nur die einzelnen Heizkörperventile.",
+        "title": "Set up Smartdome Heat Control",
+        "description": "First select the **controller type** for the heating pump controller:\n\n- **Thermostat (climate entity)** – You have a smart heating circuit controller (e.g. Lambdatronic, Fröling, Viessmann). Smartdome sends target temperatures to the climate entity to activate or deactivate the heating. The boost delta value is used to temporarily raise the target temperature to switch the heating circuit on. An optional temperature sensor enables additional monitoring.\n- **Smart switch** – You have no heating circuit controller, only a smart on/off switch (e.g. Shelly, Sonoff). Smartdome switches it directly on or off — no temperature sensor required, no boost delta needed.\n\nIf you have no heating pump controller, leave the field empty — Smartdome will then only control the individual radiator valves.",
         "data": {
-          "main_control_type": "Steuertyp Heizpumpensteuerung",
-          "main_thermostat": "Heizpumpensteuerung (Climate-Entity)",
-          "main_switch": "Heizpumpensteuerung (Switch-Entity)",
-          "main_sensor": "Temperatursensor Heizpumpensteuerung",
-          "boost_delta": "Boost-Delta",
-          "tolerance": "Toleranz",
-          "night_start": "Nacht-Start",
-          "morning_boost_start": "Morgen-Boost Start",
-          "morning_boost_end": "Morgen-Boost Ende",
-          "vacation_enabled": "Urlaubsmodus aktiv",
-          "vacation_temperature": "Urlaubstemperatur",
-          "away_enabled": "Nicht Zuhause aktiv"
+          "main_control_type": "Heating pump controller type",
+          "main_thermostat": "Heating pump controller (climate entity)",
+          "main_switch": "Heating pump controller (switch entity)",
+          "main_sensor": "Heating pump controller temperature sensor",
+          "boost_delta": "Boost delta",
+          "tolerance": "Tolerance",
+          "night_start": "Night start",
+          "morning_boost_start": "Day start / morning boost start",
+          "morning_boost_end": "Morning boost end",
+          "vacation_enabled": "Vacation mode enabled",
+          "vacation_temperature": "Vacation temperature",
+          "away_enabled": "Away mode enabled"
         }
       },
       "rooms": {
-        "title": "Räume bestätigen",
-        "description": "Es wurden {room_count} Räume erkannt: {room_names}. Bestätige, um die Einrichtung abzuschließen.",
+        "title": "Confirm rooms",
+        "description": "{room_count} rooms were detected: {room_names}. Confirm to finish setup.",
         "data": {
-          "confirm": "Erkannte Räume übernehmen"
+          "confirm": "Use detected rooms"
         }
       }
-    }
+    },
+    "error": {}
   },
   "options": {
     "step": {
       "init": {
         "title": "Smartdome Heat Control",
-        "description": "Wähle aus, was du bearbeiten möchtest.",
+        "description": "Choose what you want to edit.",
         "data": {
-          "action": "Bereich"
+          "action": "Section"
         }
       },
       "global": {
-        "title": "Globale Einstellungen",
-        "description": "Wähle hier den **Steuertyp** für die Heizpumpensteuerung:\n\n- **Thermostat (Climate-Entity)** – Smartdome steuert einen Heizkreisregler oder ein Climate-Entity per Solltemperatur. Smartdome erhöht die Solltemperatur um den Boost-Delta-Wert, um den Heizkreis einzuschalten, und senkt sie wieder, um ihn abzuschalten. Ein optionaler Temperatursensor ermöglicht Monitoring.\n- **Smarter Schalter (Switch)** – Smartdome schaltet einen Switch direkt ein (Heizung an) oder aus (Heizung aus). Kein Temperatursensor notwendig, kein Boost-Delta erforderlich — die Steuerung erfolgt rein binär.\n\nFalls keine Heizpumpensteuerung vorhanden ist, einfach leer lassen.",
+        "title": "Global settings",
+        "description": "Select the **controller type** for the heating pump controller:\n\n- **Thermostat (climate entity)** – Smartdome controls a heating circuit controller or climate entity via target temperature. Smartdome raises the target temperature by the boost delta value to switch the heating circuit on, and lowers it again to switch it off. An optional temperature sensor enables monitoring.\n- **Smart switch** – Smartdome switches a switch directly on (heating on) or off (heating off). No temperature sensor required, no boost delta needed — control is purely binary.\n\nIf no heating pump controller is present, simply leave the field empty.",
         "data": {
-          "main_control_type": "Steuertyp Heizpumpensteuerung",
-          "main_thermostat": "Heizpumpensteuerung (Climate-Entity)",
-          "main_switch": "Heizpumpensteuerung (Switch-Entity)",
-          "main_sensor": "Temperatursensor Heizpumpensteuerung",
-          "boost_delta": "Boost-Delta",
-          "tolerance": "Toleranz",
-          "night_start": "Nacht-Start",
-          "morning_boost_start": "Morgen-Boost Start",
-          "morning_boost_end": "Morgen-Boost Ende",
-          "vacation_enabled": "Urlaubsmodus aktiv",
-          "vacation_temperature": "Urlaubstemperatur",
-          "away_enabled": "Nicht Zuhause aktiv"
+          "main_control_type": "Heating pump controller type",
+          "main_thermostat": "Heating pump controller (climate entity)",
+          "main_switch": "Heating pump controller (switch entity)",
+          "main_sensor": "Heating pump controller temperature sensor",
+          "boost_delta": "Boost delta",
+          "tolerance": "Tolerance",
+          "night_start": "Global night start",
+          "morning_boost_start": "Global day start",
+          "morning_boost_end": "Morning boost end",
+          "vacation_enabled": "Vacation mode enabled",
+          "vacation_temperature": "Vacation temperature",
+          "away_enabled": "Away mode enabled"
         }
       },
       "rooms_list": {
-        "title": "Räume verwalten",
-        "description": "Wähle einen Raum zum Bearbeiten oder lege einen neuen an.",
+        "title": "Manage rooms",
+        "description": "Select a room to edit or create a new one.",
         "data": {
-          "room_action": "Raum"
+          "room_action": "Room"
         }
       },
       "edit_room": {
-        "title": "Raum bearbeiten",
-        "description": "Bearbeite Heizkörperventil, Raumtemperatursensor und Zieltemperaturen dieses Raums.\n\n**Kein smartes Heizkörperventil vorhanden?** Lass das Feld leer — der Raum arbeitet dann im **Sensor-only Modus**: Er trägt zum Heiz-Signal des Zentralreglers bei, kann aber nicht individuell gesteuert werden.",
+        "title": "Edit room",
+        "description": "Edit radiator valve, room temperature sensor, temperatures, and schedule for this room.\n\n**No smart radiator valve?** Leave the field empty — the room will operate in **sensor-only mode**: it contributes to the central heating signal but cannot be individually controlled.",
         "data": {
-          "label": "Bezeichnung",
-          "thermostat": "Heizkörperventil",
-          "sensor": "Raumtemperatursensor",
-          "target_day": "Zieltemperatur Tag",
-          "target_night": "Zieltemperatur Nacht",
-          "away_temperature": "Away-Temperatur",
-          "day_start": "Tag-Start",
-          "night_start": "Nacht-Start",
-          "enabled": "Raum aktiv",
-          "delete_room": "Raum löschen",
-          "window_sensor": "Fensterkontakt",
-          "control_profile": "Thermostat-Regelprofil"
+          "label": "Label",
+          "thermostat": "Radiator valve",
+          "sensor": "Room temperature sensor",
+          "target_day": "Day target temperature",
+          "target_night": "Night target temperature",
+          "away_temperature": "Away temperature",
+          "day_start": "Day start",
+          "night_start": "Night start",
+          "enabled": "Room enabled",
+          "delete_room": "Delete room",
+          "window_sensor": "Window sensor",
+          "control_profile": "Thermostat control profile"
         }
       },
       "add_room": {
-        "title": "Raum hinzufügen",
-        "description": "Lege einen neuen Raum manuell an.\n\n**Kein smartes Heizkörperventil vorhanden?** Lass das Feld leer — der Raum arbeitet dann im **Sensor-only Modus**: Er trägt zum Heiz-Signal des Zentralreglers bei, kann aber nicht individuell gesteuert werden.",
+        "title": "Add room",
+        "description": "Create a new room manually.\n\n**No smart radiator valve?** Leave the field empty — the room will operate in **sensor-only mode**: it contributes to the central heating signal but cannot be individually controlled.",
         "data": {
-          "label": "Bezeichnung",
-          "thermostat": "Heizkörperventil",
-          "sensor": "Raumtemperatursensor",
-          "target_day": "Zieltemperatur Tag",
-          "target_night": "Zieltemperatur Nacht",
-          "away_temperature": "Away-Temperatur",
-          "day_start": "Tag-Start",
-          "night_start": "Nacht-Start",
-          "enabled": "Raum aktiv",
-          "window_sensor": "Fensterkontakt",
-          "control_profile": "Thermostat-Regelprofil"
+          "label": "Label",
+          "thermostat": "Radiator valve",
+          "sensor": "Room temperature sensor",
+          "target_day": "Day target temperature",
+          "target_night": "Night target temperature",
+          "away_temperature": "Away temperature",
+          "day_start": "Day start",
+          "night_start": "Night start",
+          "enabled": "Room enabled",
+          "window_sensor": "Window sensor",
+          "control_profile": "Thermostat control profile"
         }
       }
-    }
+    },
+    "error": {}
   },
   "selector": {
     "action": {
       "options": {
-        "global": "⚙️ Globale Einstellungen",
-        "rooms": "🏠 Räume verwalten",
-        "discover": "🔎 Räume neu erkennen"
+        "global": "⚙️ Global settings",
+        "rooms": "🏠 Manage rooms",
+        "discover": "🔎 Rediscover rooms"
       }
     },
     "control_profile": {
       "options": {
-        "standard": "Standard-Thermostat",
-        "self_regulating": "Selbst regelndes Thermostat (z.B. Homematic OCCU)"
+        "standard": "Standard thermostat",
+        "self_regulating": "Self-regulating thermostat (e.g. Homematic OCCU)"
       }
     },
     "main_control_type": {
       "options": {
         "thermostat": "Thermostat",
-        "switch": "Smarter Schalter (Switch)"
+        "switch": "Smart switch"
       }
     }
   }
