@@ -193,6 +193,12 @@ const I18N = {
     circuit_delete: "Delete",
     room_circuit: "Heating circuit",
     circuit_none: "— No circuit (global) —",
+
+    section_outdoor: "Outdoor temperature",
+    outdoor_sensor: "Outdoor temperature sensor",
+    outdoor_temp_cutoff_enabled: "Cutoff enabled",
+    outdoor_temp_cutoff_enabled_hint: "Heating is suppressed when outdoor temperature ≥ threshold.",
+    outdoor_temp_cutoff: "Threshold (°C)",
   },
 
   de: {
@@ -349,6 +355,12 @@ const I18N = {
     circuit_delete: "Löschen",
     room_circuit: "Heizkreis",
     circuit_none: "— Kein Kreis (global) —",
+
+    section_outdoor: "Außentemperatur",
+    outdoor_sensor: "Außentemperatursensor",
+    outdoor_temp_cutoff_enabled: "Abschaltung aktiv",
+    outdoor_temp_cutoff_enabled_hint: "Heizung wird unterdrückt wenn Außentemperatur ≥ Schwellenwert.",
+    outdoor_temp_cutoff: "Schwellenwert (°C)",
   },
 };
 
@@ -381,6 +393,9 @@ const DEFAULTS = {
   vacation_enabled: false,
   vacation_temperature: 14.0,
   away_enabled: false,
+  outdoor_sensor: "",
+  outdoor_temp_cutoff_enabled: false,
+  outdoor_temp_cutoff: 15.0,
   rooms: {},
   circuits: {},
 };
@@ -451,6 +466,10 @@ function initEls() {
     scheduleCopyCancel: document.getElementById("schedule-copy-cancel"),
     scheduleCopyApply: document.getElementById("schedule-copy-apply"),
     scheduleCopyRoomsList: document.getElementById("schedule-copy-rooms-list"),
+
+    outdoorSensorPicker: document.getElementById("outdoor_sensor_picker"),
+    outdoorTempCutoffEnabled: document.getElementById("outdoor_temp_cutoff_enabled"),
+    outdoorTempCutoff: document.getElementById("outdoor_temp_cutoff"),
   };
 }
 
@@ -923,6 +942,19 @@ function updateMainLiveStatus() {
     } else {
       switchLive.textContent = "";
       delete switchLive.dataset.entity;
+    }
+  }
+
+  const outdoorLive = document.getElementById("global_outdoor_live");
+  if (outdoorLive) {
+    const outdoorId = getEntityPickerValue("global_outdoor_sensor_picker");
+    const temp = outdoorId ? getSensorTemperature(outdoorId) : null;
+    if (temp !== null) {
+      outdoorLive.textContent = formatTemperature(temp);
+      outdoorLive.dataset.entity = outdoorId;
+    } else {
+      outdoorLive.textContent = "";
+      delete outdoorLive.dataset.entity;
     }
   }
 }
@@ -1484,6 +1516,28 @@ function renderGlobalSettings() {
     onChange: () => {},
   });
 
+  if (els.outdoorSensorPicker) {
+    createEntityPicker({
+      container: els.outdoorSensorPicker,
+      pickerId: "global_outdoor_sensor_picker",
+      items: state.sensors,
+      getItems: () => state.sensors,
+      selectedValue: cfg.outdoor_sensor || "",
+      emptyLabel: t("select_not_set"),
+      onChange: () => {},
+    });
+  }
+
+  if (els.outdoorTempCutoffEnabled) {
+    els.outdoorTempCutoffEnabled.checked = cfg.outdoor_temp_cutoff_enabled ?? false;
+  }
+
+  if (els.outdoorTempCutoff) {
+    els.outdoorTempCutoff.value = String(
+      normalizeNumber(cfg.outdoor_temp_cutoff, DEFAULTS.outdoor_temp_cutoff)
+    );
+  }
+
   createModePicker(cfg.heating_mode);
   renderCircuits();
   updateMainLiveStatus();
@@ -1908,6 +1962,14 @@ function collectFormState() {
       )
     : DEFAULTS.vacation_temperature;
   cfg.away_enabled = els.awayEnabled ? els.awayEnabled.checked : false;
+
+  cfg.outdoor_sensor = getEntityPickerValue("global_outdoor_sensor_picker");
+  cfg.outdoor_temp_cutoff_enabled = els.outdoorTempCutoffEnabled
+    ? els.outdoorTempCutoffEnabled.checked
+    : false;
+  cfg.outdoor_temp_cutoff = els.outdoorTempCutoff
+    ? normalizeNumber(els.outdoorTempCutoff.value, DEFAULTS.outdoor_temp_cutoff)
+    : DEFAULTS.outdoor_temp_cutoff;
 
   const rooms = {};
   const roomNodes = els.roomsContainer.querySelectorAll(".room");
