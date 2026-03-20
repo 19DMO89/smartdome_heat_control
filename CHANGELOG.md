@@ -1,5 +1,9 @@
 # Changelog
 
+## [3.2.1] – 2026-03-20
+
+- feat: Außentemperatur-Abschaltung jetzt vollständig im Panel konfigurierbar (Sensor, Schwellenwert, Toggle)
+
 ## [3.2.0] – 2026-03-20
 
 ### 🌡️ Neu: Außentemperatur-Abschaltung / Outdoor Temperature Cutoff

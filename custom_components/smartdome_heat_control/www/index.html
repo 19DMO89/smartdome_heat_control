@@ -1085,6 +1085,32 @@
             </div>
           </div>
 
+          <!-- Außentemperatur -->
+          <div class="settings-group">
+            <div class="settings-group-label" data-i18n="section_outdoor">Außentemperatur</div>
+            <div class="fields">
+              <div class="field full">
+                <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                  <span data-i18n="outdoor_sensor">Außentemperatursensor</span>
+                  <span id="global_outdoor_live" class="label-live"></span>
+                </label>
+                <div id="outdoor_sensor_picker"></div>
+              </div>
+            </div>
+            <div class="toggle" style="margin-top:10px;">
+              <div class="toggle-text">
+                <strong data-i18n="outdoor_temp_cutoff_enabled">Abschaltung aktiv</strong>
+                <span data-i18n="outdoor_temp_cutoff_enabled_hint">
+                  Heizung wird unterdrückt wenn Außentemperatur ≥ Schwellenwert.
+                </span>
+              </div>
+              <div class="toggle-right">
+                <input id="outdoor_temp_cutoff" class="toggle-temp" type="number" min="-20" max="30" step="0.5" value="15" />
+                <input id="outdoor_temp_cutoff_enabled" type="checkbox" />
+              </div>
+            </div>
+          </div>
+
           <!-- Heizpumpensteuerung -->
           <div class="settings-group">
             <div class="settings-group-label" data-i18n="section_thermostat">Heizpumpensteuerung</div>
