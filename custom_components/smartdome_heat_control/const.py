@@ -134,6 +134,13 @@ DEFAULT_WINDOW_CLOSE_DELAY = 60
 
 
 
+# Außentemperatur-Abschaltung
+CONF_OUTDOOR_SENSOR = "outdoor_sensor"
+CONF_OUTDOOR_TEMP_CUTOFF_ENABLED = "outdoor_temp_cutoff_enabled"
+CONF_OUTDOOR_TEMP_CUTOFF = "outdoor_temp_cutoff"
+DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED = False
+DEFAULT_OUTDOOR_TEMP_CUTOFF = 15.0
+
 # Defaults
 DEFAULT_ENABLED = True
 DEFAULT_BOOST_DELTA = 2.0

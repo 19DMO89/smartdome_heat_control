@@ -21,6 +21,11 @@ from .const import (
     ADAPTIVE_BUCKET_SHORT_MAX_SECS,
     CONF_AWAY_ENABLED,
     CONF_BOOST_DELTA,
+    CONF_OUTDOOR_SENSOR,
+    CONF_OUTDOOR_TEMP_CUTOFF,
+    CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    DEFAULT_OUTDOOR_TEMP_CUTOFF,
+    DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
     CONF_CIRCUIT_CONTROL_TYPE,
     CONF_CIRCUIT_MAIN_SENSOR,
     CONF_CIRCUIT_MAIN_SWITCH,
@@ -155,6 +160,11 @@ class SmartHeatingController:
         if main_sensor:
             watch_entities.add(main_sensor)
 
+        if bool(self.config.get(CONF_OUTDOOR_TEMP_CUTOFF_ENABLED, False)):
+            outdoor_sensor = self._as_entity_id(self.config.get(CONF_OUTDOOR_SENSOR))
+            if outdoor_sensor:
+                watch_entities.add(outdoor_sensor)
+
         for circuit in self.config.get(CONF_CIRCUITS, {}).values():
             if isinstance(circuit, dict):
                 circuit_sensor = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_SENSOR))
@@ -233,6 +243,10 @@ class SmartHeatingController:
         self.config.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
         self.config.setdefault(CONF_WINDOW_OPEN_DELAY, DEFAULT_WINDOW_OPEN_DELAY)
         self.config.setdefault(CONF_WINDOW_CLOSE_DELAY, DEFAULT_WINDOW_CLOSE_DELAY)
+        self.config.setdefault(
+            CONF_OUTDOOR_TEMP_CUTOFF_ENABLED, DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED
+        )
+        self.config.setdefault(CONF_OUTDOOR_TEMP_CUTOFF, DEFAULT_OUTDOOR_TEMP_CUTOFF)
         self.config.setdefault(
             CONF_ENERGY_RESIDUAL_HEAT_HOLD,
             DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
@@ -995,6 +1009,25 @@ class SmartHeatingController:
         room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
         room[CONF_ROOM_CYCLE_START_TS] = None
 
+    def _is_outdoor_cutoff_active(self) -> bool:
+        """Prüfen ob die Außentemperatur-Abschaltung aktiv ist."""
+        if not bool(
+            self.config.get(CONF_OUTDOOR_TEMP_CUTOFF_ENABLED, DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED)
+        ):
+            return False
+        outdoor_sensor = self._as_entity_id(self.config.get(CONF_OUTDOOR_SENSOR))
+        if not outdoor_sensor:
+            return False
+        outdoor_temp = self._get_state_float(outdoor_sensor)
+        if outdoor_temp is None:
+            return False
+        cutoff = self._safe_float(
+            self.config.get(CONF_OUTDOOR_TEMP_CUTOFF, DEFAULT_OUTDOOR_TEMP_CUTOFF)
+        )
+        if cutoff is None:
+            cutoff = float(DEFAULT_OUTDOOR_TEMP_CUTOFF)
+        return outdoor_temp >= cutoff
+
     def _evaluate(self) -> None:
         """Heizlogik auswerten."""
         if not self._enabled:
@@ -1017,6 +1050,9 @@ class SmartHeatingController:
         room_states: dict[str, dict[str, Any]] = {}
 
         mode = self._get_heating_mode()
+        outdoor_cutoff_active = self._is_outdoor_cutoff_active()
+        if outdoor_cutoff_active:
+            _LOGGER.debug("Außentemperatur-Abschaltung aktiv – Heizung gesperrt")
 
         for room_id, room in rooms.items():
             actual = self._room_temp(room)
@@ -1037,6 +1073,12 @@ class SmartHeatingController:
                 tolerance=tolerance,
                 predicted_overshoot=predicted_overshoot,
             )
+
+            # Außentemperatur-Abschaltung: Heizung unterdrücken, aber
+            # Raumthermostate auf normalen Idle-Sollwert belassen (kein Frost-Modus).
+            if outdoor_cutoff_active and state == ROOM_STATE_HEATING:
+                state = ROOM_STATE_IDLE
+                self._room_state[room_id] = ROOM_STATE_IDLE
 
             room_states[room_id] = {
                 "actual": actual,
