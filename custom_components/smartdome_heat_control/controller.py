@@ -45,6 +45,7 @@ from .const import (
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_CONTROL_PROFILE,
     CONF_ROOM_CYCLE_PEAK_TEMP,
+    CONF_ROOM_CYCLE_PEAKED,
     CONF_ROOM_CYCLE_START_TS,
     CONF_ROOM_CYCLE_TARGET_TEMP,
     CONF_ROOM_DAY_START,
@@ -289,6 +290,7 @@ class SmartHeatingController:
                     room.setdefault(CONF_ROOM_CYCLE_TARGET_TEMP, None)
                     room.setdefault(CONF_ROOM_CYCLE_PEAK_TEMP, None)
                     room.setdefault(CONF_ROOM_CYCLE_START_TS, None)
+                    room.setdefault(CONF_ROOM_CYCLE_PEAKED, False)
 
     def _unsubscribe_all(self) -> None:
         """Alle Listener entfernen."""
@@ -839,6 +841,7 @@ class SmartHeatingController:
             room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = False
             room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
             room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
+            room[CONF_ROOM_CYCLE_PEAKED] = False
 
         self._desired_targets.clear()
         self._last_computed_targets.clear()
@@ -944,10 +947,16 @@ class SmartHeatingController:
             return
 
         if room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE):
-            peak = room.get(CONF_ROOM_CYCLE_PEAK_TEMP)
-            if peak is None or current_temp > peak:
-                room[CONF_ROOM_CYCLE_PEAK_TEMP] = current_temp
-            return
+            if room.get(CONF_ROOM_CYCLE_PEAKED):
+                # Previous cycle peaked but never finished (temperature didn't
+                # drop back below target before the next heat request came in).
+                # Force-finish it so learning is recorded, then start fresh.
+                self._finish_room_heating_cycle(room)
+            else:
+                peak = room.get(CONF_ROOM_CYCLE_PEAK_TEMP)
+                if peak is None or current_temp > peak:
+                    room[CONF_ROOM_CYCLE_PEAK_TEMP] = current_temp
+                return
 
         room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = True
         room[CONF_ROOM_CYCLE_TARGET_TEMP] = target_temp
@@ -1008,6 +1017,7 @@ class SmartHeatingController:
         room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
         room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
         room[CONF_ROOM_CYCLE_START_TS] = None
+        room[CONF_ROOM_CYCLE_PEAKED] = False
 
     def _is_outdoor_cutoff_active(self) -> bool:
         """Prüfen ob die Außentemperatur-Abschaltung aktiv ist."""
@@ -1091,12 +1101,20 @@ class SmartHeatingController:
                 self._start_room_heating_cycle(room, target, actual)
             else:
                 self._update_room_cycle_peak(room, actual)
-                if (
-                    room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE)
-                    and actual is not None
-                    and actual >= target
-                ):
-                    self._finish_room_heating_cycle(room)
+                if room.get(CONF_ROOM_HEATING_CYCLE_ACTIVE) and actual is not None:
+                    start_ts = room.get(CONF_ROOM_CYCLE_START_TS)
+                    cycle_age = (dt_util.now().timestamp() - float(start_ts)) if start_ts is not None else 0.0
+                    if actual >= target:
+                        # Temperature crossed target: mark peak phase reached.
+                        room[CONF_ROOM_CYCLE_PEAKED] = True
+                    elif room.get(CONF_ROOM_CYCLE_PEAKED):
+                        # Temperature has peaked above target and is now declining
+                        # below it → full overshoot captured, finish the cycle.
+                        self._finish_room_heating_cycle(room)
+                    elif cycle_age > 7200:
+                        # Safety: target never reached within 2 h – finish to
+                        # avoid stale state.
+                        self._finish_room_heating_cycle(room)
 
         # Any thermostat entity that is already managed as a room thermostat
         # handles its own idle setpoint via the room step (_get_idle_target_for_room).

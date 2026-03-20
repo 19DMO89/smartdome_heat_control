@@ -67,6 +67,7 @@ CONF_ROOM_HEATING_CYCLE_ACTIVE = "heating_cycle_active"
 CONF_ROOM_CYCLE_TARGET_TEMP = "cycle_target_temp"
 CONF_ROOM_CYCLE_PEAK_TEMP = "cycle_peak_temp"
 CONF_ROOM_CYCLE_START_TS = "cycle_start_ts"
+CONF_ROOM_CYCLE_PEAKED = "cycle_peaked"
 
 # Adaptive bucket boundaries (seconds)
 ADAPTIVE_BUCKET_SHORT_MAX_SECS = 900   # < 15 min
