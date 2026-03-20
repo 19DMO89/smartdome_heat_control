@@ -262,11 +262,8 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required("action", default="rooms"): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[
-                                {"value": "global", "label": "⚙️ Globale Einstellungen"},
-                                {"value": "rooms", "label": "🏠 Räume verwalten"},
-                                {"value": "discover", "label": "🔎 Räume neu erkennen"},
-                            ],
+                            options=["global", "rooms", "discover"],
+                            translation_key="action",
                             mode="list",
                         )
                     ),
