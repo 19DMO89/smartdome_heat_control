@@ -17,6 +17,9 @@ from .const import (
     CONF_MAIN_THERMOSTAT,
     CONF_MORNING_BOOST_END,
     CONF_MORNING_BOOST_START,
+    CONF_OUTDOOR_SENSOR,
+    CONF_OUTDOOR_TEMP_CUTOFF,
+    CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
     CONF_ROOM_WINDOW_SENSOR,
     CONF_NIGHT_START,
     CONF_ROOMS,
@@ -37,6 +40,8 @@ from .const import (
     DEFAULT_MORNING_BOOST_END,
     DEFAULT_MORNING_BOOST_START,
     DEFAULT_NIGHT_START,
+    DEFAULT_OUTDOOR_TEMP_CUTOFF,
+    DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
     DEFAULT_ROOM_AWAY_TEMPERATURE,
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
@@ -167,6 +172,23 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_AWAY_ENABLED,
                     default=DEFAULT_AWAY_ENABLED,
                 ): bool,
+                vol.Optional(CONF_OUTDOOR_SENSOR): _temperature_sensor_selector(),
+                vol.Optional(
+                    CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
+                    default=DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
+                ): bool,
+                vol.Optional(
+                    CONF_OUTDOOR_TEMP_CUTOFF,
+                    default=DEFAULT_OUTDOOR_TEMP_CUTOFF,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=-20.0,
+                        max=30.0,
+                        step=0.5,
+                        unit_of_measurement="°C",
+                        mode="box",
+                    )
+                ),
             }
         )
 
@@ -336,6 +358,32 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                         DEFAULT_AWAY_ENABLED,
                     ),
                 ): bool,
+                vol.Optional(
+                    CONF_OUTDOOR_SENSOR,
+                    default=data.get(CONF_OUTDOOR_SENSOR, ""),
+                ): _temperature_sensor_selector(),
+                vol.Optional(
+                    CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
+                    default=data.get(
+                        CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
+                        DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
+                    ),
+                ): bool,
+                vol.Optional(
+                    CONF_OUTDOOR_TEMP_CUTOFF,
+                    default=data.get(
+                        CONF_OUTDOOR_TEMP_CUTOFF,
+                        DEFAULT_OUTDOOR_TEMP_CUTOFF,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=-20.0,
+                        max=30.0,
+                        step=0.5,
+                        unit_of_measurement="°C",
+                        mode="box",
+                    )
+                ),
             }
         )
 

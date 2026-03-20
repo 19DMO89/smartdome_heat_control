@@ -17,7 +17,10 @@
           "morning_boost_end": "Morgen-Boost Ende",
           "vacation_enabled": "Urlaubsmodus aktiv",
           "vacation_temperature": "Urlaubstemperatur",
-          "away_enabled": "Nicht Zuhause aktiv"
+          "away_enabled": "Nicht Zuhause aktiv",
+          "outdoor_sensor": "Außentemperatursensor",
+          "outdoor_temp_cutoff_enabled": "Außentemperatur-Abschaltung aktiv",
+          "outdoor_temp_cutoff": "Heizung abschalten ab Außentemperatur"
         }
       },
       "rooms": {
@@ -54,7 +57,10 @@
           "morning_boost_end": "Morgen-Boost Ende",
           "vacation_enabled": "Urlaubsmodus aktiv",
           "vacation_temperature": "Urlaubstemperatur",
-          "away_enabled": "Nicht Zuhause aktiv"
+          "away_enabled": "Nicht Zuhause aktiv",
+          "outdoor_sensor": "Außentemperatursensor",
+          "outdoor_temp_cutoff_enabled": "Außentemperatur-Abschaltung aktiv",
+          "outdoor_temp_cutoff": "Heizung abschalten ab Außentemperatur"
         }
       },
       "rooms_list": {

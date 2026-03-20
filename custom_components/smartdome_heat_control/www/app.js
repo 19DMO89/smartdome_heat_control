@@ -911,6 +911,20 @@ function updateMainLiveStatus() {
       delete sensorLive.dataset.entity;
     }
   }
+
+  const switchLive = document.getElementById("global_switch_live");
+  if (switchLive) {
+    const switchId = getEntityPickerValue("global_main_switch_picker");
+    if (switchId) {
+      const switchState = findState(switchId);
+      const isOn = switchState?.state === "on";
+      switchLive.innerHTML = isOn ? "🟢 on" : "⚫ off";
+      switchLive.dataset.entity = switchId;
+    } else {
+      switchLive.textContent = "";
+      delete switchLive.dataset.entity;
+    }
+  }
 }
 
 let modePickerValue = "balanced";

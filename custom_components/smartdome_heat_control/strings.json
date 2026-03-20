@@ -17,7 +17,10 @@
           "morning_boost_end": "Morning boost end",
           "vacation_enabled": "Vacation mode enabled",
           "vacation_temperature": "Vacation temperature",
-          "away_enabled": "Away mode enabled"
+          "away_enabled": "Away mode enabled",
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "outdoor_temp_cutoff_enabled": "Outdoor temperature cutoff enabled",
+          "outdoor_temp_cutoff": "Switch off heating above outdoor temperature"
         }
       },
       "rooms": {
@@ -54,7 +57,10 @@
           "morning_boost_end": "Morning boost end",
           "vacation_enabled": "Vacation mode enabled",
           "vacation_temperature": "Vacation temperature",
-          "away_enabled": "Away mode enabled"
+          "away_enabled": "Away mode enabled",
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "outdoor_temp_cutoff_enabled": "Outdoor temperature cutoff enabled",
+          "outdoor_temp_cutoff": "Switch off heating above outdoor temperature"
         }
       },
       "rooms_list": {
