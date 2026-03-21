@@ -25,7 +25,7 @@
       },
       "rooms": {
         "title": "Confirm rooms",
-        "description": "{room_count} rooms were detected: {room_names}. Confirm to finish setup.",
+        "description": "{room_count} rooms were detected{room_names}. Confirm to finish setup.",
         "data": {
           "confirm": "Use detected rooms"
         }

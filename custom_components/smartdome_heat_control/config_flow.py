@@ -205,10 +205,11 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=self._data,
             )
 
-        room_names = ", ".join(
+        room_names_str = ", ".join(
             room.get(CONF_ROOM_LABEL, room_id)
             for room_id, room in self._discovered_rooms.items()
-        ) or "Keine gefunden"
+        )
+        room_names = f": {room_names_str}" if room_names_str else ""
 
         return self.async_show_form(
             step_id="rooms",
@@ -262,11 +263,8 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required("action", default="rooms"): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[
-                                {"value": "global", "label": "⚙️ Globale Einstellungen"},
-                                {"value": "rooms", "label": "🏠 Räume verwalten"},
-                                {"value": "discover", "label": "🔎 Räume neu erkennen"},
-                            ],
+                            options=["global", "rooms", "discover"],
+                            translation_key="action",
                             mode="list",
                         )
                     ),
@@ -407,7 +405,7 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
             {"value": room_id, "label": f"✏️ {room.get(CONF_ROOM_LABEL, room_id)}"}
             for room_id, room in self._rooms.items()
         ]
-        room_options.append({"value": "__add__", "label": "➕ Neuen Raum hinzufügen"})
+        room_options.append({"value": "__add__", "label": "➕ Add new room"})
 
         return self.async_show_form(
             step_id="rooms_list",
