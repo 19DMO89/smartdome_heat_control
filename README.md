@@ -88,6 +88,18 @@ Each room can be assigned one of two control profiles depending on the type of t
 
 ---
 
+### Outdoor Temperature Cutoff
+
+Heating can be automatically suppressed when the outdoor temperature reaches or exceeds a configurable threshold.
+
+- Outdoor temperature sensor (any sensor or climate entity)
+- Enable/disable the cutoff independently
+- Configurable threshold: –20 °C to +30 °C (default: 15 °C)
+- Room thermostats stay at their normal idle setpoint — no frost protection mode
+- Responds in real time to sensor state changes
+
+---
+
 ### Window Open Detection
 
 When a window sensor detects an open window:
@@ -206,6 +218,7 @@ Configure:
 - **Controller type** — Thermostat or Smart switch *(optional)*
 - Main thermostat or main switch *(optional)*
 - Main temperature sensor *(optional, thermostat mode only)*
+- **Outdoor temperature sensor** + cutoff threshold *(optional — suppresses heating above threshold)*
 - Boost delta
 - Temperature tolerance
 - Global day/night times
@@ -226,6 +239,7 @@ Configure each room individually:
 - Away temperature
 - Day/night schedule or weekly schedule
 - Thermostat control profile
+- **Thermostat calibration offset** — corrects a fixed measurement offset in the thermostat (–5 to +5 °C, in 0.5 °C steps)
 - Heating circuit assignment *(optional)*
 - Enable/disable
 
@@ -373,6 +387,18 @@ Jedem Raum kann eines von zwei Regelprofilen zugewiesen werden, je nach verwende
 
 ---
 
+### Außentemperatur-Abschaltung
+
+Die Heizung kann automatisch unterdrückt werden, sobald die Außentemperatur einen konfigurierbaren Schwellenwert erreicht oder überschreitet.
+
+- Außentemperatursensor (beliebiger Sensor oder Climate-Entity)
+- Abschaltung unabhängig aktivier-/deaktivierbar
+- Konfigurierbarer Schwellenwert: –20 °C bis +30 °C (Standard: 15 °C)
+- Raumthermostate verbleiben auf ihrem normalen Idle-Sollwert — kein Frostschutzmodus
+- Reagiert in Echtzeit auf Sensorzustandsänderungen
+
+---
+
 ### Fenster-Erkennung
 
 Wenn ein Fensterkontakt ein geöffnetes Fenster meldet:
@@ -491,6 +517,7 @@ Konfigurierbar:
 - **Steuertyp** — Thermostat oder Smarter Schalter *(optional)*
 - Hauptthermostat oder Hauptschalter *(optional)*
 - Haupttemperatursensor *(optional, nur im Thermostat-Modus)*
+- **Außentemperatursensor** + Abschaltschwellenwert *(optional — unterdrückt Heizung ab Schwellenwert)*
 - Boost-Delta
 - Temperaturtoleranz
 - Globale Tag/Nacht-Zeiten
@@ -511,6 +538,7 @@ Jeden Raum einzeln konfigurieren:
 - Abwesenheitstemperatur
 - Tag/Nacht-Zeitplan oder Wochenschema
 - Thermostat-Regelprofil
+- **Thermostat-Kalibrierungsoffset** — korrigiert einen fixen Messfehler des Thermostats (–5 bis +5 °C, in 0,5 °C Schritten)
 - Heizkreis-Zuweisung *(optional)*
 - Aktivieren/Deaktivieren
 
