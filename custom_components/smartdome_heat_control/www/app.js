@@ -1397,15 +1397,28 @@ async function haFetch(path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+async function getHassWS() {
+  const haConn = await getHassConnection();
+  const ws = haConn?.conn || haConn;
+  if (!ws || typeof ws.sendMessagePromise !== "function") {
+    throw new Error("WebSocket-Verbindung nicht verfügbar");
+  }
+  return ws;
+}
+
 async function callService(domain, service, data = {}) {
-  return haFetch(`/api/services/${domain}/${service}`, {
-    method: "POST",
-    body: JSON.stringify(data),
+  const ws = await getHassWS();
+  return ws.sendMessagePromise({
+    type: "call_service",
+    domain,
+    service,
+    service_data: data,
   });
 }
 
 async function loadAllStates() {
-  const states = await haFetch("/api/states");
+  const ws = await getHassWS();
+  const states = await ws.sendMessagePromise({ type: "get_states" });
   state.allStates = Array.isArray(states) ? states : [];
 
   state.climates = sortByEntityId(
@@ -1428,16 +1441,10 @@ async function loadAllStates() {
 }
 
 async function loadConfig() {
-  try {
-    const entity = await haFetch(`/api/states/${CONFIG_ENTITY_ID}`);
-    state.config = normalizeConfig(entity?.attributes || {});
-  } catch (error) {
-    if (String(error.message).includes("404")) {
-      state.config = normalizeConfig({});
-      return;
-    }
-    throw error;
-  }
+  const entity = state.allStates.find(
+    (s) => s.entity_id === CONFIG_ENTITY_ID
+  );
+  state.config = normalizeConfig(entity?.attributes || {});
 }
 
 function updateMainControlTypeVisibility(type) {
