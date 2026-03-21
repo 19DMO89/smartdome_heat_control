@@ -25,7 +25,7 @@
       },
       "rooms": {
         "title": "Räume bestätigen",
-        "description": "Es wurden {room_count} Räume erkannt: {room_names}. Bestätige, um die Einrichtung abzuschließen.",
+        "description": "Es wurden {room_count} Räume erkannt{room_names}. Bestätige, um die Einrichtung abzuschließen.",
         "data": {
           "confirm": "Erkannte Räume übernehmen"
         }
