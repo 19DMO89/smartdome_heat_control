@@ -1362,6 +1362,17 @@
           </div>
 
           <div class="help-section">
+            <h3>🌡️ Außentemperatur-Abschaltung</h3>
+            <p>Wenn ein Außentemperatursensor konfiguriert ist, kann die Heizung automatisch unterdrückt werden, sobald die Außentemperatur einen Schwellenwert erreicht oder überschreitet.</p>
+            <ul>
+              <li><strong>Außentemperatursensor:</strong> Beliebiger Sensor oder Climate-Entity mit Temperaturattribut.</li>
+              <li><strong>Abschaltung aktiv:</strong> Muss aktiviert sein damit die Funktion greift.</li>
+              <li><strong>Schwellenwert:</strong> –20 °C bis +30 °C (Standard: 15 °C). Wird die Außentemperatur erreicht oder überschritten, wird die Heizung nicht eingeschaltet.</li>
+            </ul>
+            <div class="help-tip">💡 Raumthermostate verbleiben auf ihrem normalen Idle-Sollwert — kein Frostschutzmodus. Die Funktion reagiert in Echtzeit auf Sensorzustandsänderungen.</div>
+          </div>
+
+          <div class="help-section">
             <h3>🏠 Räume</h3>
             <ul>
               <li><strong>Thermostat:</strong> Der Heizkörperthermostat dieses Raums. Wird direkt gesteuert.</li>
@@ -1370,6 +1381,7 @@
               <li><strong>Zieltemperatur Tag / Nacht:</strong> Gewünschte Raumtemperatur je Tageszeit.</li>
               <li><strong>Away-Temperatur:</strong> Temperatur wenn der Nicht-Zuhause-Modus aktiv ist.</li>
               <li><strong>Wochenschema:</strong> Individuelle Zeitsteuerung für diesen Raum — überschreibt die globalen Zeiten.</li>
+              <li><strong>Kalibrierungsoffset:</strong> Korrigiert einen fixen Messfehler des Raumthermostats (–5 bis +5 °C, in 0,5 °C Schritten). Nützlich wenn das Thermostat z.B. systematisch 1 °C zu hoch regelt.</li>
             </ul>
           </div>
 
@@ -1446,6 +1458,17 @@
           </div>
 
           <div class="help-section">
+            <h3>🌡️ Outdoor Temperature Cutoff</h3>
+            <p>When an outdoor temperature sensor is configured, heating can be automatically suppressed once the outdoor temperature reaches or exceeds a threshold.</p>
+            <ul>
+              <li><strong>Outdoor temperature sensor:</strong> Any sensor or climate entity with a temperature attribute.</li>
+              <li><strong>Cutoff enabled:</strong> Must be active for the feature to take effect.</li>
+              <li><strong>Threshold:</strong> –20 °C to +30 °C (default: 15 °C). Once the outdoor temperature reaches or exceeds this value, heating is suppressed.</li>
+            </ul>
+            <div class="help-tip">💡 Room thermostats stay at their normal idle setpoint — no frost protection mode. The feature responds in real time to sensor state changes.</div>
+          </div>
+
+          <div class="help-section">
             <h3>🏠 Rooms</h3>
             <ul>
               <li><strong>Thermostat:</strong> The radiator thermostat for this room. Controlled directly by the integration.</li>
@@ -1454,6 +1477,7 @@
               <li><strong>Day / Night target temperature:</strong> Desired room temperature for each time of day.</li>
               <li><strong>Away temperature:</strong> Temperature when away mode is active.</li>
               <li><strong>Weekly schedule:</strong> Individual time control for this room — overrides the global times.</li>
+              <li><strong>Calibration offset:</strong> Corrects a fixed measurement error in the room thermostat (–5 to +5 °C, in 0.5 °C steps). Useful if the thermostat consistently regulates 1 °C too high, for example.</li>
             </ul>
           </div>
 
@@ -1486,6 +1510,6 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=3.2.3"></script>
 </body>
 </html>

@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.2.3] – 2026-03-21
+
+### 🔧 Fix: UI-Felder nach Updates nicht sichtbar (Browser-Cache)
+
+**DE:** Der Browser hat `app.js` aggressiv gecacht, wodurch neue UI-Felder nach einem Update nicht angezeigt wurden — obwohl der neue Code bereits aktiv war. Der Script-Tag enthält jetzt einen Versions-Parameter (`?v=3.2.3`), der den Browser zwingt, die neue Version zu laden.
+
+**EN:** The browser was aggressively caching `app.js`, causing newly added UI fields to remain invisible after an update — even though the new code was already active. The script tag now includes a version parameter (`?v=3.2.3`) that forces the browser to load the updated file.
+
+---
+
+### 🌡️ Neu: Thermostat-Kalibrierungsoffset pro Raum
+
+**DE:** Selbst-regelnde Thermostate (z. B. OCCU/Homematic, Better Thermostat) messen die Temperatur am Ventilkörper — dieser liegt durch das zurückfließende Kaltwasser systematisch ~1 °C unter der tatsächlichen Raumtemperatur. Das führt dazu, dass der Raum ~1 °C wärmer geregelt wird als gewünscht. Mit dem neuen Offset-Feld kann das pro Raum korrigiert werden (z. B. `−1,0 °C` → Thermostat erhält 18 °C als Sollwert → regelt auf 19 °C Raumtemperatur).
+
+**EN:** Self-regulating thermostats (e.g. OCCU/Homematic, Better Thermostat) measure temperature at the valve body — which reads systematically ~1 °C lower than actual room temperature due to cold return water. This causes rooms to be regulated ~1 °C warmer than desired. The new offset field allows per-room correction (e.g. `−1.0 °C` → thermostat receives 18 °C setpoint → regulates to 19 °C room temperature).
+
+**Einstellungen / Settings → Raumkarte:**
+- Thermostat-Kalibrierungsoffset (°C) / Thermostat calibration offset (°C): −5 bis +5 °C (Standard / Default: 0 °C)
+
+**Verhalten / Behavior:**
+- Der Offset wird nur auf den an den Thermostat gesendeten Sollwert angewendet
+- Die interne Steuerlogik (Heizen starten/stoppen) arbeitet weiterhin mit der unkorrigierten Raumtemperatur
+- Fensterkontakt-Pause (Frostschutztemperatur) bleibt unberührt
+
+---
+
+## [3.2.2] – 2026-03-21
+
+- chore: interne Versionsvorbereitung für 3.2.x-Releases
+
 ## [3.2.1] – 2026-03-20
 
 - feat: Außentemperatur-Abschaltung jetzt vollständig im Panel konfigurierbar (Sensor, Schwellenwert, Toggle)
