@@ -31,8 +31,10 @@ from .const import (
     CONF_ROOMS,
     CONF_ROOM_CIRCUIT_ID,
     CONF_ROOM_CONTROL_PROFILE,
+    CONF_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_WINDOW_SENSORS,
     DEFAULT_ROOM_CONTROL_PROFILE,
+    DEFAULT_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_CALLING_FOR_HEAT,
     CONF_ROOM_CYCLE_PEAK_TEMP,
@@ -290,6 +292,9 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "control_profile": room.get(
             "control_profile",
             DEFAULT_ROOM_CONTROL_PROFILE,
+            ),
+            CONF_ROOM_THERMOSTAT_OFFSET: float(
+                room.get(CONF_ROOM_THERMOSTAT_OFFSET, DEFAULT_ROOM_THERMOSTAT_OFFSET)
             ),
         }
 

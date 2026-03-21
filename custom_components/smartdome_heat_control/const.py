@@ -75,11 +75,13 @@ ADAPTIVE_BUCKET_MEDIUM_MAX_SECS = 2700  # 15–45 min
                                         # > 45 min = long bucket
 
 CONF_ROOM_CONTROL_PROFILE = "control_profile"
+CONF_ROOM_THERMOSTAT_OFFSET = "thermostat_offset"
 
 CONTROL_PROFILE_STANDARD = "standard"
 CONTROL_PROFILE_SELF_REGULATING = "self_regulating"
 
 DEFAULT_ROOM_CONTROL_PROFILE = CONTROL_PROFILE_STANDARD
+DEFAULT_ROOM_THERMOSTAT_OFFSET = 0.0
 
 # Steuertyp Hauptthermostat / Heizkreis (Thermostat oder Switch)
 CONF_MAIN_CONTROL_TYPE = "main_control_type"

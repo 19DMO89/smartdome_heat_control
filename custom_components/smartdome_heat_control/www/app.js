@@ -136,6 +136,7 @@ const I18N = {
     control_profile_self_regulating: "Self-regulating thermostat",
     room_target_day: "Day target temperature (°C)",
     room_target_night: "Night target temperature (°C)",
+    room_thermostat_offset: "Thermostat calibration offset (°C)",
     room_away_temperature: "Away temperature (°C)",
     room_day_start: "Day start",
     room_night_start: "Night start",
@@ -298,6 +299,7 @@ const I18N = {
     control_profile_self_regulating: "Selbst regelndes Thermostat",
     room_target_day: "Zieltemperatur Tag (°C)",
     room_target_night: "Zieltemperatur Nacht (°C)",
+    room_thermostat_offset: "Thermostat-Kalibrierungsoffset (°C)",
     room_away_temperature: "Away-Temperatur (°C)",
     room_day_start: "Tag-Start",
     room_night_start: "Nacht-Start",
@@ -685,6 +687,7 @@ function normalizeRoom(roomId, room) {
       return old ? [old] : [];
     })(),
     control_profile: normalizeControlProfile(room?.control_profile),
+    thermostat_offset: normalizeNumber(room?.thermostat_offset, 0.0),
     circuit_id: typeof room?.circuit_id === "string" ? room.circuit_id : "",
     target_day: normalizeNumber(room?.target_day, 21.0),
     target_night: normalizeNumber(room?.target_night, 18.0),
@@ -1682,6 +1685,13 @@ function createRoomCard(roomId, room) {
           room.target_night
         )}" />
       </div>
+
+      <div class="field">
+        <label>${escapeHtml(t("room_thermostat_offset"))}</label>
+        <input class="room-thermostat-offset" type="number" min="-5" max="5" step="0.5" value="${escapeHtml(
+          String(room.thermostat_offset ?? 0)
+        )}" />
+      </div>
     </div>
 
     <button type="button" class="ghost room-advanced-toggle" style="width:100%; margin-top:10px; font-size:12px; color:var(--muted); padding:8px;">
@@ -1995,6 +2005,10 @@ function collectFormState() {
       ).filter(Boolean),
       control_profile:
         node.querySelector(".room-control-profile")?.value || "standard",
+      thermostat_offset: normalizeNumber(
+        node.querySelector(".room-thermostat-offset")?.value,
+        0.0
+      ),
       target_day: node.querySelector(".room-target-day").value,
       target_night: node.querySelector(".room-target-night").value,
       away_temperature: node.querySelector(".room-away-temperature").value,
@@ -2046,6 +2060,7 @@ function addRoom() {
     window_sensor: "",
     window_sensors: [],
     control_profile: "standard",
+    thermostat_offset: 0.0,
     circuit_id: "",
     target_day: 21.0,
     target_night: 18.0,

@@ -44,6 +44,7 @@ from .const import (
     CONF_ROOMS,
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_CONTROL_PROFILE,
+    CONF_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_CYCLE_PEAK_TEMP,
     CONF_ROOM_CYCLE_PEAKED,
     CONF_ROOM_CYCLE_START_TS,
@@ -82,6 +83,7 @@ from .const import (
     DEFAULT_NIGHT_START,
     DEFAULT_ROOM_AWAY_TEMPERATURE,
     DEFAULT_ROOM_CONTROL_PROFILE,
+    DEFAULT_ROOM_THERMOSTAT_OFFSET,
     DEFAULT_ROOM_WEEKLY_SCHEDULE,
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
@@ -1293,6 +1295,13 @@ class SmartHeatingController:
                     target,
                 )
                 effective_state = ROOM_STATE_IDLE
+
+            if not room_state["pause_active"]:
+                thermostat_offset = float(
+                    room.get(CONF_ROOM_THERMOSTAT_OFFSET, DEFAULT_ROOM_THERMOSTAT_OFFSET)
+                )
+                if thermostat_offset != 0.0:
+                    room_target = room_target + thermostat_offset
 
             desired = self._round_to_step(
                 float(room_target),
