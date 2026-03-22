@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.2.5] – 2026-03-22
+
+### 🔧 Fix: Heizkreise ließen sich nach dem Speichern nicht löschen
+
+**DE:** Der `update_config`-Service behandelte das `circuits`-Feld als Deep-Merge-Patch statt als vollständige Ersetzung. Ein leeres `circuits: {}` vom Frontend wurde mit `deep_merge({circuit_abc: {...}}, {})` verarbeitet — ein leeres Dict hat keine Keys zu iterieren, daher blieben alle bestehenden Kreise unverändert im Backend. Gelöst durch die gleiche Behandlung wie `rooms`: circuits wird im Service immer vollständig ersetzt statt gemergt.
+
+**EN:** The `update_config` service was treating the `circuits` field as a deep-merge patch instead of a full replacement. An empty `circuits: {}` from the frontend was processed as `deep_merge({circuit_abc: {...}}, {})` — an empty dict has no keys to iterate, so all existing circuits remained unchanged in the backend. Fixed by applying the same handling as `rooms`: circuits is now always fully replaced in the service instead of merged.
+
+---
+
 ## [3.2.4] – 2026-03-22
 
 ### 🔧 Fix: Heizkreise ließen sich nach dem Anlegen nicht mehr löschen
