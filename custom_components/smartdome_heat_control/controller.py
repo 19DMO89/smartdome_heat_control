@@ -28,6 +28,7 @@ from .const import (
     DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
     CONF_CIRCUIT_CONTROL_TYPE,
     CONF_CIRCUIT_ENABLED,
+    CONF_CIRCUIT_LABEL,
     CONF_CIRCUIT_MAIN_SENSOR,
     CONF_CIRCUIT_MAIN_SWITCH,
     CONF_CIRCUIT_MAIN_THERMOSTAT,
@@ -909,10 +910,17 @@ class SmartHeatingController:
         mode = self._get_heating_mode()
         now_ts = dt_util.now().timestamp()
 
-        if pause_active or actual is None:
+        if pause_active:
             self._room_state[room_id] = ROOM_STATE_IDLE
             self._residual_heat_hold_until.pop(room_id, None)
             return ROOM_STATE_IDLE
+
+        if actual is None:
+            # Sensor vorübergehend nicht verfügbar: aktuellen Zustand einfrieren.
+            # Wenn der Raum bereits heizte, weiter heizen – nicht abrupt stoppen,
+            # nur weil ein Sensor kurz "unavailable" meldet.
+            # Heizung STARTEN ohne Sensor ist nicht erlaubt (bleibt IDLE).
+            return self._room_state.get(room_id, ROOM_STATE_IDLE)
 
         if current_state == ROOM_STATE_IDLE:
             if actual < (target - tolerance):
@@ -1171,15 +1179,29 @@ class SmartHeatingController:
                     else:
                         self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
                     continue
+                # RESIDUAL_HOLD zählt ebenfalls als "braucht Wärme":
+                # Im Energy-Modus halten Räume den Heizkreis nach Zielerreichung
+                # noch kurz aktiv, damit Restwärme verteilt wird.
                 any_circuit_needs_heat = any(
-                    rs["state"] == ROOM_STATE_HEATING
+                    rs["state"] in (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD)
                     for rs in circuit_room_states.values()
                 )
                 # Übergang heating → idle: _desired_targets löschen damit
                 # Befehl garantiert gesendet wird.
                 was_heating = self._circuit_heating_active.get(circuit_id, False)
                 if was_heating and not any_circuit_needs_heat:
+                    _LOGGER.debug(
+                        "Heizkreis '%s' schaltet auf IDLE. Raumzustände: %s",
+                        circuit.get(CONF_CIRCUIT_LABEL, circuit_id),
+                        {rid: rs["state"] for rid, rs in circuit_room_states.items()},
+                    )
                     self._desired_targets.pop(ct, None)
+                elif not was_heating and any_circuit_needs_heat:
+                    _LOGGER.debug(
+                        "Heizkreis '%s' schaltet auf HEATING. Raumzustände: %s",
+                        circuit.get(CONF_CIRCUIT_LABEL, circuit_id),
+                        {rid: rs["state"] for rid, rs in circuit_room_states.items()},
+                    )
                 self._circuit_heating_active[circuit_id] = any_circuit_needs_heat
 
                 if circuit_control_type == CONTROL_TYPE_SWITCH:

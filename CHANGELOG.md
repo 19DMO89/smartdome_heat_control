@@ -1,5 +1,28 @@
 # Changelog
 
+## [3.2.6] – 2026-03-22
+
+### 🔧 Fix: Heizkreis schaltet sich ab obwohl Räume Wärme brauchen
+
+**Ursache 1 – Sensor-Flackern:** Wenn ein Raumsensor kurz `unavailable` oder `unknown` zurückgab, wurde der Raum sofort auf `IDLE` gezwungen. Dadurch wurde `any_circuit_needs_heat = False` und der Heizkreis schaltete sich ab – auch wenn der Sensor nur für einen Moment nicht erreichbar war.
+
+**Fix:** Bei `actual = None` (Sensor nicht verfügbar) wird der aktuelle Raumzustand jetzt eingefroren statt auf IDLE zurückgesetzt. Ein Raum der bereits heizte bleibt in `HEATING`. Heating kann ohne Sensor nicht neu gestartet werden (bleibt `IDLE`), aber ein laufender Heizzyklus wird nicht abgebrochen.
+
+**Ursache 2 – `RESIDUAL_HOLD` nicht als "braucht Wärme" gewertet:** Im Energy-Modus wechseln Räume nach Zielerreichung in den Zustand `RESIDUAL_HOLD` (Restwärme-Nachlauf). Dieser Zustand wurde bisher nicht als "Heizkreis braucht Wärme" gewertet, was dazu führte, dass der Heizkreis abgeschaltet wurde bevor die Restwärme vollständig verteilt war.
+
+**Fix:** `ROOM_STATE_RESIDUAL_HOLD` wird jetzt gleichwertig mit `ROOM_STATE_HEATING` behandelt, wenn ermittelt wird ob ein Heizkreis aktiv bleiben soll.
+
+**Neu: Debug-Logging:** Jedes Mal wenn ein Heizkreis von HEATING auf IDLE (oder umgekehrt) wechselt, wird ein `DEBUG`-Log-Eintrag mit den aktuellen Raumzuständen geschrieben. Damit lässt sich in den HA-Logs präzise nachvollziehen warum ein Heizkreis ab- oder angeschaltet hat.
+
+---
+
+**EN – Root causes and fixes:**
+- **Sensor flicker:** A temporarily unavailable room sensor forced the room to `IDLE`, causing `any_circuit_needs_heat = False` and shutting off the circuit. Fixed by freezing the current room state when `actual is None` instead of forcing IDLE.
+- **`RESIDUAL_HOLD` not counted as "needs heat":** In energy mode, rooms transition to `RESIDUAL_HOLD` after reaching target. This state is now treated the same as `HEATING` for circuit-level decisions.
+- **Debug logging added:** Each circuit ON↔OFF transition now logs the per-room states at `DEBUG` level.
+
+---
+
 ## [3.2.5] – 2026-03-22
 
 ### 🔧 Fix: Heizkreise ließen sich nach dem Speichern nicht löschen
