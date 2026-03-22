@@ -1069,7 +1069,7 @@
                 </span>
               </div>
               <div class="toggle-right">
-                <input id="vacation_temperature" class="toggle-temp" type="number" min="5" max="20" step="0.1" />
+                <input id="vacation_temperature" class="toggle-temp" type="number" min="5" max="20" step="0.5" />
                 <input id="vacation_enabled" type="checkbox" />
               </div>
             </div>
@@ -1162,11 +1162,11 @@
               </div>
               <div class="field">
                 <label for="boost_delta" data-i18n="boost_delta">Boost-Delta (°C)</label>
-                <input id="boost_delta" type="number" min="0" step="0.1" />
+                <input id="boost_delta" type="number" min="0" step="0.5" />
               </div>
               <div class="field">
                 <label for="tolerance" data-i18n="tolerance">Toleranz (°C)</label>
-                <input id="tolerance" type="number" min="0" step="0.1" />
+                <input id="tolerance" type="number" min="0" step="0.5" />
               </div>
             </div>
           </div>
@@ -1357,6 +1357,7 @@
               <li>Erstelle einen Heizkreis über <strong>Heizkreis hinzufügen</strong> und weise ihm eine Heizpumpensteuerung zu.</li>
               <li>Weise Räume diesem Kreis über das Feld <strong>Heizkreis</strong> im Raum zu.</li>
               <li>Räume ohne Kreis verwenden weiterhin die globale Heizpumpensteuerung.</li>
+              <li>Über die Checkbox <strong>Heizkreis aktiv</strong> lässt sich ein Kreis deaktivieren — der Controller ignoriert ihn dann vollständig und schaltet seine Heizpumpensteuerung auf Minimum.</li>
             </ul>
             <div class="help-tip">💡 Wenn du nur einen Heizkreis hast, brauchst du hier nichts konfigurieren.</div>
           </div>
@@ -1378,7 +1379,8 @@
               <li><strong>Thermostat:</strong> Der Heizkörperthermostat dieses Raums. Wird direkt gesteuert.</li>
               <li><strong>Temperatursensor:</strong> Optionaler externer Sensor (z.B. Wandsensor). Wird für die Regelung verwendet wenn gesetzt.</li>
               <li><strong>Fensterkontakte:</strong> Beliebig viele Fenster- oder Türkontakte. Sobald <em>einer</em> offen meldet, pausiert die Heizung für diesen Raum.</li>
-              <li><strong>Zieltemperatur Tag / Nacht:</strong> Gewünschte Raumtemperatur je Tageszeit.</li>
+              <li><strong>Zieltemperatur Tag / Nacht:</strong> Gewünschte Raumtemperatur je Tageszeit (in 0,5 °C-Schritten).</li>
+              <li><strong>Nachtabsenkung aktiv:</strong> Checkbox direkt neben der Nacht-Zieltemperatur. Wenn deaktiviert, verwendet der Raum immer die Tages-Zieltemperatur — unabhängig von der Uhrzeit.</li>
               <li><strong>Away-Temperatur:</strong> Temperatur wenn der Nicht-Zuhause-Modus aktiv ist.</li>
               <li><strong>Wochenschema:</strong> Individuelle Zeitsteuerung für diesen Raum — überschreibt die globalen Zeiten.</li>
               <li><strong>Kalibrierungsoffset:</strong> Korrigiert einen fixen Messfehler des Raumthermostats (–5 bis +5 °C, in 0,5 °C Schritten). Nützlich wenn das Thermostat z.B. systematisch 1 °C zu hoch regelt.</li>
@@ -1453,6 +1455,7 @@
               <li>Create a circuit via <strong>Add heating circuit</strong> and assign a main thermostat to it.</li>
               <li>Assign rooms to the circuit using the <strong>Heating circuit</strong> field in the room card.</li>
               <li>Rooms without a circuit use the global main thermostat.</li>
+              <li>Use the <strong>Circuit active</strong> checkbox to disable a circuit — the controller will fully ignore it and set its pump controller to minimum.</li>
             </ul>
             <div class="help-tip">💡 If you have only one heating circuit, you don't need to configure anything here.</div>
           </div>
@@ -1474,7 +1477,8 @@
               <li><strong>Thermostat:</strong> The radiator thermostat for this room. Controlled directly by the integration.</li>
               <li><strong>Temperature sensor:</strong> Optional external sensor (e.g. wall sensor). Used for control logic when set.</li>
               <li><strong>Window sensors:</strong> Any number of window or door sensors. If <em>any one</em> reports open, heating is paused for that room.</li>
-              <li><strong>Day / Night target temperature:</strong> Desired room temperature for each time of day.</li>
+              <li><strong>Day / Night target temperature:</strong> Desired room temperature for each time of day (in 0.5 °C steps).</li>
+              <li><strong>Night setback active:</strong> Checkbox next to the night target temperature. When disabled, the room always uses the day target temperature regardless of the time of day.</li>
               <li><strong>Away temperature:</strong> Temperature when away mode is active.</li>
               <li><strong>Weekly schedule:</strong> Individual time control for this room — overrides the global times.</li>
               <li><strong>Calibration offset:</strong> Corrects a fixed measurement error in the room thermostat (–5 to +5 °C, in 0.5 °C steps). Useful if the thermostat consistently regulates 1 °C too high, for example.</li>
@@ -1510,6 +1514,6 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=3.2.3"></script>
+  <script type="module" src="./app.js?v=3.2.4"></script>
 </body>
 </html>

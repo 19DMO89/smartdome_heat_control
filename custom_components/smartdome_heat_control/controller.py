@@ -27,6 +27,7 @@ from .const import (
     DEFAULT_OUTDOOR_TEMP_CUTOFF,
     DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
     CONF_CIRCUIT_CONTROL_TYPE,
+    CONF_CIRCUIT_ENABLED,
     CONF_CIRCUIT_MAIN_SENSOR,
     CONF_CIRCUIT_MAIN_SWITCH,
     CONF_CIRCUIT_MAIN_THERMOSTAT,
@@ -51,6 +52,7 @@ from .const import (
     CONF_ROOM_CYCLE_TARGET_TEMP,
     CONF_ROOM_DAY_START,
     CONF_ROOM_ENABLED,
+    CONF_ROOM_NIGHT_SETBACK_ENABLED,
     CONF_ROOM_HEATING_CYCLE_ACTIVE,
     CONF_ROOM_LEARNED_OVERSHOOT,
     CONF_ROOM_LEARNED_OVERSHOOT_LONG,
@@ -562,7 +564,8 @@ class SmartHeatingController:
 
     def _base_target_for_room(self, room: dict[str, Any]) -> float:
         """Normale Tag-/Nacht-Solltemperatur."""
-        if self._is_night_for_room(room):
+        night_setback_enabled = bool(room.get(CONF_ROOM_NIGHT_SETBACK_ENABLED, True))
+        if night_setback_enabled and self._is_night_for_room(room):
             return float(room.get(CONF_ROOM_TARGET_NIGHT, DEFAULT_TARGET_NIGHT))
         return float(room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY))
 
@@ -1134,6 +1137,20 @@ class SmartHeatingController:
             # Multi-circuit mode: each circuit controls its own main thermostat or switch
             for circuit_id, circuit in circuits.items():
                 if not isinstance(circuit, dict):
+                    continue
+                if not circuit.get(CONF_CIRCUIT_ENABLED, True):
+                    # Disabled circuit: ensure its output is off
+                    circuit_control_type = circuit.get(CONF_CIRCUIT_CONTROL_TYPE, "thermostat")
+                    if circuit_control_type == CONTROL_TYPE_SWITCH:
+                        ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_SWITCH))
+                    else:
+                        ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
+                    if ct:
+                        self._desired_targets.pop(ct, None)
+                        if circuit_control_type == CONTROL_TYPE_SWITCH:
+                            self._turn_switch_if_needed(ct, False)
+                        else:
+                            self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
                     continue
                 circuit_control_type = circuit.get(CONF_CIRCUIT_CONTROL_TYPE, "thermostat")
                 if circuit_control_type == CONTROL_TYPE_SWITCH:

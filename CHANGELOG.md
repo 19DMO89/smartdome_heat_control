@@ -1,5 +1,39 @@
 # Changelog
 
+## [3.2.4] – 2026-03-22
+
+### 🔧 Fix: Heizkreise ließen sich nach dem Anlegen nicht mehr löschen
+
+**DE:** Ein Fehler im Live-Update-Mechanismus führte dazu, dass gelöschte Heizkreise sofort wieder im Panel auftauchten, sobald der Controller einen Room-State-Update sendete (was sekündlich passieren kann). Die Ursache: Der WebSocket-Handler hat bei jedem Config-Entity-Update `state.config` vollständig aus dem Backend überschrieben — ohne zu berücksichtigen, ob der User gerade ungespeicherte Änderungen an Heizkreisen hatte. Gelöst durch einen `pendingCircuits`-Mechanismus, der ausstehende Änderungen bei eingehenden Live-Updates konserviert, bis der User explizit speichert.
+
+**EN:** A bug in the live-update mechanism caused deleted heating circuits to reappear in the panel as soon as the controller sent a room-state update (which can happen every second). The root cause: the WebSocket handler was completely overwriting `state.config` from the backend on every config-entity update — without preserving unsaved circuit changes. Fixed via a `pendingCircuits` mechanism that preserves pending changes during incoming live updates until the user explicitly saves.
+
+---
+
+### ✅ Neu: Heizkreise aktivierbar / deaktivierbar
+
+**DE:** Jeder Heizkreis kann über eine Checkbox im Panel deaktiviert werden. Ein deaktivierter Kreis wird vom Controller vollständig ignoriert — seine Heizpumpensteuerung wird auf Minimum gesetzt bzw. der Switch ausgeschaltet. Die Einstellung wird persistiert und überlebt einen Neustart.
+
+**EN:** Each heating circuit can now be disabled via a checkbox in the panel. A disabled circuit is fully ignored by the controller — its pump controller is set to minimum temperature or the switch is turned off. The setting is persisted and survives restarts.
+
+---
+
+### 🌙 Neu: Nachtabsenkung pro Raum aktivierbar / deaktivierbar
+
+**DE:** Pro Raum kann die Nachtabsenkung über eine Checkbox direkt neben der Nacht-Zieltemperatur deaktiviert werden. Ist die Nachtabsenkung deaktiviert, verwendet der Raum unabhängig von der Uhrzeit immer die Tages-Zieltemperatur. Die Felder für Nacht-Zieltemperatur und Nacht-Startzeit werden optisch ausgegraut wenn die Funktion deaktiviert ist.
+
+**EN:** Night setback can now be disabled per room via a checkbox directly next to the night target temperature. When disabled, the room always uses the day target temperature regardless of the time of day. The night target temperature and night start time fields are visually greyed out when the feature is disabled.
+
+---
+
+### 🌡️ Temperatureingaben in 0,5 °C-Schritten
+
+**DE:** Alle Temperaturfelder im Panel (Zieltemperatur Tag/Nacht, Away-Temperatur, Urlaubstemperatur, Wochenplan, Boost-Delta, Toleranz) verwenden jetzt 0,5 °C-Schritte statt 0,1 °C. Das entspricht der praktischen Auflösung gängiger Heizkörperthermostate.
+
+**EN:** All temperature inputs in the panel (day/night target, away temperature, vacation temperature, weekly schedule, boost delta, tolerance) now use 0.5 °C steps instead of 0.1 °C, matching the practical resolution of common radiator thermostats.
+
+---
+
 ## [3.2.3] – 2026-03-21
 
 ### 🔧 Fix: UI-Felder nach Updates nicht sichtbar (Browser-Cache)

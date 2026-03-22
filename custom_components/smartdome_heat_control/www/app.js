@@ -136,6 +136,7 @@ const I18N = {
     control_profile_self_regulating: "Self-regulating thermostat",
     room_target_day: "Day target temperature (°C)",
     room_target_night: "Night target temperature (°C)",
+    room_night_setback_enabled: "Night setback active",
     room_thermostat_offset: "Thermostat calibration offset (°C)",
     room_away_temperature: "Away temperature (°C)",
     room_day_start: "Day start",
@@ -192,6 +193,7 @@ const I18N = {
     circuit_thermostat: "Heating pump controller",
     circuit_sensor: "Temperature sensor",
     circuit_delete: "Delete",
+    circuit_enabled: "Circuit active",
     room_circuit: "Heating circuit",
     circuit_none: "— No circuit (global) —",
 
@@ -299,6 +301,7 @@ const I18N = {
     control_profile_self_regulating: "Selbst regelndes Thermostat",
     room_target_day: "Zieltemperatur Tag (°C)",
     room_target_night: "Zieltemperatur Nacht (°C)",
+    room_night_setback_enabled: "Nachtabsenkung aktiv",
     room_thermostat_offset: "Thermostat-Kalibrierungsoffset (°C)",
     room_away_temperature: "Away-Temperatur (°C)",
     room_day_start: "Tag-Start",
@@ -355,6 +358,7 @@ const I18N = {
     circuit_thermostat: "Heizpumpensteuerung",
     circuit_sensor: "Temperatursensor",
     circuit_delete: "Löschen",
+    circuit_enabled: "Heizkreis aktiv",
     room_circuit: "Heizkreis",
     circuit_none: "— Kein Kreis (global) —",
 
@@ -477,6 +481,7 @@ function initEls() {
 
 let unsubscribeStateChanged = null;
 let isEditing = false;
+let pendingCircuits = null;
 let activeEntityPickerId = null;
 let scheduleRoomId = null;
 let currentScheduleDay = "monday";
@@ -696,6 +701,7 @@ function normalizeRoom(roomId, room) {
     day_start: normalizeTime(room?.day_start, ""),
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
+    night_setback_enabled: room?.night_setback_enabled !== false,
     learned_overshoot: normalizeNumber(room?.learned_overshoot, 0.3),
     learned_overshoot_short: normalizeNumber(room?.learned_overshoot_short, 0.2),
     learned_overshoot_medium: normalizeNumber(room?.learned_overshoot_medium, 0.4),
@@ -719,6 +725,7 @@ function normalizeCircuit(circuitId, circuit) {
       typeof circuit?.main_switch === "string" ? circuit.main_switch : "",
     main_sensor:
       typeof circuit?.main_sensor === "string" ? circuit.main_sensor : "",
+    enabled: circuit?.enabled !== false,
   };
 }
 
@@ -1045,9 +1052,13 @@ function addCircuit() {
   const circuitId = generateCircuitId();
   state.config.circuits[circuitId] = {
     label: "",
+    control_type: "thermostat",
     main_thermostat: "",
+    main_switch: "",
     main_sensor: "",
+    enabled: true,
   };
+  pendingCircuits = { ...state.config.circuits };
   renderCircuits();
 }
 
@@ -1065,11 +1076,15 @@ function createCircuitCard(circuitId, circuit) {
         value="${escapeHtml(circuit.label || "")}"
         style="flex:1; margin:0;"
       />
+      <label class="toggle-label" style="display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;">
+        <input type="checkbox" class="circuit-enabled-checkbox" ${circuit.enabled !== false ? "checked" : ""}>
+        ${escapeHtml(t("circuit_enabled"))}
+      </label>
       <button type="button" class="danger circuit-delete-btn" style="padding:8px 12px; font-size:12px;">
         ${escapeHtml(t("circuit_delete"))}
       </button>
     </div>
-    <div class="circuit-card-fields">
+    <div class="circuit-card-fields"${circuit.enabled === false ? ' style="opacity:0.5;pointer-events:none;"' : ""}>
       <div class="field full">
         <label>${escapeHtml(t("main_control_type"))}</label>
         <select class="circuit-control-type">
@@ -1098,6 +1113,14 @@ function createCircuitCard(circuitId, circuit) {
     card.querySelector(".circuit-thermostat-field").style.display = isSwitch ? "none" : "";
     card.querySelector(".circuit-switch-field").style.display = isSwitch ? "" : "none";
     card.querySelector(".circuit-sensor-field").style.display = isSwitch ? "none" : "";
+  });
+
+  const enabledCheckbox = card.querySelector(".circuit-enabled-checkbox");
+  const fieldsDiv = card.querySelector(".circuit-card-fields");
+  enabledCheckbox.addEventListener("change", () => {
+    const enabled = enabledCheckbox.checked;
+    fieldsDiv.style.opacity = enabled ? "" : "0.5";
+    fieldsDiv.style.pointerEvents = enabled ? "" : "none";
   });
 
   createEntityPicker({
@@ -1132,6 +1155,7 @@ function createCircuitCard(circuitId, circuit) {
 
   card.querySelector(".circuit-delete-btn").addEventListener("click", () => {
     delete state.config.circuits[circuitId];
+    pendingCircuits = { ...state.config.circuits };
     // clear circuit_id on rooms that referenced this circuit
     for (const room of Object.values(state.config.rooms)) {
       if (room.circuit_id === circuitId) {
@@ -1674,14 +1698,20 @@ function createRoomCard(roomId, room) {
 
       <div class="field">
         <label>${escapeHtml(t("room_target_day"))}</label>
-        <input class="room-target-day" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+        <input class="room-target-day" type="number" min="5" max="30" step="0.5" value="${escapeHtml(
           room.target_day
         )}" />
       </div>
 
-      <div class="field">
-        <label>${escapeHtml(t("room_target_night"))}</label>
-        <input class="room-target-night" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+      <div class="field room-night-target-wrap"${room.night_setback_enabled === false ? ' style="opacity:0.5;pointer-events:none;"' : ""}>
+        <label style="display:flex;align-items:center;gap:8px;">
+          ${escapeHtml(t("room_target_night"))}
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:normal;white-space:nowrap;">
+            <input type="checkbox" class="room-night-setback-enabled" ${room.night_setback_enabled !== false ? "checked" : ""} style="pointer-events:auto;">
+            ${escapeHtml(t("room_night_setback_enabled"))}
+          </label>
+        </label>
+        <input class="room-target-night" type="number" min="5" max="30" step="0.5" value="${escapeHtml(
           room.target_night
         )}" />
       </div>
@@ -1722,7 +1752,7 @@ function createRoomCard(roomId, room) {
 
         <div class="field">
           <label>${escapeHtml(t("room_away_temperature"))}</label>
-          <input class="room-away-temperature" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+          <input class="room-away-temperature" type="number" min="5" max="30" step="0.5" value="${escapeHtml(
             room.away_temperature
           )}" />
         </div>
@@ -1734,7 +1764,7 @@ function createRoomCard(roomId, room) {
           )}" />
         </div>
 
-        <div class="field">
+        <div class="field room-night-start-wrap"${room.night_setback_enabled === false ? ' style="opacity:0.5;pointer-events:none;"' : ""}>
           <label>${escapeHtml(t("room_night_start"))}</label>
           <input class="room-night-start" type="time" value="${escapeHtml(
             room.night_start || ""
@@ -1802,6 +1832,23 @@ function createRoomCard(roomId, room) {
       ? t("room_advanced_show")
       : t("room_advanced_hide");
   });
+
+  const nightSetbackCheckbox = wrapper.querySelector(".room-night-setback-enabled");
+  const nightTargetWrap = wrapper.querySelector(".room-night-target-wrap");
+  const nightStartWrap = wrapper.querySelector(".room-night-start-wrap");
+  function updateNightSetbackVisibility() {
+    const enabled = nightSetbackCheckbox.checked;
+    if (nightTargetWrap) {
+      nightTargetWrap.style.opacity = enabled ? "" : "0.5";
+      nightTargetWrap.style.pointerEvents = enabled ? "" : "none";
+      nightSetbackCheckbox.style.pointerEvents = "auto";
+    }
+    if (nightStartWrap) {
+      nightStartWrap.style.opacity = enabled ? "" : "0.5";
+      nightStartWrap.style.pointerEvents = enabled ? "" : "none";
+    }
+  }
+  nightSetbackCheckbox.addEventListener("change", updateNightSetbackVisibility);
 
   deleteBtn.addEventListener("click", () => {
     delete state.config.rooms[roomId];
@@ -2016,6 +2063,7 @@ function collectFormState() {
       day_start: node.querySelector(".room-day-start").value || "",
       night_start: node.querySelector(".room-night-start").value || "",
       enabled: node.querySelector(".room-enabled").checked,
+      night_setback_enabled: node.querySelector(".room-night-setback-enabled")?.checked !== false,
       learned_overshoot: existingRoom.learned_overshoot,
       circuit_id: node.querySelector(".room-circuit-id")?.value || existingRoom.circuit_id || "",
     });
@@ -2039,6 +2087,7 @@ function collectFormState() {
         getEntityPickerValue(`circuit_${circuitId}_switch_picker`) || "",
       main_sensor:
         getEntityPickerValue(`circuit_${circuitId}_sensor_picker`) || "",
+      enabled: node.querySelector(".circuit-enabled-checkbox")?.checked !== false,
     });
   }
   cfg.circuits = circuits;
@@ -2069,6 +2118,7 @@ function addRoom() {
     day_start: "",
     night_start: "",
     enabled: true,
+    night_setback_enabled: true,
     learned_overshoot: 0.3,
   };
   renderRooms();
@@ -2102,6 +2152,7 @@ function applyGlobalTimesToAllRooms() {
 async function saveConfig() {
   try {
     isEditing = false;
+    pendingCircuits = null;
     setButtonsDisabled(true);
     setStatus(t("status_save_loading"), "warn");
 
@@ -2241,7 +2292,7 @@ function renderScheduleEditor() {
       <input class="schedule-time" type="time" value="${escapeHtml(
         entry.start
       )}" />
-      <input class="schedule-temp" type="number" min="5" max="30" step="0.1" value="${escapeHtml(
+      <input class="schedule-temp" type="number" min="5" max="30" step="0.5" value="${escapeHtml(
         entry.temperature
       )}" />
       <button type="button" class="danger schedule-delete">✕</button>
@@ -2481,7 +2532,8 @@ function enableEditTracking() {
       e.target.closest(".room") ||
       e.target.closest(".fields") ||
       e.target.closest(".modal-content") ||
-      e.target.closest(".entity-picker")
+      e.target.closest(".entity-picker") ||
+      e.target.closest(".circuit-card")
     ) {
       isEditing = true;
     }
@@ -2495,7 +2547,8 @@ function enableEditTracking() {
         (!active.closest(".room") &&
           !active.closest(".fields") &&
           !active.closest(".modal-content") &&
-          !active.closest(".entity-picker"))
+          !active.closest(".entity-picker") &&
+          !active.closest(".circuit-card"))
       ) {
         isEditing = false;
       }
@@ -2556,6 +2609,9 @@ async function setupLiveUpdates() {
 
       if (entity.entity_id === CONFIG_ENTITY_ID) {
         state.config = normalizeConfig(entity.attributes || {});
+        if (pendingCircuits !== null) {
+          state.config.circuits = pendingCircuits;
+        }
         renderGlobalSettings();
 
         if (!isEditing) {
