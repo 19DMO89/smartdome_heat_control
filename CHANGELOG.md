@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.2.7] – 2026-03-22
+
+### 🔧 Fix: Konfiguration springt nach „Konfiguration übernehmen" zurück
+
+**Zwei Race-Conditions behoben:**
+
+**Bug A – Bearbeitungs-Override:** Im WebSocket `state_changed`-Handler wurde `renderGlobalSettings()` bisher immer aufgerufen – auch wenn `isEditing = true`. Jede Minute, wenn der Controller `_evaluate()` ausführt und den Zustand pusht, wurden die laufenden Änderungen des Nutzers in den globalen Einstellungen kommentarlos überschrieben.
+
+**Bug B – Save-Race-Condition:** In `saveConfig()` wurde `isEditing = false` *vor* dem `await callService(...)` gesetzt. Traf während dieser Wartezeit ein veraltetes `state_changed`-Event ein, renderte das Frontend kurz die alte Konfiguration – sichtbar als „Zurückspringen".
+
+**Fix:**
+- Neues `isSaving`-Flag, das während des gesamten Save-Vorgangs gesetzt ist.
+- Im `state_changed`-Handler: Config wird nur neu gerendert wenn `!isSaving && !isEditing`.
+- `room_states` (Live-Heizstatus-Badges) werden weiterhin immer aktualisiert.
+
+---
+
+**EN:** Fixed two race conditions causing the config to visually revert after saving. `renderGlobalSettings()` was always called in `state_changed` even during editing (Bug A). `isEditing` was cleared before `await callService`, allowing stale events to overwrite the UI during the save (Bug B). New `isSaving` flag blocks config re-renders during save; live `room_states` badges still update normally.
+
+---
+
 ## [3.2.6] – 2026-03-22
 
 ### 🔧 Fix: Heizkreis schaltet sich ab obwohl Räume Wärme brauchen

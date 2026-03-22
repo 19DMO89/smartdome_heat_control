@@ -481,6 +481,7 @@ function initEls() {
 
 let unsubscribeStateChanged = null;
 let isEditing = false;
+let isSaving = false;
 let pendingCircuits = null;
 let activeEntityPickerId = null;
 let scheduleRoomId = null;
@@ -2152,6 +2153,7 @@ function applyGlobalTimesToAllRooms() {
 async function saveConfig() {
   try {
     isEditing = false;
+    isSaving = true;
     pendingCircuits = null;
     setButtonsDisabled(true);
     setStatus(t("status_save_loading"), "warn");
@@ -2171,6 +2173,7 @@ async function saveConfig() {
     console.error(error);
     setStatus(`${t("status_save_failed")}: ${error.message}`, "err");
   } finally {
+    isSaving = false;
     setButtonsDisabled(false);
   }
 }
@@ -2608,15 +2611,27 @@ async function setupLiveUpdates() {
       updateStateInMemory(entity);
 
       if (entity.entity_id === CONFIG_ENTITY_ID) {
-        state.config = normalizeConfig(entity.attributes || {});
+        // room_states werden immer aktualisiert (Live-Heizstatus-Anzeige),
+        // aber Config-Render nur wenn nicht gerade gespeichert oder bearbeitet wird.
+        const incoming = normalizeConfig(entity.attributes || {});
+
+        // Live-Heizstatus-Badges immer aktuell halten
+        if (incoming.room_states) {
+          state.config.room_states = incoming.room_states;
+        }
+
+        // Konfiguration NICHT überschreiben wenn gerade gespeichert oder
+        // bearbeitet wird – verhindert Race-Condition und verlorene Edits.
+        if (isSaving || isEditing) {
+          return;
+        }
+
+        state.config = incoming;
         if (pendingCircuits !== null) {
           state.config.circuits = pendingCircuits;
         }
         renderGlobalSettings();
-
-        if (!isEditing) {
-          renderRooms();
-        }
+        renderRooms();
 
         return;
       }
