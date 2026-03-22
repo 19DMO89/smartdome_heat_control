@@ -18,6 +18,7 @@ from homeassistant.helpers import config_validation as cv
 from .const import (
     CONF_AWAY_ENABLED,
     CONF_CIRCUIT_CONTROL_TYPE,
+    CONF_CIRCUIT_ENABLED,
     CONF_CIRCUIT_LABEL,
     CONF_CIRCUIT_MAIN_SENSOR,
     CONF_CIRCUIT_MAIN_SWITCH,
@@ -37,6 +38,7 @@ from .const import (
     DEFAULT_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_CALLING_FOR_HEAT,
+    CONF_ROOM_NIGHT_SETBACK_ENABLED,
     CONF_ROOM_CYCLE_PEAK_TEMP,
     CONF_ROOM_CYCLE_START_TS,
     CONF_ROOM_CYCLE_TARGET_TEMP,
@@ -260,6 +262,7 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "day_start": room.get("day_start", ""),
             "night_start": room.get("night_start", ""),
             "enabled": room.get("enabled", True),
+            CONF_ROOM_NIGHT_SETBACK_ENABLED: bool(room.get(CONF_ROOM_NIGHT_SETBACK_ENABLED, True)),
             CONF_ROOM_CALLING_FOR_HEAT: room.get(CONF_ROOM_CALLING_FOR_HEAT, False),
             CONF_ROOM_LEARNED_OVERSHOOT: room.get(
                 CONF_ROOM_LEARNED_OVERSHOOT,
@@ -316,6 +319,7 @@ def _normalize_circuits(circuits: Any) -> dict[str, dict[str, Any]]:
             CONF_CIRCUIT_MAIN_THERMOSTAT: circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT, ""),
             CONF_CIRCUIT_MAIN_SWITCH: circuit.get(CONF_CIRCUIT_MAIN_SWITCH, ""),
             CONF_CIRCUIT_MAIN_SENSOR: circuit.get(CONF_CIRCUIT_MAIN_SENSOR, ""),
+            CONF_CIRCUIT_ENABLED: bool(circuit.get(CONF_CIRCUIT_ENABLED, True)),
         }
     return normalized
 

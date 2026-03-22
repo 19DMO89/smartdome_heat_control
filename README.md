@@ -43,7 +43,8 @@ Each room can be configured individually with:
 
 - Radiator thermostat *(optional — see Sensor-only Rooms below)*
 - Temperature sensor
-- Day and night target temperatures
+- Day and night target temperatures (adjustable in 0.5 °C steps)
+- Night setback enable/disable per room
 - Day/night schedule or weekly schedule
 - Window contact sensor
 - Away temperature
@@ -194,6 +195,8 @@ For buildings with **multiple independent heating circuits** (e.g. underfloor + 
 |---|---|
 | **No circuits configured** | Works with the global main controller setting for all rooms. |
 | **Circuits configured** | Each circuit has its own main controller. Rooms are assigned to circuits and grouped accordingly in the UI. Each circuit can independently use a thermostat or a switch. |
+
+Each circuit can be **enabled or disabled** individually. A disabled circuit is fully ignored by the controller — its pump controller is set to minimum temperature or its switch is turned off.
 
 > Circuits are only needed if the building has multiple physically separate heating systems. For most homes, no circuits need to be configured.
 
