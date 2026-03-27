@@ -121,7 +121,7 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_MAIN_THERMOSTAT): _climate_selector(),
+                vol.Optional(CONF_MAIN_THERMOSTAT): _climate_selector(),
                 vol.Optional(CONF_MAIN_SENSOR): _temperature_sensor_selector(),
                 vol.Optional(
                     CONF_BOOST_DELTA,
@@ -285,7 +285,7 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required(
+                vol.Optional(
                     CONF_MAIN_THERMOSTAT,
                     default=data.get(CONF_MAIN_THERMOSTAT),
                 ): _climate_selector(),
