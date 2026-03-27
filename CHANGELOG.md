@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.2.8] – 2026-03-27
+
+### 🔧 Fix: Heizpumpensteuerung ist kein Pflichtfeld mehr
+
+**Problem:** Beim Einrichten der Integration erschien die Fehlermeldung „Nicht alle Pflichtfelder ausgefüllt", obwohl laut Dokumentation das Feld „Heizpumpensteuerung" leer gelassen werden kann. Die Konfiguration ließ sich dadurch nicht abschließen.
+
+**Ursache:** `CONF_MAIN_THERMOSTAT` war in `config_flow.py` als `vol.Required` deklariert – sowohl im initialen Setup-Schritt als auch in den globalen Einstellungen. Das machte das Feld auf Voluptuous-Ebene zum Pflichtfeld, obwohl der Controller intern bereits `None` korrekt behandelt.
+
+**Fix:** Beide Vorkommen auf `vol.Optional` geändert. Das Feld kann jetzt leer gelassen werden; die Integration funktioniert dann ohne zentrale Heizpumpensteuerung (z. B. bei reiner Raumthermostat-Steuerung).
+
+---
+
+**EN:** Fixed a validation error that prevented completing the setup when "Heizpumpensteuerung" was left empty. The field was declared as `vol.Required` in both the initial config step and the global settings step, making it mandatory at the form level even though the controller already handled `None` correctly. Changed both occurrences to `vol.Optional`.
+
+---
+
 ## [3.2.7] – 2026-03-22
 
 ### 🔧 Fix: Konfiguration springt nach „Konfiguration übernehmen" zurück
