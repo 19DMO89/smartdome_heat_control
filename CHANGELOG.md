@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.3.3] – 2026-04-02
+
+### 🔧 Fix: app.js wurde vom Browser gecacht – neue Features nicht sichtbar
+
+`app.js` wurde mit einer hardcodierten Version `?v=3.2.6` geladen. Der Browser hat dadurch immer die alte Datei aus dem Cache verwendet, egal welche Version installiert war.
+
+**Fix:** Die Version wird jetzt dynamisch aus dem URL-Parameter von `index.html` ausgelesen (`?v=3.3.x`) und an den `app.js`-Load weitergegeben. Jede neue Version erzwingt automatisch einen Cache-Reload.
+
+---
+
 ## [3.3.2] – 2026-04-02
 
 ### 🔧 Fix: Konfiguration wird nach Heizzyklus überschrieben (Bug #57)
