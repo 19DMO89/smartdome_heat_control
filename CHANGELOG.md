@@ -1,5 +1,40 @@
 # Changelog
 
+## [3.3.0] – 2026-04-02
+
+### ✨ Feature: Globale Temperatureinstellungen (#54)
+
+Neuer Abschnitt **"Temperaturen"** in der globalen Seitenleiste mit drei Feldern:
+- **Zieltemperatur Tag** – globaler Standardwert für den Tagbetrieb
+- **Zieltemperatur Nacht** – globaler Standardwert für die Nachtabsenkung
+- **Away-Temperatur** – globaler Standardwert für den Abwesenheitsmodus
+
+Ein neuer Button **"Globale Temperaturen in alle Räume übernehmen"** setzt alle Raumwerte auf die globalen Werte. Neue Räume übernehmen beim Anlegen automatisch die globalen Werte.
+
+---
+
+### ✨ Feature: Reihenfolge der Räume (#53)
+
+Räume können nun per **Drag & Drop** (≡ Handle) neu angeordnet werden. Die Reihenfolge wird beim Speichern persistiert.
+
+Zusätzlich ist jede Raumkarte über den **▼/▶ Button** oben rechts ein- und ausklappbar, um die Übersicht bei vielen Räumen zu verbessern.
+
+---
+
+### ✨ Feature: Heizmodus pro Raum (#56)
+
+Jede Raumkarte hat nun einen **Heizmodus-Selector** direkt unter dem Raumtitel:
+- **Global** (Standard) – übernimmt den globalen Heizmodus
+- **Comfort / Balanced / Energy / Adaptive** – raumspezifische Überschreibung
+
+Die Heizlogik im Controller verwendet den Raum-Modus wenn gesetzt, sonst den globalen Modus.
+
+---
+
+**EN:** Three new features: global temperature defaults with "apply to all rooms" button (#54); room drag-and-drop reordering + collapsible room cards (#53); per-room heating mode override with "Global" fallback (#56).
+
+---
+
 ## [3.2.8] – 2026-03-27
 
 ### 🔧 Fix: Heizpumpensteuerung ist kein Pflichtfeld mehr

@@ -118,6 +118,17 @@ const I18N = {
     footer_note:
       'The apply button sets for all rooms: <strong>Day start = global day start</strong> and <strong>Night start = global night start</strong>.',
 
+    section_temperatures: "Temperatures",
+    global_target_day: "Day target temperature (°C)",
+    global_target_night: "Night target temperature (°C)",
+    global_away_temperature: "Away temperature (°C)",
+    apply_temps: "Apply global temperatures to all rooms",
+    footer_note_temps: "The apply button overwrites the day target, night target, and away temperature for all rooms with the global values.",
+    status_apply_temps_ok: "Global temperatures applied to all rooms.",
+
+    room_heating_mode: "Heating mode",
+    room_mode_global: "Global",
+
     rooms_title: "Rooms",
     rooms_subtitle:
       "Scrollable on the right so the global settings remain visible.",
@@ -283,6 +294,17 @@ const I18N = {
     footer_note:
       'Der Übernehmen-Button setzt für alle Räume: <strong>Tag-Start = globale Tag-Startzeit</strong> und <strong>Nacht-Start = globale Nacht-Startzeit</strong>.',
 
+    section_temperatures: "Temperaturen",
+    global_target_day: "Zieltemperatur Tag (°C)",
+    global_target_night: "Zieltemperatur Nacht (°C)",
+    global_away_temperature: "Away-Temperatur (°C)",
+    apply_temps: "Globale Temperaturen in alle Räume übernehmen",
+    footer_note_temps: "Der Übernehmen-Button setzt für alle Räume die Zieltemperatur Tag, Nacht und Away auf die globalen Werte.",
+    status_apply_temps_ok: "Globale Temperaturen wurden in alle Räume übernommen.",
+
+    room_heating_mode: "Heizmodus",
+    room_mode_global: "Global",
+
     rooms_title: "Räume",
     rooms_subtitle:
       "Rechts scrollbar, damit die Haupteinstellungen sichtbar bleiben.",
@@ -402,6 +424,9 @@ const DEFAULTS = {
   outdoor_sensor: "",
   outdoor_temp_cutoff_enabled: false,
   outdoor_temp_cutoff: 15.0,
+  global_target_day: 21.0,
+  global_target_night: 18.0,
+  global_away_temperature: 17.0,
   rooms: {},
   circuits: {},
 };
@@ -416,6 +441,8 @@ const state = {
 };
 
 const entityPickerState = new Map();
+const roomCollapsedState = new Map();
+let dragSrcRoomId = null;
 
 let els = {};
 
@@ -427,6 +454,10 @@ function initEls() {
     reloadRoomsBtn: document.getElementById("reloadRoomsBtn"),
     addRoomBtn: document.getElementById("addRoomBtn"),
     applyTimesToRoomsBtn: document.getElementById("applyTimesToRoomsBtn"),
+    applyTempsToRoomsBtn: document.getElementById("applyTempsToRoomsBtn"),
+    globalTargetDay: document.getElementById("global_target_day"),
+    globalTargetNight: document.getElementById("global_target_night"),
+    globalAwayTemperature: document.getElementById("global_away_temperature"),
     enabled: document.getElementById("enabled"),
     mainControlType: document.getElementById("main_control_type"),
     mainThermostatField: document.getElementById("main_thermostat_field"),
@@ -707,6 +738,8 @@ function normalizeRoom(roomId, room) {
     learned_overshoot_short: normalizeNumber(room?.learned_overshoot_short, 0.2),
     learned_overshoot_medium: normalizeNumber(room?.learned_overshoot_medium, 0.4),
     learned_overshoot_long: normalizeNumber(room?.learned_overshoot_long, 0.7),
+    order: typeof room?.order === "number" ? room.order : 0,
+    room_heating_mode: typeof room?.room_heating_mode === "string" ? room.room_heating_mode : "",
   };
 }
 
@@ -766,6 +799,9 @@ function normalizeConfig(input) {
     DEFAULTS.vacation_temperature
   );
   cfg.away_enabled = cfg.away_enabled === true;
+  cfg.global_target_day = normalizeNumber(cfg.global_target_day, DEFAULTS.global_target_day);
+  cfg.global_target_night = normalizeNumber(cfg.global_target_night, DEFAULTS.global_target_night);
+  cfg.global_away_temperature = normalizeNumber(cfg.global_away_temperature, DEFAULTS.global_away_temperature);
 
   if (!cfg.rooms || typeof cfg.rooms !== "object") {
     cfg.rooms = {};
@@ -1573,6 +1609,16 @@ function renderGlobalSettings() {
     );
   }
 
+  if (els.globalTargetDay) {
+    els.globalTargetDay.value = String(normalizeNumber(cfg.global_target_day, DEFAULTS.global_target_day));
+  }
+  if (els.globalTargetNight) {
+    els.globalTargetNight.value = String(normalizeNumber(cfg.global_target_night, DEFAULTS.global_target_night));
+  }
+  if (els.globalAwayTemperature) {
+    els.globalAwayTemperature.value = String(normalizeNumber(cfg.global_away_temperature, DEFAULTS.global_away_temperature));
+  }
+
   createModePicker(cfg.heating_mode);
   renderCircuits();
   updateMainLiveStatus();
@@ -1615,53 +1661,67 @@ function createRoomCard(roomId, room) {
   const wrapper = document.createElement("div");
   wrapper.className = "room";
   wrapper.dataset.roomId = roomId;
+  wrapper.draggable = true;
 
+  const isCollapsed = roomCollapsedState.get(roomId) === true;
   const areaText = room.area_id ? `Area: ${room.area_id}` : t("room_manual");
   const roomMeta = roomTitleMeta(room, roomId);
   const isAdaptive = getModePickerValue() === "adaptive";
   const ovShort = normalizeNumber(room.learned_overshoot_short, 0.2);
   const ovMedium = normalizeNumber(room.learned_overshoot_medium, 0.4);
   const ovLong = normalizeNumber(room.learned_overshoot_long, 0.7);
+  const roomMode = room.room_heating_mode || "";
+  const modeOptions = [
+    { value: "", label: t("room_mode_global") },
+    { value: "comfort", label: t("mode_comfort") },
+    { value: "balanced", label: t("mode_balanced") },
+    { value: "energy", label: t("mode_energy") },
+    { value: "adaptive", label: t("mode_adaptive") },
+  ].map(o => `<option value="${o.value}"${roomMode === o.value ? " selected" : ""}>${escapeHtml(o.label)}</option>`).join("");
 
   wrapper.innerHTML = `
     <div class="room-top">
-      <div>
-        <div class="room-title-row" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <div class="room-title">${escapeHtml(room.label || roomId)}</div>
-          <div class="room-title-meta" style="display:flex; align-items:center; gap:8px; font-size:14px;">
-            ${roomMeta}
+      <div style="display:flex; align-items:flex-start; gap:10px; width:100%;">
+        <span class="room-drag-handle" title="Ziehen zum Verschieben" style="cursor:grab; font-size:18px; padding:4px 2px; color:var(--muted); user-select:none; flex-shrink:0;">≡</span>
+        <div style="flex:1; min-width:0;">
+          <div class="room-title-row" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div class="room-title">${escapeHtml(room.label || roomId)}</div>
+            <div class="room-title-meta" style="display:flex; align-items:center; gap:8px; font-size:14px;">
+              ${roomMeta}
+            </div>
           </div>
+          <div class="room-subtitle">${escapeHtml(areaText)}</div>
+          ${isAdaptive ? `
+          <div class="room-adaptive room-adaptive-display">
+            <span class="adaptive-bucket">
+              <span style="color:var(--muted)">▲ &lt;15min</span>
+              <span class="adaptive-bucket-value">${ovShort.toFixed(2)} °C</span>
+            </span>
+            <span class="adaptive-bucket">
+              <span style="color:var(--muted)">▲ 15–45min</span>
+              <span class="adaptive-bucket-value">${ovMedium.toFixed(2)} °C</span>
+            </span>
+            <span class="adaptive-bucket">
+              <span style="color:var(--muted)">▲ &gt;45min</span>
+              <span class="adaptive-bucket-value">${ovLong.toFixed(2)} °C</span>
+            </span>
+          </div>` : ""}
         </div>
-        <div class="room-subtitle">${escapeHtml(areaText)}</div>
-        ${isAdaptive ? `
-        <div class="room-adaptive room-adaptive-display">
-          <span class="adaptive-bucket">
-            <span style="color:var(--muted)">▲ &lt;15min</span>
-            <span class="adaptive-bucket-value">${ovShort.toFixed(2)} °C</span>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
+          <span class="pill">
+            <input class="room-enabled" type="checkbox" ${
+              room.enabled ? "checked" : ""
+            } />
+            <span>${escapeHtml(t("room_active"))}</span>
           </span>
-          <span class="adaptive-bucket">
-            <span style="color:var(--muted)">▲ 15–45min</span>
-            <span class="adaptive-bucket-value">${ovMedium.toFixed(2)} °C</span>
-          </span>
-          <span class="adaptive-bucket">
-            <span style="color:var(--muted)">▲ &gt;45min</span>
-            <span class="adaptive-bucket-value">${ovLong.toFixed(2)} °C</span>
-          </span>
-        </div>` : ""}
+          <button class="ghost room-schedule-btn" type="button">${escapeHtml(t("room_schedule"))}</button>
+          <button class="danger room-delete-btn" type="button">${escapeHtml(t("room_delete"))}</button>
+          <button class="ghost room-collapse-btn" type="button" title="${isCollapsed ? "Aufklappen" : "Einklappen"}" style="padding:4px 10px; font-size:16px;">${isCollapsed ? "▶" : "▼"}</button>
+        </div>
       </div>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <span class="pill">
-          <input class="room-enabled" type="checkbox" ${
-            room.enabled ? "checked" : ""
-          } />
-          <span>${escapeHtml(t("room_active"))}</span>
-        </span>
-        <button class="ghost room-schedule-btn" type="button">${escapeHtml(
-          t("room_schedule")
-        )}</button>
-        <button class="danger room-delete-btn" type="button">${escapeHtml(
-          t("room_delete")
-        )}</button>
+      <div class="room-mode-row" style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+        <label style="font-size:13px; color:var(--muted); white-space:nowrap;">${escapeHtml(t("room_heating_mode"))}:</label>
+        <select class="room-heating-mode" style="font-size:13px; padding:3px 6px;">${modeOptions}</select>
       </div>
     </div>
 
@@ -1853,11 +1913,85 @@ function createRoomCard(roomId, room) {
 
   deleteBtn.addEventListener("click", () => {
     delete state.config.rooms[roomId];
+    roomCollapsedState.delete(roomId);
     renderRooms();
   });
 
   scheduleBtn.addEventListener("click", () => {
     openScheduleModal(roomId);
+  });
+
+  // Collapse / Expand
+  const collapseBtn = wrapper.querySelector(".room-collapse-btn");
+  const roomGrid = wrapper.querySelector(".room-grid");
+  const roomAdvanced = wrapper.querySelector(".room-advanced");
+  const roomModeRow = wrapper.querySelector(".room-mode-row");
+
+  function applyCollapsed(collapsed) {
+    if (roomGrid) roomGrid.style.display = collapsed ? "none" : "";
+    if (roomAdvanced) roomAdvanced.style.display = "none"; // advanced stays closed when collapsing
+    if (roomModeRow) roomModeRow.style.display = collapsed ? "none" : "";
+    if (collapseBtn) collapseBtn.textContent = collapsed ? "▶" : "▼";
+  }
+
+  applyCollapsed(isCollapsed);
+
+  collapseBtn.addEventListener("click", () => {
+    const nowCollapsed = roomCollapsedState.get(roomId) !== true;
+    roomCollapsedState.set(roomId, nowCollapsed);
+    applyCollapsed(nowCollapsed);
+  });
+
+  // Drag and Drop
+  wrapper.addEventListener("dragstart", (e) => {
+    dragSrcRoomId = roomId;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", roomId);
+    wrapper.style.opacity = "0.5";
+  });
+
+  wrapper.addEventListener("dragend", () => {
+    wrapper.style.opacity = "";
+    els.roomsContainer.querySelectorAll(".room").forEach(n => n.classList.remove("drag-over"));
+  });
+
+  wrapper.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    els.roomsContainer.querySelectorAll(".room").forEach(n => n.classList.remove("drag-over"));
+    wrapper.classList.add("drag-over");
+  });
+
+  wrapper.addEventListener("dragleave", () => {
+    wrapper.classList.remove("drag-over");
+  });
+
+  wrapper.addEventListener("drop", (e) => {
+    e.preventDefault();
+    wrapper.classList.remove("drag-over");
+    if (!dragSrcRoomId || dragSrcRoomId === roomId) return;
+
+    const srcNode = els.roomsContainer.querySelector(`.room[data-room-id="${dragSrcRoomId}"]`);
+    if (!srcNode) return;
+
+    const allNodes = [...els.roomsContainer.querySelectorAll(".room")];
+    const srcIdx = allNodes.indexOf(srcNode);
+    const dstIdx = allNodes.indexOf(wrapper);
+
+    if (srcIdx < dstIdx) {
+      wrapper.after(srcNode);
+    } else {
+      wrapper.before(srcNode);
+    }
+
+    // Update order in state
+    const updatedNodes = [...els.roomsContainer.querySelectorAll(".room")];
+    updatedNodes.forEach((n, i) => {
+      const rid = n.dataset.roomId;
+      if (state.config.rooms[rid]) state.config.rooms[rid].order = i;
+    });
+
+    dragSrcRoomId = null;
   });
 
   return wrapper;
@@ -1875,6 +2009,9 @@ function renderRooms() {
     els.roomsContainer.appendChild(empty);
     return;
   }
+
+  // Sort by order field
+  entries.sort((a, b) => (a[1].order ?? 0) - (b[1].order ?? 0));
 
   const circuits = state.config.circuits || {};
   const hasCircuits = Object.keys(circuits).length > 0;
@@ -2036,10 +2173,21 @@ function collectFormState() {
     ? normalizeNumber(els.outdoorTempCutoff.value, DEFAULTS.outdoor_temp_cutoff)
     : DEFAULTS.outdoor_temp_cutoff;
 
+  cfg.global_target_day = els.globalTargetDay
+    ? normalizeNumber(els.globalTargetDay.value, DEFAULTS.global_target_day)
+    : DEFAULTS.global_target_day;
+  cfg.global_target_night = els.globalTargetNight
+    ? normalizeNumber(els.globalTargetNight.value, DEFAULTS.global_target_night)
+    : DEFAULTS.global_target_night;
+  cfg.global_away_temperature = els.globalAwayTemperature
+    ? normalizeNumber(els.globalAwayTemperature.value, DEFAULTS.global_away_temperature)
+    : DEFAULTS.global_away_temperature;
+
   const rooms = {};
   const roomNodes = els.roomsContainer.querySelectorAll(".room");
 
-  for (const node of roomNodes) {
+  for (let i = 0; i < roomNodes.length; i++) {
+    const node = roomNodes[i];
     const roomId = node.dataset.roomId;
     const existingRoom = state.config.rooms[roomId] || {};
 
@@ -2067,6 +2215,8 @@ function collectFormState() {
       night_setback_enabled: node.querySelector(".room-night-setback-enabled")?.checked !== false,
       learned_overshoot: existingRoom.learned_overshoot,
       circuit_id: node.querySelector(".room-circuit-id")?.value || existingRoom.circuit_id || "",
+      order: i,
+      room_heating_mode: node.querySelector(".room-heating-mode")?.value || "",
     });
   }
 
@@ -2102,6 +2252,7 @@ function generateRoomId() {
 
 function addRoom() {
   const roomId = generateRoomId();
+  const existingCount = Object.keys(state.config.rooms).length;
   state.config.rooms[roomId] = {
     label: t("room_new"),
     area_id: "",
@@ -2112,17 +2263,43 @@ function addRoom() {
     control_profile: "standard",
     thermostat_offset: 0.0,
     circuit_id: "",
-    target_day: 21.0,
-    target_night: 18.0,
-    away_temperature: 17.0,
+    target_day: normalizeNumber(els.globalTargetDay?.value, DEFAULTS.global_target_day),
+    target_night: normalizeNumber(els.globalTargetNight?.value, DEFAULTS.global_target_night),
+    away_temperature: normalizeNumber(els.globalAwayTemperature?.value, DEFAULTS.global_away_temperature),
     weekly_schedule: structuredClone(DEFAULT_WEEKLY_SCHEDULE),
     day_start: "",
     night_start: "",
     enabled: true,
     night_setback_enabled: true,
     learned_overshoot: 0.3,
+    order: existingCount,
+    room_heating_mode: "",
   };
   renderRooms();
+}
+
+function applyGlobalTempsToAllRooms() {
+  const globalDay = normalizeNumber(els.globalTargetDay?.value, DEFAULTS.global_target_day);
+  const globalNight = normalizeNumber(els.globalTargetNight?.value, DEFAULTS.global_target_night);
+  const globalAway = normalizeNumber(els.globalAwayTemperature?.value, DEFAULTS.global_away_temperature);
+
+  const roomNodes = els.roomsContainer.querySelectorAll(".room");
+  if (!roomNodes.length) {
+    setStatus(t("status_no_rooms_apply"), "warn");
+    return;
+  }
+
+  for (const node of roomNodes) {
+    const dayInput = node.querySelector(".room-target-day");
+    const nightInput = node.querySelector(".room-target-night");
+    const awayInput = node.querySelector(".room-away-temperature");
+    if (dayInput) dayInput.value = String(globalDay);
+    if (nightInput) nightInput.value = String(globalNight);
+    if (awayInput) awayInput.value = String(globalAway);
+  }
+
+  state.config = collectFormState();
+  setStatus(t("status_apply_temps_ok"), "ok");
 }
 
 function applyGlobalTimesToAllRooms() {
@@ -2501,6 +2678,9 @@ function bindEvents() {
     "click",
     applyGlobalTimesToAllRooms
   );
+  if (els.applyTempsToRoomsBtn) {
+    els.applyTempsToRoomsBtn.addEventListener("click", applyGlobalTempsToAllRooms);
+  }
   if (els.addCircuitBtn) {
     els.addCircuitBtn.addEventListener("click", addCircuit);
   }

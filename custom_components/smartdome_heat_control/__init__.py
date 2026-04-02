@@ -32,6 +32,8 @@ from .const import (
     CONF_ROOMS,
     CONF_ROOM_CIRCUIT_ID,
     CONF_ROOM_CONTROL_PROFILE,
+    CONF_ROOM_HEATING_MODE,
+    CONF_ROOM_ORDER,
     CONF_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_WINDOW_SENSORS,
     DEFAULT_ROOM_CONTROL_PROFILE,
@@ -50,7 +52,13 @@ from .const import (
     CONF_VACATION_ENABLED,
     CONF_VACATION_TEMPERATURE,
     CONF_ENERGY_RESIDUAL_HEAT_HOLD,
+    CONF_GLOBAL_TARGET_DAY,
+    CONF_GLOBAL_TARGET_NIGHT,
+    CONF_GLOBAL_AWAY_TEMPERATURE,
     DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
+    DEFAULT_GLOBAL_TARGET_DAY,
+    DEFAULT_GLOBAL_TARGET_NIGHT,
+    DEFAULT_GLOBAL_AWAY_TEMPERATURE,
     DATA_CONTROLLER,
     DATA_ENABLED,
     DEFAULT_ADAPTIVE_OVERSHOOT,
@@ -299,6 +307,8 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             CONF_ROOM_THERMOSTAT_OFFSET: float(
                 room.get(CONF_ROOM_THERMOSTAT_OFFSET, DEFAULT_ROOM_THERMOSTAT_OFFSET)
             ),
+            CONF_ROOM_ORDER: int(room.get(CONF_ROOM_ORDER, 0)),
+            CONF_ROOM_HEATING_MODE: room.get(CONF_ROOM_HEATING_MODE, ""),
         }
 
     return normalized
@@ -336,7 +346,10 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
     normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
     normalized[CONF_CIRCUITS] = _normalize_circuits(normalized.get(CONF_CIRCUITS, {}))
-    normalized.setdefault(CONF_ENERGY_RESIDUAL_HEAT_HOLD,DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,)
+    normalized.setdefault(CONF_ENERGY_RESIDUAL_HEAT_HOLD, DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD)
+    normalized.setdefault(CONF_GLOBAL_TARGET_DAY, DEFAULT_GLOBAL_TARGET_DAY)
+    normalized.setdefault(CONF_GLOBAL_TARGET_NIGHT, DEFAULT_GLOBAL_TARGET_NIGHT)
+    normalized.setdefault(CONF_GLOBAL_AWAY_TEMPERATURE, DEFAULT_GLOBAL_AWAY_TEMPERATURE)
     return normalized
 
 
