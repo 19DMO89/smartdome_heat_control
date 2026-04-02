@@ -1547,6 +1547,14 @@
     </div>
   </div>
 
-  <script type="module" src="./app.js?v=3.2.6"></script>
+  <script>
+    (function() {
+      const v = new URLSearchParams(window.location.search).get('v') || 'dev';
+      const s = document.createElement('script');
+      s.type = 'module';
+      s.src = './app.js?v=' + v;
+      document.currentScript.replaceWith(s);
+    })();
+  </script>
 </body>
 </html>
