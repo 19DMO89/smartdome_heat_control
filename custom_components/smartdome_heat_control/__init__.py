@@ -127,6 +127,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = domain_data
 
     async def _persist_learned(config: dict[str, Any]) -> None:
+        rooms = config.get(CONF_ROOMS, {})
+        _LOGGER.warning(
+            "[Smartdome Diagnose] PERSIST_LEARNED: Schreibe Config Entry. "
+            "Räume: %s | heating_mode: %s | enabled: %s",
+            {rid: r.get("label", rid) for rid, r in rooms.items()},
+            config.get("heating_mode"),
+            config.get("enabled"),
+        )
         hass.config_entries.async_update_entry(entry, data=config)
         domain_data["config"] = config
 
@@ -201,6 +209,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload bei Änderungen im Options Flow."""
+    _LOGGER.warning("[Smartdome Diagnose] UPDATE_LISTENER: Config Entry wurde geändert → Reload wird ausgelöst.")
     await hass.config_entries.async_reload(entry.entry_id)
 
 
@@ -382,6 +391,15 @@ def _async_register_ws_save_config(hass: HomeAssistant) -> None:
 
         new_cfg = _normalize_config(dict(msg["config"]))
 
+        rooms = new_cfg.get(CONF_ROOMS, {})
+        _LOGGER.warning(
+            "[Smartdome Diagnose] WS_SAVE: Konfiguration wird gespeichert. "
+            "Räume: %s | heating_mode: %s | enabled: %s",
+            {rid: r.get("label", rid) for rid, r in rooms.items()},
+            new_cfg.get("heating_mode"),
+            new_cfg.get("enabled"),
+        )
+
         hass.config_entries.async_update_entry(target_entry, data=new_cfg)
         data["config"] = new_cfg
 
@@ -405,6 +423,8 @@ def _async_register_services(hass: HomeAssistant) -> None:
         if target_entry is None:
             _LOGGER.warning("Kein Config Entry für update_config gefunden")
             return
+
+        _LOGGER.warning("[Smartdome Diagnose] SERVICE_UPDATE_CONFIG aufgerufen. Patch-Keys: %s", list(call.data.get("config", {}).keys()))
 
         data = hass.data[DOMAIN][target_entry.entry_id]
         current_cfg = dict(data["config"])

@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.3.1] – 2026-04-02
+
+### 🔍 Diagnose: Logging für Bug #57 (Konfiguration wird überschrieben)
+
+Temporäre `WARNING`-Logs wurden an allen Stellen eingebaut, die den Config Entry schreiben oder den Controller aktualisieren:
+
+- `WS_SAVE` – WebSocket-Speichern aus dem Panel
+- `UPDATE_CONFIG` – Controller erhält neue Config
+- `PERSIST_LEARNED_VALUES` – Controller erstellt Persist-Task nach Lernzyklus
+- `PERSIST_LEARNED` – Config Entry wird tatsächlich geschrieben
+- `SERVICE_UPDATE_CONFIG` – HA-Service `update_config` aufgerufen
+- `UPDATE_LISTENER` – Config-Entry-Änderung löst Reload aus
+
+Die Logs erscheinen im HA-Log (`home-assistant.log`) mit dem Präfix `[Smartdome Diagnose]`.
+
+---
+
 ## [3.3.0] – 2026-04-02
 
 ### ✨ Feature: Globale Temperatureinstellungen (#54)

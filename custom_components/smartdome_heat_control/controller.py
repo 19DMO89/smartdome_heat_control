@@ -232,6 +232,14 @@ class SmartHeatingController:
 
     def update_config(self, config: dict[str, Any]) -> None:
         """Config aktualisieren."""
+        rooms = config.get("rooms", {})
+        _LOGGER.warning(
+            "[Smartdome Diagnose] UPDATE_CONFIG: Controller erhält neue Config. "
+            "Räume: %s | heating_mode: %s | enabled: %s",
+            {rid: r.get("label", rid) for rid, r in rooms.items()},
+            config.get("heating_mode"),
+            config.get("enabled"),
+        )
         self.config = config
         self._apply_config_defaults()
         self._reset_runtime_states()
@@ -318,6 +326,14 @@ class SmartHeatingController:
     def _persist_learned_values(self) -> None:
         """Gelernte Werte in den Config Entry schreiben."""
         if self._persist_callback is not None:
+            rooms = self.config.get("rooms", {})
+            _LOGGER.warning(
+                "[Smartdome Diagnose] PERSIST_LEARNED_VALUES: Erstelle Persist-Task. "
+                "Räume: %s | heating_mode: %s | enabled: %s",
+                {rid: r.get("label", rid) for rid, r in rooms.items()},
+                self.config.get("heating_mode"),
+                self.config.get("enabled"),
+            )
             self.hass.async_create_task(self._persist_callback(dict(self.config)))
 
     def _as_entity_id(self, value: Any) -> str | None:
