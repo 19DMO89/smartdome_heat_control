@@ -41,6 +41,7 @@ from .const import (
     CONF_MAIN_SENSOR,
     CONF_MAIN_THERMOSTAT,
     CONF_ROOM_CIRCUIT_ID,
+    CONF_ROOM_HEATING_MODE,
     CONF_MORNING_BOOST_START,
     CONF_NIGHT_START,
     CONF_ROOMS,
@@ -736,8 +737,15 @@ class SmartHeatingController:
         )
 
     def _get_heating_mode(self) -> str:
-        """Aktuellen Heizmodus lesen."""
+        """Globalen Heizmodus lesen."""
         return str(self.config.get(CONF_HEATING_MODE, DEFAULT_HEATING_MODE))
+
+    def _get_room_heating_mode(self, room: dict[str, Any]) -> str:
+        """Heizmodus für einen Raum lesen (room-Override oder globaler Modus)."""
+        room_mode = str(room.get(CONF_ROOM_HEATING_MODE, "")).strip()
+        if room_mode in (HEATING_MODE_COMFORT, HEATING_MODE_BALANCED, HEATING_MODE_ENERGY, HEATING_MODE_ADAPTIVE):
+            return room_mode
+        return self._get_heating_mode()
 
     def _get_energy_residual_heat_hold_seconds(self) -> int:
         """Nachlaufzeit im Energy Mode."""
@@ -798,7 +806,7 @@ class SmartHeatingController:
         target_temp: float,
     ) -> float:
         """Fester Idle-Sollwert je nach Modus."""
-        mode = self._get_heating_mode()
+        mode = self._get_room_heating_mode(room)
         min_temp = self._thermostat_min_temp(thermostat_id)
         step = self._thermostat_target_step(thermostat_id)
 
@@ -899,6 +907,7 @@ class SmartHeatingController:
     def _update_room_state(
         self,
         room_id: str,
+        room: dict[str, Any],
         target: float,
         actual: float | None,
         pause_active: bool,
@@ -907,7 +916,7 @@ class SmartHeatingController:
     ) -> str:
         """Raumzustand bestimmen und nur bei echten Zustandswechseln ändern."""
         current_state = self._room_state.get(room_id, ROOM_STATE_IDLE)
-        mode = self._get_heating_mode()
+        mode = self._get_room_heating_mode(room)
         now_ts = dt_util.now().timestamp()
 
         if pause_active:
@@ -1072,7 +1081,6 @@ class SmartHeatingController:
 
         room_states: dict[str, dict[str, Any]] = {}
 
-        mode = self._get_heating_mode()
         outdoor_cutoff_active = self._is_outdoor_cutoff_active()
         if outdoor_cutoff_active:
             _LOGGER.debug("Außentemperatur-Abschaltung aktiv – Heizung gesperrt")
@@ -1081,6 +1089,7 @@ class SmartHeatingController:
             actual = self._room_temp(room)
             target = self._effective_target_for_room(room)
             pause_active = self._window_pause_active(room_id, room)
+            mode = self._get_room_heating_mode(room)
 
             predicted_overshoot = (
                 self._get_predicted_overshoot(room, tolerance)
@@ -1090,6 +1099,7 @@ class SmartHeatingController:
 
             state = self._update_room_state(
                 room_id=room_id,
+                room=room,
                 target=target,
                 actual=actual,
                 pause_active=pause_active,

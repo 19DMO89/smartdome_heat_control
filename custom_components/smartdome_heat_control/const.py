@@ -146,6 +146,20 @@ CONF_OUTDOOR_TEMP_CUTOFF = "outdoor_temp_cutoff"
 DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED = False
 DEFAULT_OUTDOOR_TEMP_CUTOFF = 15.0
 
+# Feature #54 – Globale Temperatureinstellungen
+CONF_GLOBAL_TARGET_DAY = "global_target_day"
+CONF_GLOBAL_TARGET_NIGHT = "global_target_night"
+CONF_GLOBAL_AWAY_TEMPERATURE = "global_away_temperature"
+DEFAULT_GLOBAL_TARGET_DAY = 21.0
+DEFAULT_GLOBAL_TARGET_NIGHT = 18.0
+DEFAULT_GLOBAL_AWAY_TEMPERATURE = 17.0
+
+# Feature #53 – Reihenfolge der Räume
+CONF_ROOM_ORDER = "order"
+
+# Feature #56 – Heizmodus pro Raum
+CONF_ROOM_HEATING_MODE = "room_heating_mode"
+
 # Defaults
 DEFAULT_ENABLED = True
 DEFAULT_BOOST_DELTA = 2.0
