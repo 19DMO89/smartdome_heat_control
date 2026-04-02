@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.3.2] – 2026-04-02
+
+### 🔧 Fix: Konfiguration wird nach Heizzyklus überschrieben (Bug #57)
+
+**Ursache (Race-Condition):** `_persist_learned_values()` erstellte einen Async-Task mit einer Kopie von `self.config` zum Zeitpunkt der Task-Erstellung. Wenn der Nutzer kurz danach gespeichert hat (`WS_SAVE` → `update_config()`), lief der bereits in der Queue befindliche Task mit dem alten Snapshot und überschrieb die neue Nutzer-Config im Config Entry.
+
+**Fix:** `_persist_learned` liest jetzt nicht mehr den übergebenen Snapshot, sondern immer den **aktuellen** `domain_data["config"]` aus. Es werden ausschließlich die gelernten Raumwerte (Overshoot-Buckets, Zyklus-State) per Feld-Merge aktualisiert — Nutzer-Einstellungen werden von diesem Pfad nie mehr angefasst.
+
+**Betroffene Felder (werden weiterhin persistiert):** `learned_overshoot` (short/medium/long/avg), `heating_cycle_active`, `cycle_target_temp`, `cycle_peak_temp`, `cycle_start_ts`, `cycle_peaked`, `calling_for_heat`.
+
+---
+
+**EN:** Fixed a race condition where `_persist_learned_values()` queued a task with a snapshot of `self.config`. If `update_config()` ran before the task executed, the stale snapshot overwrote the user's saved config. Fix: `_persist_learned` now reads from `domain_data["config"]` and only merges the learned fields, never touching user settings.
+
+---
+
 ## [3.3.1] – 2026-04-02
 
 ### 🔍 Diagnose: Logging für Bug #57 (Konfiguration wird überschrieben)

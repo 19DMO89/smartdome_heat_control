@@ -40,6 +40,7 @@ from .const import (
     DEFAULT_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_CALLING_FOR_HEAT,
+    CONF_ROOM_CYCLE_PEAKED,
     CONF_ROOM_NIGHT_SETBACK_ENABLED,
     CONF_ROOM_CYCLE_PEAK_TEMP,
     CONF_ROOM_CYCLE_START_TS,
@@ -126,17 +127,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     hass.data[DOMAIN][entry.entry_id] = domain_data
 
-    async def _persist_learned(config: dict[str, Any]) -> None:
-        rooms = config.get(CONF_ROOMS, {})
+    # Nur diese Felder pro Raum werden durch den Lernprozess aktualisiert.
+    # Alle anderen Felder (Nutzer-Config) werden NICHT angefasst.
+    _LEARNED_ROOM_KEYS = (
+        CONF_ROOM_LEARNED_OVERSHOOT,
+        CONF_ROOM_LEARNED_OVERSHOOT_SHORT,
+        CONF_ROOM_LEARNED_OVERSHOOT_MEDIUM,
+        CONF_ROOM_LEARNED_OVERSHOOT_LONG,
+        CONF_ROOM_HEATING_CYCLE_ACTIVE,
+        CONF_ROOM_CYCLE_TARGET_TEMP,
+        CONF_ROOM_CYCLE_PEAK_TEMP,
+        CONF_ROOM_CYCLE_START_TS,
+        CONF_ROOM_CYCLE_PEAKED,
+        CONF_ROOM_CALLING_FOR_HEAT,
+    )
+
+    async def _persist_learned(learned: dict[str, Any]) -> None:
+        # Aktuellen Stand aus domain_data holen (nicht den übergebenen Snapshot verwenden).
+        # Das verhindert die Race-Condition, bei der ein veralteter Snapshot die
+        # kurz zuvor gespeicherte Nutzer-Config überschreibt.
+        current = dict(domain_data["config"])
+        current_rooms = current.get(CONF_ROOMS, {})
+        learned_rooms = learned.get(CONF_ROOMS, {})
+
+        changed = False
+        for room_id, learned_room in learned_rooms.items():
+            if room_id not in current_rooms:
+                continue
+            for key in _LEARNED_ROOM_KEYS:
+                new_val = learned_room.get(key)
+                if current_rooms[room_id].get(key) != new_val:
+                    current_rooms[room_id][key] = new_val
+                    changed = True
+
+        if not changed:
+            _LOGGER.debug("[Smartdome Diagnose] PERSIST_LEARNED: Keine Änderungen, Skip.")
+            return
+
         _LOGGER.warning(
-            "[Smartdome Diagnose] PERSIST_LEARNED: Schreibe Config Entry. "
-            "Räume: %s | heating_mode: %s | enabled: %s",
-            {rid: r.get("label", rid) for rid, r in rooms.items()},
-            config.get("heating_mode"),
-            config.get("enabled"),
+            "[Smartdome Diagnose] PERSIST_LEARNED: Merge lernbarer Werte in Config Entry. "
+            "Geänderte Räume: %s",
+            [rid for rid in learned_rooms if rid in current_rooms],
         )
-        hass.config_entries.async_update_entry(entry, data=config)
-        domain_data["config"] = config
+        hass.config_entries.async_update_entry(entry, data=current)
+        domain_data["config"] = current
 
     controller.set_persist_callback(_persist_learned)
 
