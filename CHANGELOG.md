@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.3.4] – 2026-04-05
+
+### 🔧 Fix: Entitäten werden nach dem Speichern gelöscht (Issue #63)
+
+**Ursache:** In `createEntityPicker()` wurde `entityPickerState` bei jedem Aufruf komplett mit dem `selectedValue`-Prop überschrieben. Wenn ein `state_changed`-Event den Re-Render triggerte (jede Minute durch den Controller-Zyklus), hatte `isEditing` nach dem Schließen der Entity-Picker-Modal bereits wieder den Wert `false` – der Handler rief `renderRooms()` mit dem alten (noch leeren) Backend-Config auf und löschte dabei die User-Auswahl aus `entityPickerState`. Beim anschließenden Speichern las `collectFormState()` dann leere Werte.
+
+**Fix 1 – `createEntityPicker()`:** Wenn der Picker bereits einen State-Eintrag hat (User hat vorher eine Entity gewählt), wird dieser Wert beibehalten. Der `selectedValue`-Prop wird nur beim **ersten** Rendern dieses Pickers verwendet (kein existierender State).
+
+**Fix 2 – `refreshAll()`:** Beim expliziten Reload (Button „Konfiguration neu laden") wird `entityPickerState` vorher geleert, damit die frischen Backend-Werte korrekt geladen werden.
+
+---
+
+**EN:** `createEntityPicker()` always overwrote `entityPickerState` with the `selectedValue` prop. A background `state_changed` event (every minute from controller cycle) called `renderRooms()` with empty backend config while `isEditing` was already `false` after the picker modal closed — clearing the user's selection from `entityPickerState`. On save, `collectFormState()` then read empty values. Fix: preserve existing `entityPickerState.selectedValue` on re-renders; only use prop value when no existing state entry. `refreshAll()` clears picker state before explicit reloads.
+
+---
+
 ## [3.3.3] – 2026-04-02
 
 ### 🔧 Fix: app.js wurde vom Browser gecacht – neue Features nicht sichtbar

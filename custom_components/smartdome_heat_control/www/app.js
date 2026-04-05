@@ -1374,16 +1374,27 @@ function createEntityPicker({
   if (!container) return;
 
   const normalizedItems = Array.isArray(items) ? items : [];
+
+  // Bestehende User-Auswahl beibehalten: Wenn der Picker schon einen State hat
+  // (z.B. weil der Nutzer bereits eine Entity gewählt hat), wird dieser NICHT
+  // durch einen Hintergrund-Re-Render (state_changed) überschrieben.
+  // Nur beim ersten Rendern (kein existierender State) wird selectedValue aus
+  // den Props verwendet.
+  const existingState = entityPickerState.get(pickerId);
+  const effectiveValue = existingState
+    ? existingState.selectedValue
+    : selectedValue || "";
+
   entityPickerState.set(pickerId, {
     items: normalizedItems,
     getItems: getItems || null,
-    selectedValue: selectedValue || "",
+    selectedValue: effectiveValue,
     onChange,
     emptyLabel,
   });
 
   const selectedItem =
-    normalizedItems.find((item) => item.entity_id === selectedValue) || null;
+    normalizedItems.find((item) => item.entity_id === effectiveValue) || null;
 
   container.innerHTML = `
     <div class="entity-picker" id="${pickerId}">
@@ -2390,6 +2401,8 @@ async function reloadConfig() {
 async function refreshAll() {
   await loadAllStates();
   await loadConfig();
+  // Picker-State leeren damit explizite Reloads immer frische Backend-Werte zeigen.
+  entityPickerState.clear();
   renderGlobalSettings();
   renderRooms();
 }
