@@ -1636,7 +1636,8 @@ function renderGlobalSettings() {
 }
 
 function appendWindowSensorRow(listEl, roomId, sensorId) {
-  const pickerId = `room_${roomId}_ws_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`;
+  const index = listEl.children.length;
+  const pickerId = `room_${roomId}_ws_${index}`;
 
   const row = document.createElement("div");
   row.className = "room-window-sensor-row";
@@ -2804,28 +2805,29 @@ async function setupLiveUpdates() {
       updateStateInMemory(entity);
 
       if (entity.entity_id === CONFIG_ENTITY_ID) {
-        // room_states werden immer aktualisiert (Live-Heizstatus-Anzeige),
-        // aber Config-Render nur wenn nicht gerade gespeichert oder bearbeitet wird.
         const incoming = normalizeConfig(entity.attributes || {});
 
-        // Live-Heizstatus-Badges immer aktuell halten
+        // room_states immer aktuell halten (Live-Heizstatus-Badges)
         if (incoming.room_states) {
           state.config.room_states = incoming.room_states;
         }
 
-        // Konfiguration NICHT überschreiben wenn gerade gespeichert oder
-        // bearbeitet wird – verhindert Race-Condition und verlorene Edits.
-        if (isSaving || isEditing) {
-          return;
+        // Config still update im Hintergrund (damit collectFormState() frische
+        // Metadaten wie learned_overshoot, weekly_schedule hat), aber KEIN
+        // Form-Re-Render: renderGlobalSettings/renderRooms würden alle
+        // ungespeicherten Nutzer-Eingaben (Checkboxen, Inputs, Dropdowns,
+        // Fensterkontakt-Picker) überschreiben.
+        // Vollständiger Re-Render nur bei: init→refreshAll(), saveConfig()-Erfolg,
+        // explizitem Reload-Button.
+        if (!isSaving && !isEditing) {
+          state.config = incoming;
+          if (pendingCircuits !== null) {
+            state.config.circuits = pendingCircuits;
+          }
         }
 
-        state.config = incoming;
-        if (pendingCircuits !== null) {
-          state.config.circuits = pendingCircuits;
-        }
-        renderGlobalSettings();
-        renderRooms();
-
+        // Nur Live-Status-Elemente aktualisieren (kein Form-Reset)
+        updateRoomLiveState();
         return;
       }
 

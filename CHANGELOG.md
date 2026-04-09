@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.3.5] – 2026-04-09
+
+### 🔧 Fix: Formularfelder werden durch Hintergrund-Events zurückgesetzt (Issue #65)
+
+**Ursache (tiefer liegend als in V3.3.4 angenommen):** Der `state_changed`-Handler rief bei jedem Hintergrund-Event (Controller-Zyklus, jede Minute) `renderGlobalSettings()` und `renderRooms()` auf, solange `!isSaving && !isEditing`. Das `isEditing`-Flag wird jedoch extrem schnell wieder `false` – direkt nach dem Schließen einer Entity-Picker-Modal. Dadurch wurden **alle** ungespeicherten Formularfelder überschrieben: Checkboxen (z. B. „Steuerung aktiv"), Text-Inputs, Dropdowns sowie Fensterkontakt-Picker.
+
+**Zusätzlich:** Fensterkontakt-Picker verwendeten zufällige IDs (`Date.now()` + `Math.random()`), sodass der `entityPickerState`-Preservation-Fix aus V3.3.4 für diese Picker wirkungslos war.
+
+**Fix 1 – `state_changed`-Handler:** `renderGlobalSettings()` und `renderRooms()` werden nicht mehr aus Hintergrund-Events aufgerufen. Stattdessen wird nur `updateRoomLiveState()` aufgerufen (bereits vorhandene Funktion), die ausschließlich Live-Status-Badges (🔥 Heiz-Icon, Temperaturen, Overshoot-Buckets) aktualisiert – ohne ein einziges Formularfeld anzufassen. `state.config` wird weiterhin still aktualisiert (für `collectFormState()`-Metadaten), aber ohne Re-Render.
+
+**Fix 2 – Fensterkontakt-Picker IDs:** Statt zufälliger IDs werden stabile, index-basierte IDs verwendet (`room_{id}_ws_{index}`). Damit funktioniert die `entityPickerState`-Preservation auch für Fensterkontakt-Zeilen.
+
+---
+
+**EN:** The `state_changed` handler called `renderGlobalSettings()` and `renderRooms()` on every background event (controller cycle, every minute) whenever `!isSaving && !isEditing`. The `isEditing` flag resets very quickly after picker modals close, so all unsaved form fields were overwritten: checkboxes (e.g., "Enabled"), text inputs, dropdowns, and window sensor pickers. Additionally, window sensor picker IDs were random (`Date.now()` + `Math.random()`), making the V3.3.4 `entityPickerState` preservation useless for them. Fix: remove `renderGlobalSettings()`/`renderRooms()` from the background handler — only `updateRoomLiveState()` is called (updates live badges only, no form fields). Window sensor picker IDs are now stable index-based (`room_{id}_ws_{index}`).
+
+**Fixes:** #65
+
+---
+
 ## [3.3.4] – 2026-04-05
 
 ### 🔧 Fix: Entitäten werden nach dem Speichern gelöscht (Issue #63)
