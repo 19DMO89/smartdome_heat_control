@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.3.6] – 2026-04-13
+
+### 🔧 Fix: Wochenschema verliert Temperatur-Eingaben beim Umsortieren (Issue #66)
+
+**Ursache:** Im Schedule-Editor wurde bei jeder Zeiteingabe (`change`-Event) `renderScheduleEditor()` aufgerufen, das alle DOM-Elemente zerstört und neu aufbaut. Wenn ein Nutzer eine Temperatur eingegeben, aber das Feld noch nicht verlassen hatte (kein `blur` → kein `change`-Event), wurde der Wert nicht in `draftWeeklySchedule` geschrieben und ging beim Re-Render verloren.
+
+**Fix:** Neue Funktion `flushScheduleEditorValues()` liest vor jedem Re-Render alle aktuellen DOM-Werte (Zeit + Temperatur) aus den bestehenden Zeilen in `draftWeeklySchedule` — auch wenn das `change`-Event noch nicht gefeuert hat. Die Funktion wird am Anfang von `renderScheduleEditor()` und `saveScheduleDraft()` aufgerufen.
+
+---
+
+**EN:** The schedule editor called `renderScheduleEditor()` on every time input change, destroying all DOM elements. If the user had typed a temperature but not blurred the field yet (no `change` event fired), the value was lost. Fix: new `flushScheduleEditorValues()` reads all current DOM values into `draftWeeklySchedule` before any re-render or save.
+
+**Fixes:** #66
+
+---
+
 ## [3.3.5] – 2026-04-09
 
 ### 🔧 Fix: Formularfelder werden durch Hintergrund-Events zurückgesetzt (Issue #65)
