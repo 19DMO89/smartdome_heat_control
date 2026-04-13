@@ -2459,7 +2459,22 @@ function sortScheduleEntries(entries) {
   entries.sort((a, b) => a.start.localeCompare(b.start));
 }
 
+function flushScheduleEditorValues() {
+  if (!draftWeeklySchedule || !scheduleRoomId) return;
+  const entries = draftWeeklySchedule[currentScheduleDay];
+  if (!Array.isArray(entries)) return;
+  const rows = els.scheduleEntries.querySelectorAll(".schedule-entry");
+  rows.forEach((row, i) => {
+    if (!entries[i]) return;
+    const timeVal = row.querySelector(".schedule-time")?.value;
+    const tempVal = row.querySelector(".schedule-temp")?.value;
+    if (timeVal) entries[i].start = normalizeTime(timeVal, "06:00");
+    if (tempVal !== undefined && tempVal !== "") entries[i].temperature = normalizeNumber(tempVal, 21.0);
+  });
+}
+
 function renderScheduleEditor() {
+  flushScheduleEditorValues();
   renderScheduleDayButtons();
 
   if (!draftWeeklySchedule || !scheduleRoomId) {
@@ -2538,6 +2553,8 @@ function saveScheduleDraft() {
     closeScheduleModal();
     return;
   }
+
+  flushScheduleEditorValues();
 
   const room = state.config.rooms?.[scheduleRoomId];
   if (!room) {
