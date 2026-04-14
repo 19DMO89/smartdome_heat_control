@@ -213,6 +213,33 @@ const I18N = {
     outdoor_temp_cutoff_enabled: "Cutoff enabled",
     outdoor_temp_cutoff_enabled_hint: "Heating is suppressed when outdoor temperature ≥ threshold.",
     outdoor_temp_cutoff: "Threshold (°C)",
+    section_cooling: "Cooling",
+    cooling_enabled: "Cooling active",
+    cooling_enabled_hint: "Manually activates cooling mode via air conditioning. Heating valves are set to minimum.",
+    cooling_auto: "Auto cooling",
+    cooling_auto_hint: "Automatically activates cooling when outdoor temperature ≥ threshold.",
+    cooling_threshold: "Threshold (°C)",
+    room_climate_entity: "Air conditioning (climate entity)",
+    room_use_climate: "Use AC for heating",
+    room_use_climate_hint: "Uses the air conditioning unit for heating instead of the radiator valve.",
+    section_room_cooling: "Cooling settings",
+    room_cool_target_day: "Cooling target day (°C)",
+    room_cool_target_night: "Cooling target night (°C)",
+    room_climate_fan_mode: "Fan speed",
+    room_climate_preset: "Preset",
+    room_climate_hvac_mode: "HVAC mode",
+    climate_fan_auto: "Auto",
+    climate_fan_low: "Low",
+    climate_fan_medium: "Medium",
+    climate_fan_high: "High",
+    climate_preset_none: "None",
+    climate_preset_eco: "Eco",
+    climate_preset_comfort: "Comfort",
+    climate_preset_boost: "Boost",
+    climate_preset_sleep: "Sleep",
+    climate_hvac_cool: "Cool",
+    climate_hvac_fan_only: "Fan only",
+    climate_hvac_dry: "Dry",
   },
 
   de: {
@@ -389,6 +416,33 @@ const I18N = {
     outdoor_temp_cutoff_enabled: "Abschaltung aktiv",
     outdoor_temp_cutoff_enabled_hint: "Heizung wird unterdrückt wenn Außentemperatur ≥ Schwellenwert.",
     outdoor_temp_cutoff: "Schwellenwert (°C)",
+    section_cooling: "Kühlen",
+    cooling_enabled: "Kühlen aktiv",
+    cooling_enabled_hint: "Aktiviert den Kühlmodus manuell über Klimaanlagen. Heizventile werden auf Minimum gesetzt.",
+    cooling_auto: "Auto-Kühlen",
+    cooling_auto_hint: "Aktiviert Kühlen automatisch wenn Außentemperatur ≥ Schwellenwert.",
+    cooling_threshold: "Schwellenwert (°C)",
+    room_climate_entity: "Klimaanlage (Climate-Entity)",
+    room_use_climate: "Klimaanlage zum Heizen nutzen",
+    room_use_climate_hint: "Nutzt die Klimaanlage zum Heizen anstatt des Heizkörperventils.",
+    section_room_cooling: "Kühleinstellungen",
+    room_cool_target_day: "Kühlziel Tag (°C)",
+    room_cool_target_night: "Kühlziel Nacht (°C)",
+    room_climate_fan_mode: "Lüftergeschwindigkeit",
+    room_climate_preset: "Preset",
+    room_climate_hvac_mode: "HVAC-Modus",
+    climate_fan_auto: "Automatisch",
+    climate_fan_low: "Niedrig",
+    climate_fan_medium: "Mittel",
+    climate_fan_high: "Hoch",
+    climate_preset_none: "Kein",
+    climate_preset_eco: "Eco",
+    climate_preset_comfort: "Komfort",
+    climate_preset_boost: "Boost",
+    climate_preset_sleep: "Schlaf",
+    climate_hvac_cool: "Kühlen",
+    climate_hvac_fan_only: "Nur Lüfter",
+    climate_hvac_dry: "Entfeuchten",
   },
 };
 
@@ -427,6 +481,14 @@ const DEFAULTS = {
   global_target_day: 21.0,
   global_target_night: 18.0,
   global_away_temperature: 17.0,
+  cooling_enabled: false,
+  cooling_auto: false,
+  cooling_threshold: 24.0,
+  room_cool_target_day: 23.0,
+  room_cool_target_night: 24.0,
+  room_climate_fan_mode: "auto",
+  room_climate_preset: "",
+  room_climate_hvac_mode: "cool",
   rooms: {},
   circuits: {},
 };
@@ -458,6 +520,9 @@ function initEls() {
     globalTargetDay: document.getElementById("global_target_day"),
     globalTargetNight: document.getElementById("global_target_night"),
     globalAwayTemperature: document.getElementById("global_away_temperature"),
+    coolingEnabled: document.getElementById("cooling_enabled"),
+    coolingAuto: document.getElementById("cooling_auto"),
+    coolingThreshold: document.getElementById("cooling_threshold"),
     enabled: document.getElementById("enabled"),
     mainControlType: document.getElementById("main_control_type"),
     mainThermostatField: document.getElementById("main_thermostat_field"),
@@ -740,6 +805,13 @@ function normalizeRoom(roomId, room) {
     learned_overshoot_long: normalizeNumber(room?.learned_overshoot_long, 0.7),
     order: typeof room?.order === "number" ? room.order : 0,
     room_heating_mode: typeof room?.room_heating_mode === "string" ? room.room_heating_mode : "",
+    climate_entity: typeof room?.climate_entity === "string" ? room.climate_entity : "",
+    use_climate: room?.use_climate === true,
+    cool_target_day: normalizeNumber(room?.cool_target_day, 23.0),
+    cool_target_night: normalizeNumber(room?.cool_target_night, 24.0),
+    climate_fan_mode: typeof room?.climate_fan_mode === "string" ? room.climate_fan_mode : "auto",
+    climate_preset: typeof room?.climate_preset === "string" ? room.climate_preset : "",
+    climate_hvac_mode: typeof room?.climate_hvac_mode === "string" ? room.climate_hvac_mode : "cool",
   };
 }
 
@@ -802,6 +874,9 @@ function normalizeConfig(input) {
   cfg.global_target_day = normalizeNumber(cfg.global_target_day, DEFAULTS.global_target_day);
   cfg.global_target_night = normalizeNumber(cfg.global_target_night, DEFAULTS.global_target_night);
   cfg.global_away_temperature = normalizeNumber(cfg.global_away_temperature, DEFAULTS.global_away_temperature);
+  cfg.cooling_enabled = cfg.cooling_enabled === true;
+  cfg.cooling_auto = cfg.cooling_auto === true;
+  cfg.cooling_threshold = normalizeNumber(cfg.cooling_threshold, DEFAULTS.cooling_threshold);
 
   if (!cfg.rooms || typeof cfg.rooms !== "object") {
     cfg.rooms = {};
@@ -1630,6 +1705,12 @@ function renderGlobalSettings() {
     els.globalAwayTemperature.value = String(normalizeNumber(cfg.global_away_temperature, DEFAULTS.global_away_temperature));
   }
 
+  if (els.coolingEnabled) els.coolingEnabled.checked = cfg.cooling_enabled ?? false;
+  if (els.coolingAuto) els.coolingAuto.checked = cfg.cooling_auto ?? false;
+  if (els.coolingThreshold) {
+    els.coolingThreshold.value = String(normalizeNumber(cfg.cooling_threshold, DEFAULTS.cooling_threshold));
+  }
+
   createModePicker(cfg.heating_mode);
   renderCircuits();
   updateMainLiveStatus();
@@ -1797,6 +1878,67 @@ function createRoomCard(roomId, room) {
       </div>
     </div>
 
+    <div class="room-climate-section" style="margin-top:12px; padding:10px; background:var(--card-bg,rgba(255,255,255,0.04)); border-radius:8px; border:1px solid var(--border,rgba(255,255,255,0.08));">
+      <div style="font-size:13px; font-weight:600; color:var(--muted); margin-bottom:8px;">🌡️ ${escapeHtml(t("room_climate_entity"))}</div>
+      <div class="room-grid" style="margin:0;">
+        <div class="field full">
+          <label>${escapeHtml(t("room_climate_entity"))}</label>
+          <div class="room-climate-entity-picker"></div>
+        </div>
+      </div>
+      <div class="room-use-climate-toggle" style="margin-top:8px; display:none;">
+        <div class="toggle">
+          <div class="toggle-text">
+            <strong>${escapeHtml(t("room_use_climate"))}</strong>
+            <span>${escapeHtml(t("room_use_climate_hint"))}</span>
+          </div>
+          <div class="toggle-right">
+            <input class="room-use-climate" type="checkbox" ${room.use_climate ? "checked" : ""} />
+          </div>
+        </div>
+      </div>
+      <div class="room-cooling-settings" style="margin-top:8px; display:none;">
+        <div style="font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px;">❄️ ${escapeHtml(t("section_room_cooling"))}</div>
+        <div class="room-grid" style="margin:0;">
+          <div class="field">
+            <label>${escapeHtml(t("room_cool_target_day"))}</label>
+            <input class="room-cool-target-day" type="number" min="15" max="30" step="0.5" value="${escapeHtml(String(room.cool_target_day ?? 23.0))}" />
+          </div>
+          <div class="field">
+            <label>${escapeHtml(t("room_cool_target_night"))}</label>
+            <input class="room-cool-target-night" type="number" min="15" max="30" step="0.5" value="${escapeHtml(String(room.cool_target_night ?? 24.0))}" />
+          </div>
+          <div class="field">
+            <label>${escapeHtml(t("room_climate_fan_mode"))}</label>
+            <select class="room-climate-fan-mode">
+              <option value="auto" ${(room.climate_fan_mode || "auto") === "auto" ? "selected" : ""}>${escapeHtml(t("climate_fan_auto"))}</option>
+              <option value="low" ${room.climate_fan_mode === "low" ? "selected" : ""}>${escapeHtml(t("climate_fan_low"))}</option>
+              <option value="medium" ${room.climate_fan_mode === "medium" ? "selected" : ""}>${escapeHtml(t("climate_fan_medium"))}</option>
+              <option value="high" ${room.climate_fan_mode === "high" ? "selected" : ""}>${escapeHtml(t("climate_fan_high"))}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>${escapeHtml(t("room_climate_preset"))}</label>
+            <select class="room-climate-preset">
+              <option value="" ${!room.climate_preset ? "selected" : ""}>${escapeHtml(t("climate_preset_none"))}</option>
+              <option value="eco" ${room.climate_preset === "eco" ? "selected" : ""}>${escapeHtml(t("climate_preset_eco"))}</option>
+              <option value="comfort" ${room.climate_preset === "comfort" ? "selected" : ""}>${escapeHtml(t("climate_preset_comfort"))}</option>
+              <option value="boost" ${room.climate_preset === "boost" ? "selected" : ""}>${escapeHtml(t("climate_preset_boost"))}</option>
+              <option value="sleep" ${room.climate_preset === "sleep" ? "selected" : ""}>${escapeHtml(t("climate_preset_sleep"))}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>${escapeHtml(t("room_climate_hvac_mode"))}</label>
+            <select class="room-climate-hvac-mode">
+              <option value="cool" ${(room.climate_hvac_mode || "cool") === "cool" ? "selected" : ""}>${escapeHtml(t("climate_hvac_cool"))}</option>
+              <option value="fan_only" ${room.climate_hvac_mode === "fan_only" ? "selected" : ""}>${escapeHtml(t("climate_hvac_fan_only"))}</option>
+              <option value="dry" ${room.climate_hvac_mode === "dry" ? "selected" : ""}>${escapeHtml(t("climate_hvac_dry"))}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <button type="button" class="ghost room-advanced-toggle" style="width:100%; margin-top:10px; font-size:12px; color:var(--muted); padding:8px;">
       <span class="room-advanced-toggle-label">${escapeHtml(t("room_advanced_show"))}</span>
       <span class="room-advanced-chevron" style="margin-left:6px; display:inline-block; transition:transform 0.2s;">▾</span>
@@ -1881,6 +2023,28 @@ function createRoomCard(roomId, room) {
     emptyLabel: t("select_not_set"),
     onChange: () => {},
   });
+
+  const climatePickerContainer = wrapper.querySelector(".room-climate-entity-picker");
+  const useClimateToggleWrap = wrapper.querySelector(".room-use-climate-toggle");
+  const coolingSettingsWrap = wrapper.querySelector(".room-cooling-settings");
+
+  function updateClimateVisibility() {
+    const hasClimate = !!getEntityPickerValue(`room_${roomId}_climate_picker`);
+    useClimateToggleWrap.style.display = hasClimate ? "" : "none";
+    coolingSettingsWrap.style.display = hasClimate ? "" : "none";
+  }
+
+  createEntityPicker({
+    container: climatePickerContainer,
+    pickerId: `room_${roomId}_climate_picker`,
+    items: state.climates,
+    getItems: () => state.climates,
+    selectedValue: room.climate_entity || "",
+    emptyLabel: t("select_not_set"),
+    onChange: () => { updateClimateVisibility(); },
+  });
+
+  updateClimateVisibility();
 
   const windowSensorsList = wrapper.querySelector(".room-window-sensors-list");
   const initialSensors = Array.isArray(room.window_sensors) && room.window_sensors.length
@@ -2194,6 +2358,11 @@ function collectFormState() {
   cfg.global_away_temperature = els.globalAwayTemperature
     ? normalizeNumber(els.globalAwayTemperature.value, DEFAULTS.global_away_temperature)
     : DEFAULTS.global_away_temperature;
+  cfg.cooling_enabled = els.coolingEnabled ? els.coolingEnabled.checked : false;
+  cfg.cooling_auto = els.coolingAuto ? els.coolingAuto.checked : false;
+  cfg.cooling_threshold = els.coolingThreshold
+    ? normalizeNumber(els.coolingThreshold.value, DEFAULTS.cooling_threshold)
+    : DEFAULTS.cooling_threshold;
 
   const rooms = {};
   const roomNodes = els.roomsContainer.querySelectorAll(".room");
@@ -2229,6 +2398,13 @@ function collectFormState() {
       circuit_id: node.querySelector(".room-circuit-id")?.value || existingRoom.circuit_id || "",
       order: i,
       room_heating_mode: node.querySelector(".room-heating-mode")?.value || "",
+      climate_entity: getEntityPickerValue(`room_${roomId}_climate_picker`) || "",
+      use_climate: node.querySelector(".room-use-climate")?.checked === true,
+      cool_target_day: normalizeNumber(node.querySelector(".room-cool-target-day")?.value, 23.0),
+      cool_target_night: normalizeNumber(node.querySelector(".room-cool-target-night")?.value, 24.0),
+      climate_fan_mode: node.querySelector(".room-climate-fan-mode")?.value || "auto",
+      climate_preset: node.querySelector(".room-climate-preset")?.value || "",
+      climate_hvac_mode: node.querySelector(".room-climate-hvac-mode")?.value || "cool",
     });
   }
 
@@ -2286,6 +2462,13 @@ function addRoom() {
     learned_overshoot: 0.3,
     order: existingCount,
     room_heating_mode: "",
+    climate_entity: "",
+    use_climate: false,
+    cool_target_day: DEFAULTS.room_cool_target_day,
+    cool_target_night: DEFAULTS.room_cool_target_night,
+    climate_fan_mode: DEFAULTS.room_climate_fan_mode,
+    climate_preset: DEFAULTS.room_climate_preset,
+    climate_hvac_mode: DEFAULTS.room_climate_hvac_mode,
   };
   renderRooms();
 }

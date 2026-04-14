@@ -160,6 +160,29 @@ CONF_ROOM_ORDER = "order"
 # Feature #56 – Heizmodus pro Raum
 CONF_ROOM_HEATING_MODE = "room_heating_mode"
 
+# Feature #69 – Klimaanlage pro Raum
+CONF_ROOM_CLIMATE_ENTITY = "climate_entity"
+CONF_ROOM_USE_CLIMATE = "use_climate"
+
+# Feature #70 – Kühlen
+CONF_COOLING_ENABLED = "cooling_enabled"
+CONF_COOLING_AUTO = "cooling_auto"
+CONF_COOLING_THRESHOLD = "cooling_threshold"
+DEFAULT_COOLING_ENABLED = False
+DEFAULT_COOLING_AUTO = False
+DEFAULT_COOLING_THRESHOLD = 24.0
+
+CONF_ROOM_COOL_TARGET_DAY = "cool_target_day"
+CONF_ROOM_COOL_TARGET_NIGHT = "cool_target_night"
+CONF_ROOM_CLIMATE_FAN_MODE = "climate_fan_mode"
+CONF_ROOM_CLIMATE_PRESET = "climate_preset"
+CONF_ROOM_CLIMATE_HVAC_MODE = "climate_hvac_mode"
+DEFAULT_ROOM_COOL_TARGET_DAY = 23.0
+DEFAULT_ROOM_COOL_TARGET_NIGHT = 24.0
+DEFAULT_ROOM_CLIMATE_FAN_MODE = "auto"
+DEFAULT_ROOM_CLIMATE_PRESET = ""
+DEFAULT_ROOM_CLIMATE_HVAC_MODE = "cool"
+
 # Defaults
 DEFAULT_ENABLED = True
 DEFAULT_BOOST_DELTA = 2.0
