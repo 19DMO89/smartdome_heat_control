@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.4.1] – 2026-04-14
+
+### ✨ Feat: Klimaanlagen einbinden + Kühlmodus (Features #68, #69, #70)
+
+**Feature #68 – Raum Aktiv/Inaktiv als HA-Entität:**
+Jeder Raum wird nun als `switch`-Entität in Home Assistant bereitgestellt (z. B. `switch.wohnzimmer_aktiv`). Automationen (z. B. Positionserkennung) können den Raum direkt schalten — der Controller reagiert sofort ohne Wartezeit auf den nächsten Zyklus. Zusätzlich wird für jeden Raum eine `switch`-Entität „Klimaanlage nutzen" bereitgestellt.
+
+**Feature #69 – Klimaanlage pro Raum (Heizen mit AC):**
+Pro Raum kann optional eine Klimaanlage (`climate.*`-Entität) konfiguriert werden. Mit dem Toggle „Klimaanlage nutzen" (auch als HA-Entität) übernimmt die AC das Heizen: Sie wird auf `hvac_mode=heat` gesetzt und bekommt die Zieltemperatur. Das Heizventil wird auf Minimum gesetzt (aus). Ideal wenn PV-Überschuss lieber mit der Klimaanlage genutzt werden soll.
+
+**Feature #70 – Kühlen mit Klimaanlage:**
+Globaler Kühlmodus — manuell per Toggle „Kühlen aktiv" oder automatisch wenn die Außentemperatur einen einstellbaren Schwellwert überschreitet. Pro Raum einstellbar: Kühlzieltemperatur (Tag/Nacht), Lüftergeschwindigkeit (auto/low/medium/high), Preset (none/eco/comfort/boost/sleep), HVAC-Modus (cool/fan_only/dry). Im Kühlbetrieb werden alle Heizventile auf Minimum gesetzt.
+
+---
+
+**EN:** Three new features: #68 adds per-room enabled/disabled switch entities in HA for use in automations (e.g. presence detection). #69 adds optional air conditioning entity per room — when "use AC" is enabled, the climate entity heats the room and the valve is set to minimum (ideal for PV surplus use). #70 adds a global cooling mode that activates either manually or automatically based on outdoor temperature, with per-room cooling target temperatures, fan speed, preset, and HVAC mode settings.
+
+**Closes:** #68, #69, #70
+
+---
+
 ## [3.3.6] – 2026-04-13
 
 ### 🔧 Fix: Wochenschema verliert Temperatur-Eingaben beim Umsortieren (Issue #66)

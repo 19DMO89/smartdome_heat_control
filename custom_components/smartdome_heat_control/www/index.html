@@ -1116,6 +1116,34 @@
             </div>
           </div>
 
+          <!-- Kühlen -->
+          <div class="settings-group">
+            <div class="settings-group-label" data-i18n="section_cooling">Kühlen</div>
+            <div class="toggle">
+              <div class="toggle-text">
+                <strong data-i18n="cooling_enabled">Kühlen aktiv</strong>
+                <span data-i18n="cooling_enabled_hint">
+                  Aktiviert den Kühlmodus manuell über Klimaanlagen.
+                </span>
+              </div>
+              <div class="toggle-right">
+                <input id="cooling_enabled" type="checkbox" />
+              </div>
+            </div>
+            <div class="toggle" style="margin-top:8px;">
+              <div class="toggle-text">
+                <strong data-i18n="cooling_auto">Auto-Kühlen</strong>
+                <span data-i18n="cooling_auto_hint">
+                  Aktiviert Kühlen automatisch wenn Außentemperatur ≥ Schwellenwert.
+                </span>
+              </div>
+              <div class="toggle-right">
+                <input id="cooling_threshold" class="toggle-temp" type="number" min="15" max="45" step="0.5" value="24" />
+                <input id="cooling_auto" type="checkbox" />
+              </div>
+            </div>
+          </div>
+
           <!-- Heizpumpensteuerung -->
           <div class="settings-group">
             <div class="settings-group-label" data-i18n="section_thermostat">Heizpumpensteuerung</div>

@@ -96,6 +96,24 @@ from .const import (
     DEFAULT_VACATION_TEMPERATURE,
     DEFAULT_WINDOW_CLOSE_DELAY,
     DEFAULT_WINDOW_OPEN_DELAY,
+    CONF_ROOM_CLIMATE_ENTITY,
+    CONF_ROOM_USE_CLIMATE,
+    CONF_COOLING_ENABLED,
+    CONF_COOLING_AUTO,
+    CONF_COOLING_THRESHOLD,
+    DEFAULT_COOLING_ENABLED,
+    DEFAULT_COOLING_AUTO,
+    DEFAULT_COOLING_THRESHOLD,
+    CONF_ROOM_COOL_TARGET_DAY,
+    CONF_ROOM_COOL_TARGET_NIGHT,
+    CONF_ROOM_CLIMATE_FAN_MODE,
+    CONF_ROOM_CLIMATE_PRESET,
+    CONF_ROOM_CLIMATE_HVAC_MODE,
+    DEFAULT_ROOM_COOL_TARGET_DAY,
+    DEFAULT_ROOM_COOL_TARGET_NIGHT,
+    DEFAULT_ROOM_CLIMATE_FAN_MODE,
+    DEFAULT_ROOM_CLIMATE_PRESET,
+    DEFAULT_ROOM_CLIMATE_HVAC_MODE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -145,6 +163,11 @@ class SmartHeatingController:
         # (True = mind. ein Raum heizte). Wird genutzt um beim Übergang
         # heating→idle einen garantierten min_temp-Befehl zu senden.
         self._circuit_heating_active: dict[str, bool] = {}
+
+        # Zuletzt gesendeter HVAC-/Fan-/Preset-Modus pro Climate-Entity
+        self._last_hvac_mode: dict[str, str] = {}
+        self._last_fan_mode: dict[str, str] = {}
+        self._last_preset_mode: dict[str, str] = {}
 
         self._apply_config_defaults()
 
@@ -752,6 +775,64 @@ class SmartHeatingController:
             )
         )
 
+    def _set_hvac_mode_if_needed(self, entity_id: str, hvac_mode: str) -> None:
+        """HVAC-Modus setzen, aber nur wenn er sich geändert hat."""
+        if self._last_hvac_mode.get(entity_id) == hvac_mode:
+            return
+        self._last_hvac_mode[entity_id] = hvac_mode
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                CLIMATE_DOMAIN,
+                "set_hvac_mode",
+                {"entity_id": entity_id, "hvac_mode": hvac_mode},
+                blocking=True,
+            )
+        )
+
+    def _set_fan_mode_if_needed(self, entity_id: str, fan_mode: str) -> None:
+        """Lüftermodus setzen, aber nur wenn er sich geändert hat."""
+        if self._last_fan_mode.get(entity_id) == fan_mode:
+            return
+        self._last_fan_mode[entity_id] = fan_mode
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                CLIMATE_DOMAIN,
+                "set_fan_mode",
+                {"entity_id": entity_id, "fan_mode": fan_mode},
+                blocking=True,
+            )
+        )
+
+    def _set_preset_mode_if_needed(self, entity_id: str, preset_mode: str) -> None:
+        """Preset-Modus setzen, aber nur wenn er sich geändert hat."""
+        if self._last_preset_mode.get(entity_id) == preset_mode:
+            return
+        self._last_preset_mode[entity_id] = preset_mode
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                CLIMATE_DOMAIN,
+                "set_preset_mode",
+                {"entity_id": entity_id, "preset_mode": preset_mode},
+                blocking=True,
+            )
+        )
+
+    def _is_cooling_active(self) -> bool:
+        """Prüfen ob der Kühlmodus aktiv ist (manuell oder automatisch)."""
+        if self.config.get(CONF_COOLING_ENABLED, DEFAULT_COOLING_ENABLED):
+            return True
+        if self.config.get(CONF_COOLING_AUTO, DEFAULT_COOLING_AUTO):
+            outdoor_sensor = self.config.get(CONF_OUTDOOR_SENSOR, "")
+            threshold = float(self.config.get(CONF_COOLING_THRESHOLD, DEFAULT_COOLING_THRESHOLD))
+            if outdoor_sensor:
+                sensor_state = self.hass.states.get(outdoor_sensor)
+                if sensor_state is not None:
+                    try:
+                        return float(sensor_state.state) >= threshold
+                    except (ValueError, TypeError):
+                        pass
+        return False
+
     def _get_heating_mode(self) -> str:
         """Globalen Heizmodus lesen."""
         return str(self.config.get(CONF_HEATING_MODE, DEFAULT_HEATING_MODE))
@@ -880,6 +961,9 @@ class SmartHeatingController:
         self._last_command_sent_at.clear()
         self._last_applied_room_state.clear()
         self._circuit_heating_active.clear()
+        self._last_hvac_mode.clear()
+        self._last_fan_mode.clear()
+        self._last_preset_mode.clear()
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
@@ -1322,6 +1406,55 @@ class SmartHeatingController:
 
         for room_id, room in rooms.items():
             thermostat = self._as_entity_id(room.get(CONF_ROOM_THERMOSTAT))
+            climate_entity = self._as_entity_id(room.get(CONF_ROOM_CLIMATE_ENTITY, ""))
+            use_climate = bool(room.get(CONF_ROOM_USE_CLIMATE, False))
+            cooling_active = self._is_cooling_active()
+
+            # --- Klimaanlage / Kühllogik (#69 + #70) ---
+            if climate_entity:
+                rstate = room_states.get(room_id, {})
+                if cooling_active:
+                    # Kühlmodus: Klimaanlage übernimmt
+                    hvac_mode = str(room.get(CONF_ROOM_CLIMATE_HVAC_MODE, DEFAULT_ROOM_CLIMATE_HVAC_MODE))
+                    fan_mode = str(room.get(CONF_ROOM_CLIMATE_FAN_MODE, DEFAULT_ROOM_CLIMATE_FAN_MODE))
+                    preset = str(room.get(CONF_ROOM_CLIMATE_PRESET, DEFAULT_ROOM_CLIMATE_PRESET))
+                    cool_target = float(room.get(CONF_ROOM_COOL_TARGET_DAY, DEFAULT_ROOM_COOL_TARGET_DAY))
+                    self._set_hvac_mode_if_needed(climate_entity, hvac_mode)
+                    if fan_mode:
+                        self._set_fan_mode_if_needed(climate_entity, fan_mode)
+                    if preset:
+                        self._set_preset_mode_if_needed(climate_entity, preset)
+                    self._set_temp_if_needed(climate_entity, cool_target)
+                    # Heizventil ausschalten
+                    if thermostat:
+                        self._set_temp_if_needed(
+                            thermostat, self._thermostat_min_temp(thermostat)
+                        )
+                    continue
+                elif use_climate:
+                    # Heizen via Klimaanlage
+                    if rstate.get("pause_active"):
+                        self._set_hvac_mode_if_needed(climate_entity, "off")
+                    else:
+                        heat_target = float(
+                            rstate.get(
+                                "target",
+                                room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
+                            )
+                        )
+                        self._set_hvac_mode_if_needed(climate_entity, "heat")
+                        self._set_temp_if_needed(climate_entity, heat_target)
+                    # Heizventil ausschalten
+                    if thermostat:
+                        self._set_temp_if_needed(
+                            thermostat, self._thermostat_min_temp(thermostat)
+                        )
+                    continue
+                else:
+                    # Klimaanlage vorhanden aber nicht verwendet → ausschalten
+                    self._set_hvac_mode_if_needed(climate_entity, "off")
+
+            # --- Bestehende Thermostat-Logik (unverändert) ---
             if not thermostat:
                 continue
 
