@@ -228,7 +228,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         entry.async_on_unload(_cleanup_start_listener)
 
-    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
 
@@ -256,12 +255,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Integration neu laden."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
-
-async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload bei Änderungen im Options Flow."""
-    _LOGGER.warning("[Smartdome Diagnose] UPDATE_LISTENER: Config Entry wurde geändert → Reload wird ausgelöst.")
     await hass.config_entries.async_reload(entry.entry_id)
 
 
