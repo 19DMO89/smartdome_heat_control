@@ -2105,7 +2105,12 @@ function createRoomCard(roomId, room) {
 
   function applyCollapsed(collapsed) {
     if (roomGrid) roomGrid.style.display = collapsed ? "none" : "";
-    if (roomAdvanced) roomAdvanced.style.display = "none"; // advanced stays closed when collapsing
+    if (roomAdvanced) {
+      // Beim Einklappen: Inline-Style erzwingen + Klasse zurücksetzen
+      // Beim Aufklappen: Inline-Style leeren, damit .hidden-Klasse wieder greift
+      roomAdvanced.style.display = collapsed ? "none" : "";
+      if (collapsed) roomAdvanced.classList.add("hidden");
+    }
     if (roomModeRow) roomModeRow.style.display = collapsed ? "none" : "";
     if (collapseBtn) collapseBtn.textContent = collapsed ? "▶" : "▼";
   }
