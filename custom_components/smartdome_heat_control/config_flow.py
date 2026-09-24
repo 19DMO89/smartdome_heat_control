@@ -23,9 +23,11 @@ from .const import (
     CONF_ROOM_WINDOW_SENSOR,
     CONF_NIGHT_START,
     CONF_ROOMS,
+    CONF_ROOM_AWAY_ENABLED,
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_DAY_START,
     CONF_ROOM_ENABLED,
+    CONF_ROOM_EXTRA_THERMOSTATS,
     CONF_ROOM_LABEL,
     CONF_ROOM_NIGHT_START,
     CONF_ROOM_SENSOR,
@@ -42,7 +44,9 @@ from .const import (
     DEFAULT_NIGHT_START,
     DEFAULT_OUTDOOR_TEMP_CUTOFF,
     DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    DEFAULT_ROOM_AWAY_ENABLED,
     DEFAULT_ROOM_AWAY_TEMPERATURE,
+    DEFAULT_ROOM_EXTRA_THERMOSTATS,
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
     DEFAULT_TOLERANCE,
@@ -70,7 +74,17 @@ def _climate_selector() -> selector.EntitySelector:
             multiple=False,
         )
     )
-    
+
+
+def _extra_climate_selector() -> selector.EntitySelector:
+    return selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain="climate",
+            multiple=True,
+        )
+    )
+
+
 def _window_sensor_selector() -> selector.EntitySelector:
     return selector.EntitySelector(
         selector.EntitySelectorConfig(
@@ -115,6 +129,14 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     room_data.setdefault(
                         CONF_ROOM_AWAY_TEMPERATURE,
                         DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    )
+                    room_data.setdefault(
+                        CONF_ROOM_EXTRA_THERMOSTATS,
+                        list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
+                    )
+                    room_data.setdefault(
+                        CONF_ROOM_AWAY_ENABLED,
+                        DEFAULT_ROOM_AWAY_ENABLED,
                     )
 
             return await self.async_step_rooms()
@@ -241,6 +263,14 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 room_data.setdefault(
                     CONF_ROOM_AWAY_TEMPERATURE,
                     DEFAULT_ROOM_AWAY_TEMPERATURE,
+                )
+                room_data.setdefault(
+                    CONF_ROOM_EXTRA_THERMOSTATS,
+                    list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
+                )
+                room_data.setdefault(
+                    CONF_ROOM_AWAY_ENABLED,
+                    DEFAULT_ROOM_AWAY_ENABLED,
                 )
 
     async def async_step_init(
@@ -453,6 +483,14 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                     CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
                     CONF_ROOM_WINDOW_SENSOR: user_input.get(CONF_ROOM_WINDOW_SENSOR),
+                    CONF_ROOM_EXTRA_THERMOSTATS: user_input.get(
+                        CONF_ROOM_EXTRA_THERMOSTATS,
+                        list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
+                    ),
+                    CONF_ROOM_AWAY_ENABLED: user_input.get(
+                        CONF_ROOM_AWAY_ENABLED,
+                        DEFAULT_ROOM_AWAY_ENABLED,
+                    ),
                 }
 
             new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
@@ -469,6 +507,13 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     CONF_ROOM_THERMOSTAT,
                     default=room.get(CONF_ROOM_THERMOSTAT, ""),
                 ): _climate_selector(),
+                vol.Optional(
+                    CONF_ROOM_EXTRA_THERMOSTATS,
+                    default=room.get(
+                        CONF_ROOM_EXTRA_THERMOSTATS,
+                        list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
+                    ),
+                ): _extra_climate_selector(),
                 vol.Optional(
                     CONF_ROOM_SENSOR,
                     default=room.get(CONF_ROOM_SENSOR, ""),
@@ -499,6 +544,13 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_ROOM_ENABLED,
                     default=room.get(CONF_ROOM_ENABLED, True),
+                ): bool,
+                vol.Optional(
+                    CONF_ROOM_AWAY_ENABLED,
+                    default=room.get(
+                        CONF_ROOM_AWAY_ENABLED,
+                        DEFAULT_ROOM_AWAY_ENABLED,
+                    ),
                 ): bool,
                 vol.Optional("delete_room", default=False): bool,
                 vol.Optional(
@@ -536,6 +588,14 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                 CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
                 CONF_ROOM_WINDOW_SENSOR: user_input.get(CONF_ROOM_WINDOW_SENSOR),
+                CONF_ROOM_EXTRA_THERMOSTATS: user_input.get(
+                    CONF_ROOM_EXTRA_THERMOSTATS,
+                    list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
+                ),
+                CONF_ROOM_AWAY_ENABLED: user_input.get(
+                    CONF_ROOM_AWAY_ENABLED,
+                    DEFAULT_ROOM_AWAY_ENABLED,
+                ),
             }
 
             new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
@@ -548,6 +608,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required(CONF_ROOM_LABEL): str,
                     vol.Optional(CONF_ROOM_THERMOSTAT): _climate_selector(),
+                    vol.Optional(
+                        CONF_ROOM_EXTRA_THERMOSTATS,
+                        default=list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
+                    ): _extra_climate_selector(),
                     vol.Optional(CONF_ROOM_SENSOR): _temperature_sensor_selector(),
                     vol.Optional(
                         CONF_ROOM_TARGET_DAY,
@@ -564,6 +628,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(CONF_ROOM_DAY_START, default=""): selector.TimeSelector(),
                     vol.Optional(CONF_ROOM_NIGHT_START, default=""): selector.TimeSelector(),
                     vol.Optional(CONF_ROOM_ENABLED, default=True): bool,
+                    vol.Optional(
+                        CONF_ROOM_AWAY_ENABLED,
+                        default=DEFAULT_ROOM_AWAY_ENABLED,
+                    ): bool,
                     vol.Optional(CONF_ROOM_WINDOW_SENSOR): _window_sensor_selector(),
                 }
             ),
@@ -581,6 +649,14 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     room_data.setdefault(
                         CONF_ROOM_AWAY_TEMPERATURE,
                         DEFAULT_ROOM_AWAY_TEMPERATURE,
+                    )
+                    room_data.setdefault(
+                        CONF_ROOM_EXTRA_THERMOSTATS,
+                        list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
+                    )
+                    room_data.setdefault(
+                        CONF_ROOM_AWAY_ENABLED,
+                        DEFAULT_ROOM_AWAY_ENABLED,
                     )
                 self._rooms[room_id] = room_data
 

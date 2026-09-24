@@ -1,10 +1,12 @@
 """Helper-Funktionen für Smartdome Heat Control."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.area_registry import async_get as async_get_area_registry
@@ -21,9 +23,16 @@ from .const import (
     CONF_ROOM_TARGET_DAY,
     CONF_ROOM_TARGET_NIGHT,
     CONF_ROOM_THERMOSTAT,
+    CONF_ROOMS,
+    DATA_CONTROLLER,
+    DATA_ENABLED,
+    DEFAULT_ENABLED,
     DEFAULT_TARGET_DAY,
     DEFAULT_TARGET_NIGHT,
+    DOMAIN,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _is_state_available(state: State | None) -> bool:
@@ -188,6 +197,49 @@ async def async_get_all_sensors(hass: HomeAssistant) -> list[str]:
             result.append(entity_id)
 
     return sorted(set(result))
+
+
+def apply_room_config_update(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    room_id: str,
+    updates: dict[str, Any],
+) -> None:
+    """Raumconfig-Felder setzen, speichern und Controller sofort auslösen.
+
+    Gemeinsam genutzt von raumbasierten Switch- und Select-Entities, damit
+    beide Entity-Typen denselben Update-/Persist-Ablauf verwenden.
+    """
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if entry_data is None:
+        _LOGGER.warning(
+            "Kein Entry-Status für %s, Raumconfig kann nicht gesetzt werden",
+            entry.entry_id,
+        )
+        return
+
+    cfg = dict(entry_data["config"])
+    rooms = dict(cfg.get(CONF_ROOMS, {}))
+    room = dict(rooms.get(room_id, {}))
+    room.update(updates)
+    rooms[room_id] = room
+    cfg[CONF_ROOMS] = rooms
+
+    entry_data["config"] = cfg
+    hass.config_entries.async_update_entry(entry, data=cfg)
+
+    controller = entry_data.get(DATA_CONTROLLER)
+    if controller is not None:
+        controller.update_config(cfg)
+        controller._evaluate()  # sofort reagieren
+
+    state_cfg = dict(cfg)
+    state_cfg.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
+    hass.states.async_set(
+        f"{DOMAIN}.config",
+        "active" if state_cfg.get(DATA_ENABLED, DEFAULT_ENABLED) else "disabled",
+        attributes=state_cfg,
+    )
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

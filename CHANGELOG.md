@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.5.0] – 2026-09-24
+
+### ✨ Feat: Raum-Status-Sensor, Heizmodus-Select, Away pro Raum, mehrere Heizkörperventile (Issue #55, #72, #73)
+
+**Issue #55 – Raum-Entität mit Attributen:** Jeder Raum bekommt eine `sensor`-Entität (z. B. `sensor.wohnzimmer_status`) mit dem Raumzustand (`idle`/`heating`/`residual_hold`/`window_pause`/`off`) als Zustand sowie Zieltemperatur, Ist-Temperatur, Heizmodus und Away-Status als Attribute. Zusätzlich gibt es pro Raum eine `select`-Entität „Heizmodus" (`off`/`default`/`comfort`/`balanced`/`energy`/`adaptive`) — die Option „off" deaktiviert den Raum, ohne einen eigenen Switch zu benötigen.
+
+**Issue #72 – Away-Modus pro Raum:** Zusätzlich zum globalen Away-Switch gibt es jetzt pro Raum eine eigene `switch`-Entität „Away Modus". Away ist aktiv, sobald entweder der globale ODER der raumbezogene Schalter eingeschaltet ist; die bereits vorhandene raumbezogene Away-Zieltemperatur wird dabei verwendet.
+
+**Issue #73 – Mehrere Heizkörperventile pro Raum:** In der Karte kann pro Raum jetzt neben dem Hauptthermostat eine beliebige Anzahl weiterer Thermostat-Entitäten hinterlegt werden ("Weitere Heizkörperventile"). Alle Ventile eines Raums erhalten dieselbe berechnete Zieltemperatur und denselben Regelzyklus.
+
+---
+
+**EN:** #55 adds a `sensor` entity per room exposing room state plus target/current temperature, heating mode and away status as attributes, and a per-room `select` entity for heating mode (including an "off" option). #72 adds a per-room away switch alongside the existing global one (either can trigger away for that room). #73 allows configuring multiple radiator valves per room; all valves in a room receive the same computed setpoint.
+
+**Closes:** #55, #72, #73
+
+---
+
 ## [3.4.1] – 2026-04-14
 
 ### ✨ Feat: Klimaanlagen einbinden + Kühlmodus (Features #68, #69, #70)

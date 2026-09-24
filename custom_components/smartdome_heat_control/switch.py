@@ -14,6 +14,7 @@ from .const import (
     CONF_AWAY_ENABLED,
     CONF_VACATION_ENABLED,
     CONF_ROOMS,
+    CONF_ROOM_AWAY_ENABLED,
     CONF_ROOM_ENABLED,
     CONF_ROOM_LABEL,
     CONF_ROOM_USE_CLIMATE,
@@ -23,9 +24,11 @@ from .const import (
     DEFAULT_AWAY_ENABLED,
     DEFAULT_COOLING_ENABLED,
     DEFAULT_ENABLED,
+    DEFAULT_ROOM_AWAY_ENABLED,
     DEFAULT_VACATION_ENABLED,
     DOMAIN,
 )
+from .helpers import apply_room_config_update
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,6 +80,7 @@ async def async_setup_entry(
         label = str(room.get(CONF_ROOM_LABEL, room_id))
         entities.append(SmartdomeRoomEnabledSwitch(hass, entry, room_id, label))
         entities.append(SmartdomeRoomUseClimateSwitch(hass, entry, room_id, label))
+        entities.append(SmartdomeRoomAwaySwitch(hass, entry, room_id, label))
 
     async_add_entities(entities, True)
 
@@ -245,30 +249,7 @@ class SmartdomeRoomBaseSwitch(SmartHeatingBaseSwitch):
 
     def _apply_room_config_update(self, room_key: str, value: bool) -> None:
         """Raumconfig-Feld setzen, speichern und Controller sofort auslösen."""
-        entry_data = self._get_entry_data()
-        if entry_data is None:
-            _LOGGER.warning(
-                "Kein Entry-Status für %s, Schalter kann nicht gesetzt werden",
-                self._entry.entry_id,
-            )
-            return
-
-        cfg = dict(entry_data["config"])
-        rooms = dict(cfg.get(CONF_ROOMS, {}))
-        room = dict(rooms.get(self._room_id, {}))
-        room[room_key] = value
-        rooms[self._room_id] = room
-        cfg[CONF_ROOMS] = rooms
-
-        entry_data["config"] = cfg
-        self.hass.config_entries.async_update_entry(self._entry, data=cfg)
-
-        controller = entry_data.get(DATA_CONTROLLER)
-        if controller is not None:
-            controller.update_config(cfg)
-            controller._evaluate()  # sofort reagieren
-
-        self._push_state(cfg)
+        apply_room_config_update(self.hass, self._entry, self._room_id, {room_key: value})
         self.async_write_ha_state()
 
 
@@ -330,3 +311,33 @@ class SmartdomeRoomUseClimateSwitch(SmartdomeRoomBaseSwitch):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._apply_room_config_update(CONF_ROOM_USE_CLIMATE, False)
+
+
+class SmartdomeRoomAwaySwitch(SmartdomeRoomBaseSwitch):
+    """Switch: Away-Modus für diesen Raum (unabhängig vom globalen Away-Modus)."""
+
+    _attr_icon = "mdi:home-export-outline"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        room_id: str,
+        room_label: str,
+    ) -> None:
+        super().__init__(hass, entry, room_id, room_label)
+        self._attr_unique_id = f"{entry.entry_id}_room_{room_id}_away"
+        self._attr_name = f"{room_label} – Away Modus"
+
+    @property
+    def is_on(self) -> bool:
+        cfg = self._get_config()
+        rooms = cfg.get(CONF_ROOMS, {})
+        room = rooms.get(self._room_id, {})
+        return bool(room.get(CONF_ROOM_AWAY_ENABLED, DEFAULT_ROOM_AWAY_ENABLED))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self._apply_room_config_update(CONF_ROOM_AWAY_ENABLED, True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._apply_room_config_update(CONF_ROOM_AWAY_ENABLED, False)

@@ -140,6 +140,8 @@ const I18N = {
     room_label: "Label",
     room_area_id: "Area ID",
     room_thermostat: "Radiator valve",
+    room_extra_thermostats: "Additional radiator valves",
+    add_extra_thermostat: "Add radiator valve",
     room_sensor: "Room temperature sensor",
     room_window_sensor: "Window sensor",
     room_control_profile: "Thermostat control profile",
@@ -343,6 +345,8 @@ const I18N = {
     room_label: "Bezeichnung",
     room_area_id: "Area-ID",
     room_thermostat: "Heizkörperventil",
+    room_extra_thermostats: "Weitere Heizkörperventile",
+    add_extra_thermostat: "Heizkörperventil hinzufügen",
     room_sensor: "Raumtemperatursensor",
     room_window_sensor: "Fensterkontakt",
     room_control_profile: "Thermostat-Regelprofil",
@@ -777,6 +781,9 @@ function normalizeRoom(roomId, room) {
         : roomId,
     area_id: typeof room?.area_id === "string" ? room.area_id : "",
     thermostat: typeof room?.thermostat === "string" ? room.thermostat : "",
+    extra_thermostats: Array.isArray(room?.extra_thermostats)
+      ? room.extra_thermostats.filter((s) => typeof s === "string" && s)
+      : [],
     sensor: typeof room?.sensor === "string" ? room.sensor : "",
     window_sensor:
       typeof room?.window_sensor === "string" ? room.window_sensor : "",
@@ -1750,6 +1757,40 @@ function appendWindowSensorRow(listEl, roomId, sensorId) {
   });
 }
 
+function appendExtraThermostatRow(listEl, roomId, thermostatId) {
+  const index = listEl.children.length;
+  const pickerId = `room_${roomId}_extra_thermostat_${index}`;
+
+  const row = document.createElement("div");
+  row.className = "room-extra-thermostat-row";
+  row.style.cssText = "display:flex; gap:8px; align-items:center; margin-bottom:6px;";
+  row.dataset.thermostatPickerId = pickerId;
+
+  const pickerContainer = document.createElement("div");
+  pickerContainer.style.flex = "1";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "ghost";
+  removeBtn.style.cssText = "padding:8px 10px; flex-shrink:0;";
+  removeBtn.textContent = "✕";
+  removeBtn.addEventListener("click", () => row.remove());
+
+  row.appendChild(pickerContainer);
+  row.appendChild(removeBtn);
+  listEl.appendChild(row);
+
+  createEntityPicker({
+    container: pickerContainer,
+    pickerId,
+    items: state.climates,
+    getItems: () => state.climates,
+    selectedValue: thermostatId || "",
+    emptyLabel: t("select_not_set"),
+    onChange: () => {},
+  });
+}
+
 function createRoomCard(roomId, room) {
   const wrapper = document.createElement("div");
   wrapper.className = "room";
@@ -1832,6 +1873,14 @@ function createRoomCard(roomId, room) {
           <span class="label-live room-thermostat-live"></span>
         </label>
         <div class="room-thermostat-picker"></div>
+      </div>
+
+      <div class="field full">
+        <label>${escapeHtml(t("room_extra_thermostats"))}</label>
+        <div class="room-extra-thermostats-list"></div>
+        <button type="button" class="ghost room-add-thermostat-btn" style="width:100%; margin-top:6px; font-size:13px;">
+          + ${escapeHtml(t("add_extra_thermostat"))}
+        </button>
       </div>
 
       <div class="field">
@@ -2057,6 +2106,19 @@ function createRoomCard(roomId, room) {
 
   wrapper.querySelector(".room-add-window-sensor-btn").addEventListener("click", () => {
     appendWindowSensorRow(windowSensorsList, roomId, "");
+  });
+
+  const extraThermostatsList = wrapper.querySelector(".room-extra-thermostats-list");
+  const initialExtraThermostats = Array.isArray(room.extra_thermostats)
+    ? room.extra_thermostats
+    : [];
+
+  for (const thermostatId of initialExtraThermostats) {
+    appendExtraThermostatRow(extraThermostatsList, roomId, thermostatId);
+  }
+
+  wrapper.querySelector(".room-add-thermostat-btn").addEventListener("click", () => {
+    appendExtraThermostatRow(extraThermostatsList, roomId, "");
   });
 
   const advancedToggle = wrapper.querySelector(".room-advanced-toggle");
@@ -2381,6 +2443,9 @@ function collectFormState() {
       label: node.querySelector(".room-label").value.trim() || roomId,
       area_id: node.querySelector(".room-area-id").value.trim(),
       thermostat: getEntityPickerValue(`room_${roomId}_thermostat_picker`) || "",
+      extra_thermostats: [...node.querySelectorAll(".room-extra-thermostat-row")].map(
+        (row) => getEntityPickerValue(row.dataset.thermostatPickerId)
+      ).filter(Boolean),
       sensor: getEntityPickerValue(`room_${roomId}_sensor_picker`) || "",
       window_sensors: [...node.querySelectorAll(".room-window-sensor-row")].map(
         (row) => getEntityPickerValue(row.dataset.wsPickerId)
@@ -2450,6 +2515,7 @@ function addRoom() {
     label: t("room_new"),
     area_id: "",
     thermostat: "",
+    extra_thermostats: [],
     sensor: "",
     window_sensor: "",
     window_sensors: [],

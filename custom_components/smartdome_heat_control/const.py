@@ -5,7 +5,11 @@ DOMAIN = "smartdome_heat_control"
 DATA_CONTROLLER = "controller"
 DATA_ENABLED = "enabled"
 
-PLATFORMS: list[str] = ["switch", "number", "select"]
+# Dispatcher-Signal: wird nach jeder Auswertung mit dem Raumzustand gesendet,
+# damit Entities (z.B. sensor.py) sich ohne Polling aktualisieren können.
+SIGNAL_ROOM_STATE_UPDATED = f"{DOMAIN}_room_state_updated"
+
+PLATFORMS: list[str] = ["switch", "number", "select", "sensor"]
 
 # Services
 SERVICE_UPDATE_CONFIG = "update_config"
@@ -163,6 +167,14 @@ CONF_ROOM_HEATING_MODE = "room_heating_mode"
 # Feature #69 – Klimaanlage pro Raum
 CONF_ROOM_CLIMATE_ENTITY = "climate_entity"
 CONF_ROOM_USE_CLIMATE = "use_climate"
+
+# Feature – Mehrere Heizkörperventile pro Raum
+CONF_ROOM_EXTRA_THERMOSTATS = "extra_thermostats"
+DEFAULT_ROOM_EXTRA_THERMOSTATS: list[str] = []
+
+# Feature – Away-Modus pro Raum
+CONF_ROOM_AWAY_ENABLED = "room_away_enabled"
+DEFAULT_ROOM_AWAY_ENABLED = False
 
 # Feature #70 – Kühlen
 CONF_COOLING_ENABLED = "cooling_enabled"
