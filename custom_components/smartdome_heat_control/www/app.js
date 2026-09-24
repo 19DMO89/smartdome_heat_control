@@ -152,6 +152,7 @@ const I18N = {
     room_night_setback_enabled: "Night setback active",
     room_thermostat_offset: "Thermostat calibration offset (°C)",
     room_away_temperature: "Away temperature (°C)",
+    room_away_mode_enabled: "Away mode active for this room",
     room_day_start: "Day start",
     room_night_start: "Night start",
     room_manual: "Manually created",
@@ -357,6 +358,7 @@ const I18N = {
     room_night_setback_enabled: "Nachtabsenkung aktiv",
     room_thermostat_offset: "Thermostat-Kalibrierungsoffset (°C)",
     room_away_temperature: "Away-Temperatur (°C)",
+    room_away_mode_enabled: "Away-Modus für diesen Raum aktiv",
     room_day_start: "Tag-Start",
     room_night_start: "Nacht-Start",
     room_manual: "Manuell angelegt",
@@ -801,6 +803,7 @@ function normalizeRoom(roomId, room) {
     target_day: normalizeNumber(room?.target_day, 21.0),
     target_night: normalizeNumber(room?.target_night, 18.0),
     away_temperature: normalizeNumber(room?.away_temperature, 17.0),
+    room_away_enabled: room?.room_away_enabled === true,
     weekly_schedule: normalizeWeeklySchedule(room?.weekly_schedule),
     day_start: normalizeTime(room?.day_start, ""),
     night_start: normalizeTime(room?.night_start, ""),
@@ -2015,7 +2018,13 @@ function createRoomCard(roomId, room) {
         </div>
 
         <div class="field">
-          <label>${escapeHtml(t("room_away_temperature"))}</label>
+          <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>${escapeHtml(t("room_away_temperature"))}</span>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:normal;white-space:nowrap;">
+              <input type="checkbox" class="room-away-enabled" ${room.room_away_enabled ? "checked" : ""} />
+              ${escapeHtml(t("room_away_mode_enabled"))}
+            </label>
+          </label>
           <input class="room-away-temperature" type="number" min="5" max="30" step="0.5" value="${escapeHtml(
             room.away_temperature
           )}" />
@@ -2459,6 +2468,7 @@ function collectFormState() {
       target_day: node.querySelector(".room-target-day").value,
       target_night: node.querySelector(".room-target-night").value,
       away_temperature: node.querySelector(".room-away-temperature").value,
+      room_away_enabled: node.querySelector(".room-away-enabled")?.checked === true,
       weekly_schedule: existingRoom.weekly_schedule || DEFAULT_WEEKLY_SCHEDULE,
       day_start: node.querySelector(".room-day-start").value || "",
       night_start: node.querySelector(".room-night-start").value || "",
@@ -2525,6 +2535,7 @@ function addRoom() {
     target_day: normalizeNumber(els.globalTargetDay?.value, DEFAULTS.global_target_day),
     target_night: normalizeNumber(els.globalTargetNight?.value, DEFAULTS.global_target_night),
     away_temperature: normalizeNumber(els.globalAwayTemperature?.value, DEFAULTS.global_away_temperature),
+    room_away_enabled: false,
     weekly_schedule: structuredClone(DEFAULT_WEEKLY_SCHEDULE),
     day_start: "",
     night_start: "",

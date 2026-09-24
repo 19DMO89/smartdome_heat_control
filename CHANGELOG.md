@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.5.1] – 2026-09-24
+
+### 🔧 Fix: Away-Modus & weitere Heizkörperventile gingen beim Neustart/Speichern verloren
+
+**Ursache:** `_normalize_rooms()` in `__init__.py` baut das Raum-Dict bei jedem Setup und jedem Speichervorgang aus einer festen Feld-Liste neu auf. Die beiden in V3.5.0 hinzugefügten Felder (`room_away_enabled`, `extra_thermostats`) waren dort nicht eingetragen und wurden dadurch stillschweigend verworfen – der neue Away-Switch pro Raum blieb wirkungslos, zusätzliche Heizkörperventile überlebten keinen Neustart.
+
+**Fix:** Beide Felder in `_normalize_rooms()` ergänzt (inkl. neuer `_normalize_extra_thermostats()`-Hilfsfunktion). Zusätzlich gibt es jetzt in der Karte selbst eine Away-Checkbox direkt neben der Away-Temperatur pro Raum (Bereich „Erweitert"), sodass der Away-Modus nicht nur über die HA-Switch-Entität, sondern auch direkt in der Smartdome-Karte umschaltbar ist.
+
+---
+
+**EN:** `_normalize_rooms()` rebuilds each room dict from a fixed field list on every setup and save; the two fields added in V3.5.0 (`room_away_enabled`, `extra_thermostats`) were missing from that list and got silently dropped. Fixed by adding both fields there. Also added an away-mode checkbox directly in the room card (Advanced section), next to the away temperature field.
+
+---
+
 ## [3.5.0] – 2026-09-24
 
 ### ✨ Feat: Raum-Status-Sensor, Heizmodus-Select, Away pro Raum, mehrere Heizkörperventile (Issue #55, #72, #73)

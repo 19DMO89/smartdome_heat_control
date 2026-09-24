@@ -36,6 +36,10 @@ from .const import (
     CONF_ROOM_ORDER,
     CONF_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_WINDOW_SENSORS,
+    CONF_ROOM_AWAY_ENABLED,
+    CONF_ROOM_EXTRA_THERMOSTATS,
+    DEFAULT_ROOM_AWAY_ENABLED,
+    DEFAULT_ROOM_EXTRA_THERMOSTATS,
     DEFAULT_ROOM_CONTROL_PROFILE,
     DEFAULT_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_AWAY_TEMPERATURE,
@@ -297,6 +301,14 @@ def _normalize_window_sensors(room: dict[str, Any]) -> list[str]:
     return [old] if isinstance(old, str) and old else []
 
 
+def _normalize_extra_thermostats(room: dict[str, Any]) -> list[str]:
+    """Zusätzliche Heizkörperventile normalisieren."""
+    thermostats = room.get(CONF_ROOM_EXTRA_THERMOSTATS)
+    if isinstance(thermostats, list):
+        return [t for t in thermostats if isinstance(t, str) and t]
+    return list(DEFAULT_ROOM_EXTRA_THERMOSTATS)
+
+
 def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
     """Räume normalisieren."""
     if not isinstance(rooms, dict):
@@ -312,6 +324,7 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "label": room.get("label", room_id),
             "area_id": room.get("area_id", ""),
             "thermostat": room.get("thermostat", ""),
+            CONF_ROOM_EXTRA_THERMOSTATS: _normalize_extra_thermostats(room),
             "sensor": room.get("sensor", ""),
             "window_sensor": room.get("window_sensor", ""),
             CONF_ROOM_WINDOW_SENSORS: _normalize_window_sensors(room),
@@ -320,6 +333,9 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "away_temperature": room.get(
                 "away_temperature",
                 DEFAULT_ROOM_AWAY_TEMPERATURE,
+            ),
+            CONF_ROOM_AWAY_ENABLED: bool(
+                room.get(CONF_ROOM_AWAY_ENABLED, DEFAULT_ROOM_AWAY_ENABLED)
             ),
             "day_start": room.get("day_start", ""),
             "night_start": room.get("night_start", ""),
