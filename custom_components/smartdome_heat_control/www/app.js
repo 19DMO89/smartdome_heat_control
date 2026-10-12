@@ -2709,6 +2709,7 @@ function closeScheduleModal() {
   scheduleRoomId = null;
   currentScheduleDay = "monday";
   draftWeeklySchedule = null;
+  els.scheduleEntries.innerHTML = "";
   els.scheduleModal.classList.add("hidden");
   closeScheduleCopyModal();
 }
@@ -2739,7 +2740,9 @@ function flushScheduleEditorValues() {
 }
 
 function renderScheduleEditor() {
-  flushScheduleEditorValues();
+  // Kein flushScheduleEditorValues() hier: Beim Öffnen eines anderen Raums
+  // bzw. Wechsel des Tages stehen noch die alten Eingabezeilen im DOM und
+  // würden sonst in den neuen Raum/Tag geschrieben werden.
   renderScheduleDayButtons();
 
   if (!draftWeeklySchedule || !scheduleRoomId) {
@@ -2799,6 +2802,8 @@ function addScheduleEntry() {
   if (!draftWeeklySchedule || !scheduleRoomId) {
     return;
   }
+
+  flushScheduleEditorValues();
 
   if (!Array.isArray(draftWeeklySchedule[currentScheduleDay])) {
     draftWeeklySchedule[currentScheduleDay] = [];
@@ -2895,6 +2900,7 @@ function applyScheduleToSelectedRooms() {
     return;
   }
 
+  flushScheduleEditorValues();
   const copiedSchedule = normalizeWeeklySchedule(draftWeeklySchedule);
 
   for (const roomId of selectedIds) {
@@ -2943,6 +2949,7 @@ function bindScheduleEvents() {
 
   els.scheduleDayButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
+      flushScheduleEditorValues();
       currentScheduleDay = btn.dataset.day;
       renderScheduleEditor();
     });

@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.5.2] – 2026-10-12
+
+### 🔧 Fix: Wochenschema-Eintrag wurde auf andere Räume übertragen
+
+**Ursache:** `renderScheduleEditor()` hat vor dem Neuzeichnen immer `flushScheduleEditorValues()` aufgerufen, also die aktuell im DOM stehenden Eingabezeilen in den Entwurf zurückgeschrieben. Beim Öffnen des Wochenschemas eines anderen Raums standen dort aber noch die Zeilen des zuletzt bearbeiteten Raums (das Modal wurde beim Schließen nicht geleert) – diese wurden in den Montag des neuen Raums geschrieben und landeten mit „Konfiguration speichern" dauerhaft dort. Dasselbe passierte beim Wechsel des Wochentags innerhalb eines Raums.
+
+**Fix:** Das Zurückschreiben passiert jetzt nur noch vor dem Tageswechsel, vor dem Hinzufügen eines Zeitblocks, beim Speichern und beim Kopieren – nicht mehr beim Rendern. Zusätzlich wird die Eintragsliste beim Schließen des Modals geleert.
+
+---
+
+**EN:** The weekly-schedule editor flushed stale input rows from the DOM into the draft on every render, so opening another room's schedule (or switching weekday) copied the last edited entries into it. Flushing now only happens before day switches, adding entries, saving and copying; the entry list is cleared when the modal closes.
+
+---
+
 ## [3.5.1] – 2026-09-24
 
 ### 🔧 Fix: Away-Modus & weitere Heizkörperventile gingen beim Neustart/Speichern verloren
