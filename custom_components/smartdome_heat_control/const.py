@@ -9,7 +9,7 @@ DATA_ENABLED = "enabled"
 # damit Entities (z.B. sensor.py) sich ohne Polling aktualisieren können.
 SIGNAL_ROOM_STATE_UPDATED = f"{DOMAIN}_room_state_updated"
 
-PLATFORMS: list[str] = ["switch", "number", "select", "sensor"]
+PLATFORMS: list[str] = ["switch", "number", "select", "sensor", "climate"]
 
 # Services
 SERVICE_UPDATE_CONFIG = "update_config"

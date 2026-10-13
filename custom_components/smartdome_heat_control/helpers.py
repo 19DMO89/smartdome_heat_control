@@ -77,7 +77,11 @@ def _best_entity(
     prefer_available: bool = True,
 ) -> str | None:
     candidates = [
-        entity for entity in entities if entity.domain == domain and not entity.disabled_by
+        entity
+        for entity in entities
+        if entity.domain == domain
+        and not entity.disabled_by
+        and entity.platform != DOMAIN
     ]
     if not candidates:
         return None
@@ -171,8 +175,19 @@ async def async_discover_rooms(hass: HomeAssistant) -> dict[str, dict[str, Any]]
     return rooms
 
 
+def _is_own_entity(hass: HomeAssistant, entity_id: str) -> bool:
+    """True, wenn die Entity von dieser Integration selbst angelegt wurde."""
+    entry = async_get_entity_registry(hass).async_get(entity_id)
+    return entry is not None and entry.platform == DOMAIN
+
+
 async def async_get_all_thermostats(hass: HomeAssistant) -> list[str]:
-    return sorted(hass.states.async_entity_ids(CLIMATE_DOMAIN))
+    # Eigene Raum-Climate-Entities nicht als Heizkörperventil anbieten.
+    return sorted(
+        entity_id
+        for entity_id in hass.states.async_entity_ids(CLIMATE_DOMAIN)
+        if not _is_own_entity(hass, entity_id)
+    )
 
 
 async def async_get_all_sensors(hass: HomeAssistant) -> list[str]:

@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.6.0] – 2026-10-13
+
+### ✨ Feat: Climate-Entity pro Raum (Soll/Ist wie ein Thermostat)
+
+Jeder Raum bekommt eine `climate`-Entität („<Raum> – Heizung"). Sie zeigt die aktuell gültige Solltemperatur und die Ist-Temperatur an und funktioniert in der Standard-Thermostat-Karte von Home Assistant. `hvac_action` zeigt `heating`/`idle`/`off`, `hvac_mode` `heat`/`off` (schaltet den Raum aktiv/inaktiv).
+
+Ändert man die Solltemperatur dort, wird je nach aktuellem Zustand die **Away-**, **Nacht-** oder **Tag-Temperatur** des Raums angepasst und gespeichert. Bei aktivem Urlaubsmodus oder Wochenplan-Eintrag ist der Sollwert vorgegeben und wird mit einer Meldung abgelehnt.
+
+Die eigenen Climate-Entities werden in den Auswahllisten für Heizkörperventile und bei der Raum-Erkennung ausgeblendet, damit sie nicht versehentlich als Thermostat gewählt werden.
+
+**Hinweis:** Im Heizmodus *Energy* steht das Heizkörperventil im Leerlauf bewusst auf der Minimaltemperatur (meist 5 °C), solange der Raum warm genug ist. Das ist kein Fehler – die Soll-Temperatur des Raums sieht man jetzt in der neuen Climate-Entity.
+
+---
+
+**EN:** Each room now gets a `climate` entity showing target/current temperature like a thermostat; changing the target writes the active away/night/day setpoint. Own climate entities are hidden from thermostat pickers. Rejected while vacation mode or a weekly-schedule entry sets the target.
+
+---
+
 ## [3.5.2] – 2026-10-12
 
 ### 🔧 Fix: Wochenschema-Eintrag wurde auf andere Räume übertragen

@@ -677,6 +677,26 @@ class SmartHeatingController:
             "away_active": self._is_room_away_active(room),
         }
 
+    def get_room_setpoint_key(self, room_id: str) -> str | None:
+        """Config-Key, den ein manuell gesetzter Sollwert gerade ändern soll.
+
+        Rückgabe: ``away_temperature``, ``target_night`` oder ``target_day``.
+        ``None`` wenn der Sollwert aktuell nicht über den Raum veränderbar ist
+        (Urlaubsmodus oder aktiver Wochenplan-Eintrag).
+        """
+        room = self.config.get(CONF_ROOMS, {}).get(room_id)
+        if not isinstance(room, dict):
+            return None
+        if bool(self.config.get(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)):
+            return None
+        if self._is_room_away_active(room):
+            return CONF_ROOM_AWAY_TEMPERATURE
+        if self._scheduled_target_for_room(room) is not None:
+            return None
+        if bool(room.get(CONF_ROOM_NIGHT_SETBACK_ENABLED, True)) and self._is_night_for_room(room):
+            return CONF_ROOM_TARGET_NIGHT
+        return CONF_ROOM_TARGET_DAY
+
     def _effective_target_for_room(self, room: dict[str, Any]) -> float:
         """Ermittelt die gültige Zieltemperatur."""
         vacation_enabled = bool(
