@@ -31,9 +31,11 @@ from .const import (
     CONF_OUTDOOR_SENSOR,
     CONF_OUTDOOR_TEMP_CUTOFF,
     CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    CONF_OUTDOOR_CUTOFF_HYSTERESIS,
     CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
     DEFAULT_OUTDOOR_TEMP_CUTOFF,
     DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS,
     DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE,
     CONF_CIRCUIT_CONTROL_TYPE,
     CONF_CIRCUIT_ENABLED,
@@ -167,6 +169,7 @@ class SmartHeatingController:
         self._last_command_sent_at: dict[str, float] = {}
         self._room_sensor_missing_since: dict[str, float] = {}
         self._room_sensor_fault: set[str] = set()
+        self._outdoor_cutoff_latched = False
 
         # Zuletzt wirklich angewendeter effektiver Zustand pro Raum
         self._last_applied_room_state: dict[str, str] = {}
@@ -296,6 +299,7 @@ class SmartHeatingController:
             CONF_OUTDOOR_TEMP_CUTOFF_ENABLED, DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED
         )
         self.config.setdefault(CONF_OUTDOOR_TEMP_CUTOFF, DEFAULT_OUTDOOR_TEMP_CUTOFF)
+        self.config.setdefault(CONF_OUTDOOR_CUTOFF_HYSTERESIS, DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS)
         self.config.setdefault(CONF_OUTDOOR_MIN_ROOM_TEMPERATURE, DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE)
         self.config.setdefault(
             CONF_ENERGY_RESIDUAL_HEAT_HOLD,
@@ -1088,6 +1092,7 @@ class SmartHeatingController:
         self._last_command_sent_at.clear()
         self._room_sensor_missing_since.clear()
         self._room_sensor_fault.clear()
+        self._outdoor_cutoff_latched = False
         self._last_applied_room_state.clear()
         self._circuit_heating_active.clear()
         self._last_hvac_mode.clear()
@@ -1294,7 +1299,16 @@ class SmartHeatingController:
         )
         if cutoff is None:
             cutoff = float(DEFAULT_OUTDOOR_TEMP_CUTOFF)
-        return outdoor_temp >= cutoff
+        hysteresis = self._safe_float(
+            self.config.get(CONF_OUTDOOR_CUTOFF_HYSTERESIS, DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS)
+        )
+        hysteresis = max(0.0, hysteresis if hysteresis is not None else DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS)
+        if self._outdoor_cutoff_latched:
+            if outdoor_temp <= cutoff - hysteresis:
+                self._outdoor_cutoff_latched = False
+        elif outdoor_temp >= cutoff:
+            self._outdoor_cutoff_latched = True
+        return self._outdoor_cutoff_latched
 
     def _evaluate(self) -> None:
         """Heizlogik auswerten."""
