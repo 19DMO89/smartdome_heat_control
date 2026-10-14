@@ -114,8 +114,14 @@ def _sensor_score(hass: HomeAssistant, entity: Any) -> tuple[int, int]:
 
 
 def _best_sensor(hass: HomeAssistant, entities: list[Any]) -> str | None:
+    # Never autodiscover arbitrary numeric sensors (e.g. printer or battery).
     candidates = [
-        entity for entity in entities if entity.domain == SENSOR_DOMAIN and not entity.disabled_by
+        entity for entity in entities
+        if entity.domain == SENSOR_DOMAIN
+        and not entity.disabled_by
+        and (state := hass.states.get(entity.entity_id)) is not None
+        and state.attributes.get("device_class") == "temperature"
+        and state.attributes.get("unit_of_measurement") in ("°C", "°F")
     ]
     if not candidates:
         return None
@@ -131,9 +137,6 @@ def _best_sensor(hass: HomeAssistant, entities: list[Any]) -> str | None:
         return None
 
     if top_state.attributes.get("device_class") == "temperature":
-        return top.entity_id
-
-    if _safe_float(top_state.state) is not None:
         return top.entity_id
 
     return None
