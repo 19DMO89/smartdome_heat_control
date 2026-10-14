@@ -20,7 +20,8 @@
           "away_enabled": "Away mode enabled",
           "outdoor_sensor": "Outdoor temperature sensor",
           "outdoor_temp_cutoff_enabled": "Outdoor temperature cutoff enabled",
-          "outdoor_temp_cutoff": "Switch off heating above outdoor temperature"
+          "outdoor_temp_cutoff": "Switch off heating above outdoor temperature",
+          "outdoor_min_room_temperature": "Minimum room temperature during outdoor cutoff"
         }
       },
       "rooms": {
@@ -60,7 +61,8 @@
           "away_enabled": "Away mode enabled",
           "outdoor_sensor": "Outdoor temperature sensor",
           "outdoor_temp_cutoff_enabled": "Outdoor temperature cutoff enabled",
-          "outdoor_temp_cutoff": "Switch off heating above outdoor temperature"
+          "outdoor_temp_cutoff": "Switch off heating above outdoor temperature",
+          "outdoor_min_room_temperature": "Minimum room temperature during outdoor cutoff"
         }
       },
       "rooms_list": {

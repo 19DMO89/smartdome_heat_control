@@ -31,8 +31,10 @@ from .const import (
     CONF_OUTDOOR_SENSOR,
     CONF_OUTDOOR_TEMP_CUTOFF,
     CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
     DEFAULT_OUTDOOR_TEMP_CUTOFF,
     DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE,
     CONF_CIRCUIT_CONTROL_TYPE,
     CONF_CIRCUIT_ENABLED,
     CONF_CIRCUIT_LABEL,
@@ -292,6 +294,7 @@ class SmartHeatingController:
             CONF_OUTDOOR_TEMP_CUTOFF_ENABLED, DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED
         )
         self.config.setdefault(CONF_OUTDOOR_TEMP_CUTOFF, DEFAULT_OUTDOOR_TEMP_CUTOFF)
+        self.config.setdefault(CONF_OUTDOOR_MIN_ROOM_TEMPERATURE, DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE)
         self.config.setdefault(
             CONF_ENERGY_RESIDUAL_HEAT_HOLD,
             DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
@@ -675,6 +678,9 @@ class SmartHeatingController:
             "heating_mode": self._get_room_heating_mode(room),
             "enabled": enabled,
             "away_active": self._is_room_away_active(room),
+            "outdoor_cutoff_active": last_state.get("outdoor_cutoff_active", False),
+            "outdoor_minimum_active": last_state.get("outdoor_minimum_active", False),
+            "control_target_temperature": last_state.get("control_target"),
         }
 
     def get_room_setpoint_key(self, room_id: str) -> str | None:
@@ -1296,17 +1302,33 @@ class SmartHeatingController:
                 predicted_overshoot=predicted_overshoot,
             )
 
-            # Außentemperatur-Abschaltung: Heizung unterdrücken, aber
-            # Raumthermostate auf normalen Idle-Sollwert belassen (kein Frost-Modus).
-            if outdoor_cutoff_active and state == ROOM_STATE_HEATING:
-                state = ROOM_STATE_IDLE
-                self._room_state[room_id] = ROOM_STATE_IDLE
+            minimum = self._safe_float(self.config.get(
+                CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
+                DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE,
+            ))
+            if minimum is None:
+                minimum = float(DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE)
+            control_target = min(target, minimum) if outdoor_cutoff_active else target
+            minimum_active = outdoor_cutoff_active and control_target < target
+            if minimum_active:
+                state = self._update_room_state(
+                    room_id=room_id,
+                    room=room,
+                    target=control_target,
+                    actual=actual,
+                    pause_active=pause_active,
+                    tolerance=tolerance,
+                    predicted_overshoot=0.0,
+                )
 
             room_states[room_id] = {
                 "actual": actual,
                 "target": target,
+                "control_target": control_target,
                 "state": state,
                 "pause_active": pause_active,
+                "outdoor_cutoff_active": outdoor_cutoff_active,
+                "outdoor_minimum_active": minimum_active,
             }
 
             if state == ROOM_STATE_HEATING:
@@ -1561,15 +1583,16 @@ class SmartHeatingController:
                     room_target = self._thermostat_min_temp(thermostat)
                     effective_state = ROOM_STATE_WINDOW_PAUSE
                 elif state == ROOM_STATE_HEATING:
+                    heating_target = room_state["control_target"]
                     if self._is_self_regulating_room(room):
                         room_target = self._round_to_step(
-                            target,
+                            heating_target,
                             self._thermostat_target_step(thermostat),
                         )
                     else:
                         room_target = self._get_heating_target_for_room(
                             thermostat,
-                            target,
+                            heating_target,
                             boost_delta,
                         )
                     effective_state = ROOM_STATE_HEATING
@@ -1580,15 +1603,19 @@ class SmartHeatingController:
                     )
                     effective_state = ROOM_STATE_RESIDUAL_HOLD
                 else:
-                    room_target = self._get_idle_target_for_room(
-                        room_id,
-                        room,
-                        thermostat,
-                        target,
-                    )
+                    if room_state["outdoor_minimum_active"]:
+                        room_target = self._thermostat_min_temp(thermostat)
+                    else:
+                        room_target = self._get_idle_target_for_room(
+                            room_id, room, thermostat, target,
+                        )
                     effective_state = ROOM_STATE_IDLE
 
-                if not room_state["pause_active"] and thermostat_offset != 0.0:
+                if (
+                    not room_state["pause_active"]
+                    and not (room_state["outdoor_minimum_active"] and state != ROOM_STATE_HEATING)
+                    and thermostat_offset != 0.0
+                ):
                     room_target = room_target + thermostat_offset
 
                 desired = self._round_to_step(
