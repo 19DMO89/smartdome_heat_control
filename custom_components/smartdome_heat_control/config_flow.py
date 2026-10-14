@@ -20,6 +20,7 @@ from .const import (
     CONF_OUTDOOR_SENSOR,
     CONF_OUTDOOR_TEMP_CUTOFF,
     CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    CONF_OUTDOOR_CUTOFF_HYSTERESIS,
     CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
     CONF_ROOM_WINDOW_SENSOR,
     CONF_NIGHT_START,
@@ -45,6 +46,7 @@ from .const import (
     DEFAULT_NIGHT_START,
     DEFAULT_OUTDOOR_TEMP_CUTOFF,
     DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS,
     DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE,
     DEFAULT_ROOM_AWAY_ENABLED,
     DEFAULT_ROOM_AWAY_TEMPERATURE,
@@ -207,6 +209,10 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
                     default=DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
                 ): bool,
+                vol.Optional(
+                    CONF_OUTDOOR_CUTOFF_HYSTERESIS,
+                    default=DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS,
+                ): _temp_number_selector(0.0, 5.0, 0.5),
                 vol.Optional(
                     CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
                     default=DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE,
@@ -415,6 +421,13 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                         DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
                     ),
                 ): bool,
+                vol.Optional(
+                    CONF_OUTDOOR_CUTOFF_HYSTERESIS,
+                    default=data.get(
+                        CONF_OUTDOOR_CUTOFF_HYSTERESIS,
+                        DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS,
+                    ),
+                ): _temp_number_selector(0.0, 5.0, 0.5),
                 vol.Optional(
                     CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
                     default=data.get(
