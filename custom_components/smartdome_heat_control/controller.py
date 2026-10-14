@@ -165,6 +165,8 @@ class SmartHeatingController:
 
         # Letzte echte Schreibzeit pro Thermostat
         self._last_command_sent_at: dict[str, float] = {}
+        self._room_sensor_missing_since: dict[str, float] = {}
+        self._room_sensor_fault: set[str] = set()
 
         # Zuletzt wirklich angewendeter effektiver Zustand pro Raum
         self._last_applied_room_state: dict[str, str] = {}
@@ -681,6 +683,7 @@ class SmartHeatingController:
             "outdoor_cutoff_active": last_state.get("outdoor_cutoff_active", False),
             "outdoor_minimum_active": last_state.get("outdoor_minimum_active", False),
             "control_target_temperature": last_state.get("control_target"),
+            "sensor_fault": room_id in self._room_sensor_fault,
         }
 
     def get_room_setpoint_key(self, room_id: str) -> str | None:
@@ -828,10 +831,25 @@ class SmartHeatingController:
         desired = self._round_to_step(float(temp), step)
         previous = self._desired_targets.get(entity_id)
 
-        if previous is not None and abs(previous - desired) < 0.01:
-            return
-
         now_ts = dt_util.now().timestamp()
+        # Reconcile the real device setpoint, not only our cached intent.
+        # A five-minute grace period avoids fighting delayed Bosch updates.
+        if previous is not None and abs(previous - desired) < 0.01:
+            climate_state = self.hass.states.get(entity_id)
+            actual_target = (
+                self._safe_float(climate_state.attributes.get("temperature"))
+                if climate_state and climate_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+                else None
+            )
+            if actual_target is None or abs(actual_target - desired) < max(0.2, step * 0.5):
+                return
+            if now_ts - self._last_command_sent_at.get(entity_id, 0.0) < 300:
+                return
+            _LOGGER.warning(
+                "Thermostat %s: Sollwert-Abweichung (gewünscht %.1f, gemeldet %.1f); synchronisiere",
+                entity_id, desired, actual_target,
+            )
+
         last_sent = self._last_command_sent_at.get(entity_id, 0.0)
 
         if min_interval > 0 and (now_ts - last_sent) < min_interval:
@@ -1053,6 +1071,8 @@ class SmartHeatingController:
         self._last_room_states.clear()
         self._residual_heat_hold_until.clear()
         self._last_command_sent_at.clear()
+        self._room_sensor_missing_since.clear()
+        self._room_sensor_fault.clear()
         self._last_applied_room_state.clear()
         self._circuit_heating_active.clear()
         self._last_hvac_mode.clear()
@@ -1120,11 +1140,17 @@ class SmartHeatingController:
             return ROOM_STATE_IDLE
 
         if actual is None:
-            # Sensor vorübergehend nicht verfügbar: aktuellen Zustand einfrieren.
-            # Wenn der Raum bereits heizte, weiter heizen – nicht abrupt stoppen,
-            # nur weil ein Sensor kurz "unavailable" meldet.
-            # Heizung STARTEN ohne Sensor ist nicht erlaubt (bleibt IDLE).
+            missing_since = self._room_sensor_missing_since.setdefault(room_id, now_ts)
+            if now_ts - missing_since >= 300:
+                # Fail safe after five minutes: stop indefinite boost/heating.
+                self._room_sensor_fault.add(room_id)
+                self._room_state[room_id] = ROOM_STATE_IDLE
+                self._residual_heat_hold_until.pop(room_id, None)
+                return ROOM_STATE_IDLE
             return self._room_state.get(room_id, ROOM_STATE_IDLE)
+
+        self._room_sensor_missing_since.pop(room_id, None)
+        self._room_sensor_fault.discard(room_id)
 
         if current_state == ROOM_STATE_IDLE:
             if actual < (target - tolerance):
@@ -1582,6 +1608,10 @@ class SmartHeatingController:
                 if room_state["pause_active"]:
                     room_target = self._thermostat_min_temp(thermostat)
                     effective_state = ROOM_STATE_WINDOW_PAUSE
+                elif room_id in self._room_sensor_fault:
+                    # Do not keep heating when the only room sensor is lost.
+                    room_target = self._thermostat_min_temp(thermostat)
+                    effective_state = ROOM_STATE_IDLE
                 elif state == ROOM_STATE_HEATING:
                     heating_target = room_state["control_target"]
                     if self._is_self_regulating_room(room):
@@ -1613,6 +1643,7 @@ class SmartHeatingController:
 
                 if (
                     not room_state["pause_active"]
+                    and room_id not in self._room_sensor_fault
                     and not (room_state["outdoor_minimum_active"] and state != ROOM_STATE_HEATING)
                     and thermostat_offset != 0.0
                 ):
