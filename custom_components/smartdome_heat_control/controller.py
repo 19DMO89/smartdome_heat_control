@@ -1347,16 +1347,6 @@ class SmartHeatingController:
                 else 0.0
             )
 
-            state = self._update_room_state(
-                room_id=room_id,
-                room=room,
-                target=target,
-                actual=actual,
-                pause_active=pause_active,
-                tolerance=tolerance,
-                predicted_overshoot=predicted_overshoot,
-            )
-
             minimum = self._safe_float(self.config.get(
                 CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
                 DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE,
@@ -1365,16 +1355,19 @@ class SmartHeatingController:
                 minimum = float(DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE)
             control_target = min(target, minimum) if outdoor_cutoff_active else target
             minimum_active = outdoor_cutoff_active and control_target < target
-            if minimum_active:
-                state = self._update_room_state(
-                    room_id=room_id,
-                    room=room,
-                    target=control_target,
-                    actual=actual,
-                    pause_active=pause_active,
-                    tolerance=tolerance,
-                    predicted_overshoot=0.0,
-                )
+
+            # Evaluate the state machine exactly once against its effective target.
+            # Evaluating first at 22°C and then at 19°C could spuriously turn
+            # the minimum-temperature heating on inside its hysteresis band.
+            state = self._update_room_state(
+                room_id=room_id,
+                room=room,
+                target=control_target,
+                actual=actual,
+                pause_active=pause_active,
+                tolerance=tolerance,
+                predicted_overshoot=0.0 if minimum_active else predicted_overshoot,
+            )
 
             room_states[room_id] = {
                 "actual": actual,
@@ -1598,13 +1591,18 @@ class SmartHeatingController:
                         )
                     continue
                 elif use_climate:
-                    # Heizen via Klimaanlage
-                    if rstate.get("pause_active"):
+                    # Climate heating must obey window pauses, missing sensors
+                    # and the same outdoor minimum target as radiator heating.
+                    if (
+                        rstate.get("pause_active")
+                        or room_id in self._room_sensor_fault
+                        or rstate.get("state") != ROOM_STATE_HEATING
+                    ):
                         self._set_hvac_mode_if_needed(climate_entity, "off")
                     else:
                         heat_target = float(
                             rstate.get(
-                                "target",
+                                "control_target",
                                 room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
                             )
                         )
