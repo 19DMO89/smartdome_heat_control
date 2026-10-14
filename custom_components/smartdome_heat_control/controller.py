@@ -170,6 +170,9 @@ class SmartHeatingController:
         self._room_sensor_missing_since: dict[str, float] = {}
         self._room_sensor_fault: set[str] = set()
         self._outdoor_cutoff_latched = False
+        # Transient per-room comfort requests (not persisted to schedules).
+        self._comfort_override: dict[str, tuple[float, float]] = {}
+        self._comfort_override_seconds = 3600
 
         # Zuletzt wirklich angewendeter effektiver Zustand pro Raum
         self._last_applied_room_state: dict[str, str] = {}
@@ -226,11 +229,9 @@ class SmartHeatingController:
                 if ws_id:
                     watch_entities.add(ws_id)
 
-            # Bei selbst regelnden Räumen auch die Thermostate beobachten,
-            # damit _evaluate() greift sobald die CCU den State bestätigt.
-            if self._is_self_regulating_room(room):
-                for thermostat in self._room_thermostats(room):
-                    watch_entities.add(thermostat)
+            # Physical thermostat setpoint changes can request comfort without a phone.
+            for thermostat in self._room_thermostats(room):
+                watch_entities.add(thermostat)
 
         if watch_entities:
             self._unsub.append(
@@ -657,6 +658,25 @@ class SmartHeatingController:
             return True
         return bool(room.get(CONF_ROOM_AWAY_ENABLED, DEFAULT_ROOM_AWAY_ENABLED))
 
+    def set_comfort_override(self, room_id: str, temperature: float) -> None:
+        """Request temporary room comfort without overwriting schedules/config."""
+        if room_id not in self._active_rooms():
+            return
+        requested = min(30.0, max(5.0, float(temperature)))
+        expires = dt_util.now().timestamp() + self._comfort_override_seconds
+        self._comfort_override[room_id] = (requested, expires)
+        self._evaluate()
+
+    def _active_comfort_target(self, room_id: str) -> float | None:
+        entry = self._comfort_override.get(room_id)
+        if entry is None:
+            return None
+        target, expires = entry
+        if dt_util.now().timestamp() >= expires:
+            self._comfort_override.pop(room_id, None)
+            return None
+        return target
+
     def get_room_status(self, room_id: str) -> dict[str, Any]:
         """Aktuellen Raumstatus für Entities (z.B. sensor.py) liefern."""
         room = self.config.get(CONF_ROOMS, {}).get(room_id)
@@ -676,12 +696,15 @@ class SmartHeatingController:
         current_status = last_state.get(
             "state", self._room_state.get(room_id, ROOM_STATE_IDLE)
         )
+        comfort_target = self._active_comfort_target(room_id)
         if not enabled:
             reason = "disabled"
         elif room_id in self._room_sensor_fault:
             reason = "sensor_fault"
         elif last_state.get("pause_active"):
             reason = "window_pause"
+        elif comfort_target is not None:
+            reason = "comfort_override"
         elif last_state.get("outdoor_minimum_active"):
             reason = (
                 "minimum_temperature_heating"
@@ -703,6 +726,11 @@ class SmartHeatingController:
             "outdoor_minimum_active": last_state.get("outdoor_minimum_active", False),
             "control_target_temperature": last_state.get("control_target"),
             "sensor_fault": room_id in self._room_sensor_fault,
+            "comfort_override_active": comfort_target is not None,
+            "comfort_override_target": comfort_target,
+            "comfort_override_remaining_seconds": max(
+                0, round(self._comfort_override[room_id][1] - dt_util.now().timestamp())
+            ) if comfort_target is not None else 0,
         }
 
     def get_room_setpoint_key(self, room_id: str) -> str | None:
@@ -1353,8 +1381,14 @@ class SmartHeatingController:
             ))
             if minimum is None:
                 minimum = float(DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE)
-            control_target = min(target, minimum) if outdoor_cutoff_active else target
-            minimum_active = outdoor_cutoff_active and control_target < target
+            comfort_target = self._active_comfort_target(room_id)
+            control_target = (
+                comfort_target if comfort_target is not None
+                else min(target, minimum) if outdoor_cutoff_active else target
+            )
+            minimum_active = (
+                comfort_target is None and outdoor_cutoff_active and control_target < target
+            )
 
             # Evaluate the state machine exactly once against its effective target.
             # Evaluating first at 22°C and then at 19°C could spuriously turn
@@ -1373,6 +1407,7 @@ class SmartHeatingController:
                 "actual": actual,
                 "target": target,
                 "control_target": control_target,
+                "comfort_target": comfort_target,
                 "state": state,
                 "pause_active": pause_active,
                 "outdoor_cutoff_active": outdoor_cutoff_active,
@@ -1717,7 +1752,34 @@ class SmartHeatingController:
 
     @callback
     def _on_state_change(self, event: Event) -> None:
-        """Bei Sensor-Änderung sofort neu bewerten."""
+        """Detect external setpoint increases, then evaluate room demand."""
+        entity_id = event.data.get("entity_id")
+        old = event.data.get("old_state")
+        new = event.data.get("new_state")
+        if entity_id and old and new:
+            old_target = self._safe_float(old.attributes.get("temperature"))
+            new_target = self._safe_float(new.attributes.get("temperature"))
+            now_ts = dt_util.now().timestamp()
+            if (
+                old_target is not None and new_target is not None
+                and new_target - old_target >= 0.5
+                and now_ts - self._last_command_sent_at.get(entity_id, 0) > 120
+            ):
+                for room_id, room in self._active_rooms().items():
+                    if entity_id not in self._room_thermostats(room):
+                        continue
+                    expected = self._desired_targets.get(entity_id)
+                    # Ignore delayed acknowledgements of our own commands.
+                    if expected is not None and abs(new_target - expected) < 0.25:
+                        break
+                    if self._room_temp(room) is None:
+                        break
+                    self.set_comfort_override(room_id, new_target)
+                    _LOGGER.info(
+                        "Comfort override in %s: %.1f°C for %d minutes",
+                        room_id, new_target, self._comfort_override_seconds // 60,
+                    )
+                    return
         self._evaluate()
 
     @callback
