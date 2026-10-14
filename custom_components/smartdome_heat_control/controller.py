@@ -669,12 +669,27 @@ class SmartHeatingController:
         enabled = bool(room.get(CONF_ROOM_ENABLED, True))
         last_state = self._last_room_states.get(room_id, {})
 
-        return {
-            "state": last_state.get(
-                "state", self._room_state.get(room_id, ROOM_STATE_IDLE)
+        current_status = last_state.get(
+            "state", self._room_state.get(room_id, ROOM_STATE_IDLE)
+        )
+        if not enabled:
+            reason = "disabled"
+        elif room_id in self._room_sensor_fault:
+            reason = "sensor_fault"
+        elif last_state.get("pause_active"):
+            reason = "window_pause"
+        elif last_state.get("outdoor_minimum_active"):
+            reason = (
+                "minimum_temperature_heating"
+                if current_status == ROOM_STATE_HEATING
+                else "outdoor_cutoff"
             )
-            if enabled
-            else "off",
+        else:
+            reason = "heating" if current_status == ROOM_STATE_HEATING else "normal_idle"
+
+        return {
+            "state": current_status if enabled else "off",
+            "control_reason": reason,
             "target_temperature": last_state.get("target"),
             "current_temperature": last_state.get("actual"),
             "heating_mode": self._get_room_heating_mode(room),
