@@ -92,6 +92,14 @@ class SmartdomeRoomStatusSensor(SensorEntity):
             "heating_mode": status["heating_mode"],
             "enabled": status["enabled"],
             "away_active": status["away_active"],
+            "outdoor_cutoff_active": status["outdoor_cutoff_active"],
+            "outdoor_minimum_active": status["outdoor_minimum_active"],
+            "control_target_temperature": status["control_target_temperature"],
+            "sensor_fault": status["sensor_fault"],
+            "control_reason": status["control_reason"],
+            "comfort_override_active": status["comfort_override_active"],
+            "comfort_override_target": status["comfort_override_target"],
+            "comfort_override_remaining_seconds": status["comfort_override_remaining_seconds"],
         }
 
     async def async_added_to_hass(self) -> None:

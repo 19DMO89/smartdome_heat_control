@@ -20,7 +20,9 @@
           "away_enabled": "Nicht Zuhause aktiv",
           "outdoor_sensor": "Außentemperatursensor",
           "outdoor_temp_cutoff_enabled": "Außentemperatur-Abschaltung aktiv",
-          "outdoor_temp_cutoff": "Heizung abschalten ab Außentemperatur"
+          "outdoor_temp_cutoff": "Heizung abschalten ab Außentemperatur",
+          "outdoor_min_room_temperature": "Mindest-Raumtemperatur bei Außensperre",
+          "outdoor_cutoff_hysteresis": "Hysterese der Außentemperatur-Abschaltung"
         }
       },
       "rooms": {
@@ -60,7 +62,9 @@
           "away_enabled": "Nicht Zuhause aktiv",
           "outdoor_sensor": "Außentemperatursensor",
           "outdoor_temp_cutoff_enabled": "Außentemperatur-Abschaltung aktiv",
-          "outdoor_temp_cutoff": "Heizung abschalten ab Außentemperatur"
+          "outdoor_temp_cutoff": "Heizung abschalten ab Außentemperatur",
+          "outdoor_min_room_temperature": "Mindest-Raumtemperatur bei Außensperre",
+          "outdoor_cutoff_hysteresis": "Hysterese der Außentemperatur-Abschaltung"
         }
       },
       "rooms_list": {

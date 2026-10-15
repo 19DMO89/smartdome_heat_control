@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.6.1] – 2026-10-15
+
+### 🔧 Reliability-Update und stabiler Wochenplan-Editor
+
+- Der Wochenplan-Editor baut Zeit- und Temperaturfelder während der Eingabe nicht mehr neu auf. Werte werden erst bei `change`/`blur` übernommen; Sortierung und Re-Render erfolgen nur noch bei strukturellen Aktionen oder beim Speichern.
+- Die Zeitvalidierung lehnt ungültige Werte außerhalb von `00:00` bis `23:59` zuverlässig ab.
+- Außentemperatur-Sperre mit konfigurierbarer Hysterese und minimaler Raumtemperatur robuster gemacht.
+- Temperaturquellen und Bosch-Sollwerte werden defensiver ausgewertet und abgeglichen.
+- Raumstatus enthält einen expliziten Regelgrund für eine bessere Diagnose.
+- Änderungen am physischen Thermostat oder an der Raum-Climate-Entität können als zeitlich begrenzter Komfort-Override übernommen werden; Status und Restlaufzeit werden angezeigt.
+
+---
+
+**EN:** Reliability update with safer temperature/target handling, configurable outdoor-cutoff hysteresis, diagnostic control reasons and timed comfort overrides. The weekly-schedule editor now commits fields on `change`/`blur` without rebuilding the DOM while typing; sorting is deferred to structural actions or save.
+
+---
+
 ## [3.6.0] – 2026-10-13
 
 ### ✨ Feat: Climate-Entity pro Raum (Soll/Ist wie ein Thermostat)
