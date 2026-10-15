@@ -723,8 +723,15 @@ function normalizeTime(value, fallback = "") {
     return fallback;
   }
 
-  const hours = match[1].padStart(2, "0");
-  const minutes = match[2];
+  const hoursNumber = Number(match[1]);
+  const minutesNumber = Number(match[2]);
+
+  if (hoursNumber > 23 || minutesNumber > 59) {
+    return fallback;
+  }
+
+  const hours = String(hoursNumber).padStart(2, "0");
+  const minutes = String(minutesNumber).padStart(2, "0");
 
   return `${hours}:${minutes}`;
 }
@@ -2725,6 +2732,24 @@ function sortScheduleEntries(entries) {
   entries.sort((a, b) => a.start.localeCompare(b.start));
 }
 
+function commitScheduleEntryInputs(entry, row, restoreInvalid = false) {
+  const timeInput = row.querySelector(".schedule-time");
+  const tempInput = row.querySelector(".schedule-temp");
+  const normalizedTime = normalizeTime(timeInput?.value, "");
+
+  if (normalizedTime) {
+    entry.start = normalizedTime;
+  } else if (restoreInvalid && timeInput) {
+    timeInput.value = entry.start;
+  }
+
+  if (tempInput?.value !== undefined && tempInput.value !== "") {
+    entry.temperature = normalizeNumber(tempInput.value, entry.temperature);
+  } else if (restoreInvalid && tempInput) {
+    tempInput.value = String(entry.temperature);
+  }
+}
+
 function flushScheduleEditorValues() {
   if (!draftWeeklySchedule || !scheduleRoomId) return;
   const entries = draftWeeklySchedule[currentScheduleDay];
@@ -2732,10 +2757,7 @@ function flushScheduleEditorValues() {
   const rows = els.scheduleEntries.querySelectorAll(".schedule-entry");
   rows.forEach((row, i) => {
     if (!entries[i]) return;
-    const timeVal = row.querySelector(".schedule-time")?.value;
-    const tempVal = row.querySelector(".schedule-temp")?.value;
-    if (timeVal) entries[i].start = normalizeTime(timeVal, "06:00");
-    if (tempVal !== undefined && tempVal !== "") entries[i].temperature = normalizeNumber(tempVal, 21.0);
+    commitScheduleEntryInputs(entries[i], row);
   });
 }
 
@@ -2779,18 +2801,22 @@ function renderScheduleEditor() {
     const tempInput = row.querySelector(".schedule-temp");
     const deleteBtn = row.querySelector(".schedule-delete");
 
-    timeInput.addEventListener("change", () => {
-      entry.start = normalizeTime(timeInput.value, "06:00");
-      sortScheduleEntries(entries);
-      renderScheduleEditor();
-    });
+    const commitInputs = (restoreInvalid = false) => {
+      commitScheduleEntryInputs(entry, row, restoreInvalid);
+    };
 
-    tempInput.addEventListener("change", () => {
-      entry.temperature = normalizeNumber(tempInput.value, 21.0);
-    });
+    // A time input may emit `change` while only one segment is being edited.
+    // Keep the existing DOM node and defer sorting until a structural action
+    // (day change, add/delete or save) so typing never loses focus or selection.
+    timeInput.addEventListener("change", () => commitInputs());
+    timeInput.addEventListener("blur", () => commitInputs(true));
+    tempInput.addEventListener("change", () => commitInputs());
+    tempInput.addEventListener("blur", () => commitInputs(true));
 
     deleteBtn.addEventListener("click", () => {
+      flushScheduleEditorValues();
       entries.splice(index, 1);
+      sortScheduleEntries(entries);
       renderScheduleEditor();
     });
 
@@ -2950,6 +2976,10 @@ function bindScheduleEvents() {
   els.scheduleDayButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       flushScheduleEditorValues();
+      const entries = draftWeeklySchedule?.[currentScheduleDay];
+      if (Array.isArray(entries)) {
+        sortScheduleEntries(entries);
+      }
       currentScheduleDay = btn.dataset.day;
       renderScheduleEditor();
     });
