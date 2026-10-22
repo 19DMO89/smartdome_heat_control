@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### ✨ Wochenplan-Editor: Tag auf andere Tage kopieren
+
+- Neuer Button *Auf andere Tage kopieren* im Wochenplan-Dialog der Seitenleiste, neben *Auf andere Räume kopieren*. Der aktuell gewählte Tag (z. B. Montag) wird auf beliebig viele andere Wochentage übernommen (z. B. Dienstag bis Freitag).
+- Die Kopie landet im Entwurf und wird, wie alle anderen Änderungen im Dialog, erst mit *Speichern* übernommen. Die Regelung ist nicht betroffen.
+
+---
+
+**EN:** New *Copy to other days* button in the weekly schedule dialog: copy the selected day's time blocks to any other weekdays. Applied to the draft, saved with *Save*.
+
+---
+
 ## [3.9.0] – 2026-10-26
 
 ### ✨ Außentemperatur-Sperre: Mindest-Raumtemperatur und Hysterese (aus #76/#78, danke @SniperWCW)
