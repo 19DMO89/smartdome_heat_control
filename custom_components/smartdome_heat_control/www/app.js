@@ -142,6 +142,12 @@ const I18N = {
     room_thermostat: "Radiator valve",
     room_extra_thermostats: "Additional radiator valves",
     add_extra_thermostat: "Add radiator valve",
+    room_switch_actuators: "Switch actuators (relay, e.g. floor heating)",
+    add_switch_actuator: "Add switch actuator",
+    room_switch_actuators_hint: "Switched on/off directly based on the room sensor – a room temperature sensor is required.",
+    room_hysteresis: "Hysteresis (°C, empty = global tolerance)",
+    room_switch_min_on: "Switch actuator: minimum on time (min)",
+    room_switch_min_off: "Switch actuator: minimum off time (min)",
     room_sensor: "Room temperature sensor",
     room_window_sensor: "Window sensor",
     room_control_profile: "Thermostat control profile",
@@ -348,6 +354,12 @@ const I18N = {
     room_thermostat: "Heizkörperventil",
     room_extra_thermostats: "Weitere Heizkörperventile",
     add_extra_thermostat: "Heizkörperventil hinzufügen",
+    room_switch_actuators: "Schalter-Aktoren (Relais, z. B. Fußbodenheizung)",
+    add_switch_actuator: "Schalter-Aktor hinzufügen",
+    room_switch_actuators_hint: "Werden anhand des Raumsensors direkt ein-/ausgeschaltet – dafür ist ein Raumtemperatursensor nötig.",
+    room_hysteresis: "Hysterese (°C, leer = globale Toleranz)",
+    room_switch_min_on: "Schalter-Aktor: Mindest-Laufzeit (min)",
+    room_switch_min_off: "Schalter-Aktor: Mindest-Pause (min)",
     room_sensor: "Raumtemperatursensor",
     room_window_sensor: "Fensterkontakt",
     room_control_profile: "Thermostat-Regelprofil",
@@ -786,6 +798,17 @@ function normalizeRoom(roomId, room) {
     extra_thermostats: Array.isArray(room?.extra_thermostats)
       ? room.extra_thermostats.filter((s) => typeof s === "string" && s)
       : [],
+    switch_actuators: Array.isArray(room?.switch_actuators)
+      ? room.switch_actuators.filter((s) => typeof s === "string" && s)
+      : [],
+    hysteresis: (() => {
+      const value = Number(room?.hysteresis);
+      return room?.hysteresis !== "" && room?.hysteresis !== null && Number.isFinite(value) && value > 0
+        ? value
+        : null;
+    })(),
+    switch_min_on: Math.max(0, normalizeNumber(room?.switch_min_on, 5)),
+    switch_min_off: Math.max(0, normalizeNumber(room?.switch_min_off, 5)),
     sensor: typeof room?.sensor === "string" ? room.sensor : "",
     window_sensor:
       typeof room?.window_sensor === "string" ? room.window_sensor : "",
@@ -1609,6 +1632,14 @@ async function loadAllStates() {
     state.allStates.filter((item) => item.entity_id?.startsWith("switch."))
   );
 
+  state.switchActuators = sortByEntityId(
+    state.allStates.filter(
+      (item) =>
+        item.entity_id?.startsWith("switch.") ||
+        item.entity_id?.startsWith("input_boolean.")
+    )
+  );
+
   state.binarySensors = sortByEntityId(
     state.allStates.filter((item) =>
       item.entity_id?.startsWith("binary_sensor.")
@@ -1776,6 +1807,40 @@ function appendWindowSensorRow(listEl, roomId, sensorId) {
   });
 }
 
+function appendSwitchActuatorRow(listEl, roomId, switchId) {
+  const index = listEl.children.length;
+  const pickerId = `room_${roomId}_switch_actuator_${index}`;
+
+  const row = document.createElement("div");
+  row.className = "room-switch-actuator-row";
+  row.style.cssText = "display:flex; gap:8px; align-items:center; margin-bottom:6px;";
+  row.dataset.switchPickerId = pickerId;
+
+  const pickerContainer = document.createElement("div");
+  pickerContainer.style.flex = "1";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "ghost";
+  removeBtn.style.cssText = "padding:8px 10px; flex-shrink:0;";
+  removeBtn.textContent = "✕";
+  removeBtn.addEventListener("click", () => row.remove());
+
+  row.appendChild(pickerContainer);
+  row.appendChild(removeBtn);
+  listEl.appendChild(row);
+
+  createEntityPicker({
+    container: pickerContainer,
+    pickerId,
+    items: state.switchActuators || [],
+    getItems: () => state.switchActuators || [],
+    selectedValue: switchId || "",
+    emptyLabel: t("select_not_set"),
+    onChange: () => {},
+  });
+}
+
 function appendExtraThermostatRow(listEl, roomId, thermostatId) {
   const index = listEl.children.length;
   const pickerId = `room_${roomId}_extra_thermostat_${index}`;
@@ -1900,6 +1965,15 @@ function createRoomCard(roomId, room) {
         <button type="button" class="ghost room-add-thermostat-btn" style="width:100%; margin-top:6px; font-size:13px;">
           + ${escapeHtml(t("add_extra_thermostat"))}
         </button>
+      </div>
+
+      <div class="field full">
+        <label>${escapeHtml(t("room_switch_actuators"))}</label>
+        <div class="room-switch-actuators-list"></div>
+        <button type="button" class="ghost room-add-switch-actuator-btn" style="width:100%; margin-top:6px; font-size:13px;">
+          + ${escapeHtml(t("add_switch_actuator"))}
+        </button>
+        <div style="font-size:12px; color:var(--muted); margin-top:4px;">${escapeHtml(t("room_switch_actuators_hint"))}</div>
       </div>
 
       <div class="field">
@@ -2071,6 +2145,27 @@ function createRoomCard(roomId, room) {
             `).join("")}
           </select>
         </div>` : ""}
+
+        <div class="field">
+          <label>${escapeHtml(t("room_hysteresis"))}</label>
+          <input class="room-hysteresis" type="number" min="0.1" max="5" step="0.1" value="${escapeHtml(
+            room.hysteresis ?? ""
+          )}" />
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_switch_min_on"))}</label>
+          <input class="room-switch-min-on" type="number" min="0" max="120" step="1" value="${escapeHtml(
+            String(room.switch_min_on ?? 5)
+          )}" />
+        </div>
+
+        <div class="field">
+          <label>${escapeHtml(t("room_switch_min_off"))}</label>
+          <input class="room-switch-min-off" type="number" min="0" max="120" step="1" value="${escapeHtml(
+            String(room.switch_min_off ?? 5)
+          )}" />
+        </div>
       </div>
     </div>
   `;
@@ -2144,6 +2239,19 @@ function createRoomCard(roomId, room) {
 
   wrapper.querySelector(".room-add-thermostat-btn").addEventListener("click", () => {
     appendExtraThermostatRow(extraThermostatsList, roomId, "");
+  });
+
+  const switchActuatorsList = wrapper.querySelector(".room-switch-actuators-list");
+  const initialSwitchActuators = Array.isArray(room.switch_actuators)
+    ? room.switch_actuators
+    : [];
+
+  for (const switchId of initialSwitchActuators) {
+    appendSwitchActuatorRow(switchActuatorsList, roomId, switchId);
+  }
+
+  wrapper.querySelector(".room-add-switch-actuator-btn").addEventListener("click", () => {
+    appendSwitchActuatorRow(switchActuatorsList, roomId, "");
   });
 
   const advancedToggle = wrapper.querySelector(".room-advanced-toggle");
@@ -2471,6 +2579,12 @@ function collectFormState() {
       extra_thermostats: [...node.querySelectorAll(".room-extra-thermostat-row")].map(
         (row) => getEntityPickerValue(row.dataset.thermostatPickerId)
       ).filter(Boolean),
+      switch_actuators: [...node.querySelectorAll(".room-switch-actuator-row")].map(
+        (row) => getEntityPickerValue(row.dataset.switchPickerId)
+      ).filter(Boolean),
+      hysteresis: node.querySelector(".room-hysteresis")?.value ?? "",
+      switch_min_on: node.querySelector(".room-switch-min-on")?.value || undefined,
+      switch_min_off: node.querySelector(".room-switch-min-off")?.value || undefined,
       sensor: getEntityPickerValue(`room_${roomId}_sensor_picker`) || "",
       window_sensors: [...node.querySelectorAll(".room-window-sensor-row")].map(
         (row) => getEntityPickerValue(row.dataset.wsPickerId)
@@ -2542,6 +2656,10 @@ function addRoom() {
     area_id: "",
     thermostat: "",
     extra_thermostats: [],
+    switch_actuators: [],
+    hysteresis: null,
+    switch_min_on: 5,
+    switch_min_off: 5,
     sensor: "",
     window_sensor: "",
     window_sensors: [],
@@ -3079,6 +3197,14 @@ function updateStateInMemory(entity) {
 
   state.switches = sortByEntityId(
     state.allStates.filter((item) => item.entity_id?.startsWith("switch."))
+  );
+
+  state.switchActuators = sortByEntityId(
+    state.allStates.filter(
+      (item) =>
+        item.entity_id?.startsWith("switch.") ||
+        item.entity_id?.startsWith("input_boolean.")
+    )
   );
 
   state.binarySensors = sortByEntityId(

@@ -40,6 +40,13 @@ from .const import (
     CONF_ROOM_EXTRA_THERMOSTATS,
     DEFAULT_ROOM_AWAY_ENABLED,
     DEFAULT_ROOM_EXTRA_THERMOSTATS,
+    CONF_ROOM_HYSTERESIS,
+    CONF_ROOM_SWITCH_ACTUATORS,
+    CONF_ROOM_SWITCH_MIN_OFF,
+    CONF_ROOM_SWITCH_MIN_ON,
+    DEFAULT_ROOM_SWITCH_MIN_OFF,
+    DEFAULT_ROOM_SWITCH_MIN_ON,
+    SWITCH_ACTUATOR_DOMAINS,
     DEFAULT_ROOM_CONTROL_PROFILE,
     DEFAULT_ROOM_THERMOSTAT_OFFSET,
     CONF_ROOM_AWAY_TEMPERATURE,
@@ -309,6 +316,33 @@ def _normalize_extra_thermostats(room: dict[str, Any]) -> list[str]:
     return list(DEFAULT_ROOM_EXTRA_THERMOSTATS)
 
 
+def _normalize_switch_actuators(room: dict[str, Any]) -> list[str]:
+    """Schalter-Aktoren normalisieren (nur switch.* / input_boolean.*)."""
+    actuators = room.get(CONF_ROOM_SWITCH_ACTUATORS)
+    if not isinstance(actuators, list):
+        return []
+    return [
+        a for a in actuators
+        if isinstance(a, str) and a.split(".", 1)[0] in SWITCH_ACTUATOR_DOMAINS
+    ]
+
+
+def _normalize_optional_float(value: Any) -> float | None:
+    """Leere/ungültige Werte → None (z.B. „globale Toleranz verwenden“)."""
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if result > 0 else None
+
+
+def _normalize_minutes(value: Any, default: int) -> float:
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return float(default)
+
+
 def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
     """Räume normalisieren."""
     if not isinstance(rooms, dict):
@@ -325,6 +359,16 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
             "area_id": room.get("area_id", ""),
             "thermostat": room.get("thermostat", ""),
             CONF_ROOM_EXTRA_THERMOSTATS: _normalize_extra_thermostats(room),
+            CONF_ROOM_SWITCH_ACTUATORS: _normalize_switch_actuators(room),
+            CONF_ROOM_HYSTERESIS: _normalize_optional_float(
+                room.get(CONF_ROOM_HYSTERESIS)
+            ),
+            CONF_ROOM_SWITCH_MIN_ON: _normalize_minutes(
+                room.get(CONF_ROOM_SWITCH_MIN_ON), DEFAULT_ROOM_SWITCH_MIN_ON
+            ),
+            CONF_ROOM_SWITCH_MIN_OFF: _normalize_minutes(
+                room.get(CONF_ROOM_SWITCH_MIN_OFF), DEFAULT_ROOM_SWITCH_MIN_OFF
+            ),
             "sensor": room.get("sensor", ""),
             "window_sensor": room.get("window_sensor", ""),
             CONF_ROOM_WINDOW_SENSORS: _normalize_window_sensors(room),

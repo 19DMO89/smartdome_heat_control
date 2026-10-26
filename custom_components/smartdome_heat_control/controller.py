@@ -23,9 +23,17 @@ from .const import (
     CONF_AWAY_ENABLED,
     CONF_ROOM_AWAY_ENABLED,
     CONF_ROOM_EXTRA_THERMOSTATS,
+    CONF_ROOM_HYSTERESIS,
+    CONF_ROOM_SWITCH_ACTUATORS,
+    CONF_ROOM_SWITCH_MIN_OFF,
+    CONF_ROOM_SWITCH_MIN_ON,
     DEFAULT_ROOM_AWAY_ENABLED,
     DEFAULT_ROOM_EXTRA_THERMOSTATS,
+    DEFAULT_ROOM_SWITCH_ACTUATORS,
+    DEFAULT_ROOM_SWITCH_MIN_OFF,
+    DEFAULT_ROOM_SWITCH_MIN_ON,
     DOMAIN,
+    SWITCH_ACTUATOR_DOMAINS,
     SIGNAL_ROOM_STATE_UPDATED,
     CONF_BOOST_DELTA,
     CONF_OUTDOOR_SENSOR,
@@ -177,6 +185,11 @@ class SmartHeatingController:
         self._last_fan_mode: dict[str, str] = {}
         self._last_preset_mode: dict[str, str] = {}
 
+        # Letzter Schaltbefehl pro Schalter-Aktor (Zielzustand, Zeitstempel),
+        # damit nicht bei jeder Auswertung erneut gesendet wird, solange das
+        # Gerät den neuen Zustand noch nicht gemeldet hat.
+        self._switch_command_sent_at: dict[str, tuple[bool, float]] = {}
+
         self._apply_config_defaults()
 
     async def async_start(self) -> None:
@@ -311,6 +324,10 @@ class SmartHeatingController:
                         list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
                     )
                     room.setdefault(
+                        CONF_ROOM_SWITCH_ACTUATORS,
+                        list(DEFAULT_ROOM_SWITCH_ACTUATORS),
+                    )
+                    room.setdefault(
                         CONF_ROOM_AWAY_ENABLED,
                         DEFAULT_ROOM_AWAY_ENABLED,
                     )
@@ -433,6 +450,28 @@ class SmartHeatingController:
                     result.append(entity_id)
 
         return result
+
+    def _room_switch_actuators(self, room: dict[str, Any]) -> list[str]:
+        """Alle Schalter-Aktoren eines Raums (z.B. Relais für Fußbodenheizung)."""
+        result: list[str] = []
+        actuators = room.get(CONF_ROOM_SWITCH_ACTUATORS, [])
+        if isinstance(actuators, list):
+            for entity in actuators:
+                entity_id = self._as_entity_id(entity)
+                if (
+                    entity_id
+                    and entity_id.split(".", 1)[0] in SWITCH_ACTUATOR_DOMAINS
+                    and entity_id not in result
+                ):
+                    result.append(entity_id)
+        return result
+
+    def _room_tolerance(self, room: dict[str, Any], tolerance: float) -> float:
+        """Raumeigene Hysterese, sonst globale Toleranz."""
+        hysteresis = self._safe_float(room.get(CONF_ROOM_HYSTERESIS))
+        if hysteresis is not None and hysteresis > 0:
+            return hysteresis
+        return tolerance
 
     def _is_window_open(self, room: dict[str, Any]) -> bool:
         """Prüfen, ob mindestens ein Fensterkontakt im Raum offen ist."""
@@ -862,6 +901,68 @@ class SmartHeatingController:
             )
         )
 
+    def _set_room_switch_if_needed(
+        self,
+        room: dict[str, Any],
+        entity_id: str,
+        turn_on: bool,
+        force: bool = False,
+    ) -> None:
+        """Schalter-Aktor eines Raums schalten.
+
+        Es wird nur geschaltet, wenn der aktuelle Zustand abweicht. Mindest-
+        Laufzeit und Mindest-Pause schützen Relais und Stellantriebe vor
+        häufigem Takten; force=True (z.B. Fensterpause) umgeht diese Sperre.
+        """
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+
+        is_on = state.state == "on"
+        if is_on == turn_on:
+            self._switch_command_sent_at.pop(entity_id, None)
+            return
+
+        now_ts = dt_util.now().timestamp()
+
+        if not force:
+            if is_on:
+                min_minutes = self._safe_float(
+                    room.get(CONF_ROOM_SWITCH_MIN_ON, DEFAULT_ROOM_SWITCH_MIN_ON)
+                )
+            else:
+                min_minutes = self._safe_float(
+                    room.get(CONF_ROOM_SWITCH_MIN_OFF, DEFAULT_ROOM_SWITCH_MIN_OFF)
+                )
+            min_seconds = max(0.0, (min_minutes or 0.0) * 60.0)
+            if now_ts - state.last_changed.timestamp() < min_seconds:
+                return
+
+        # Befehl bereits unterwegs → höchstens alle 30 s wiederholen
+        pending = self._switch_command_sent_at.get(entity_id)
+        if pending is not None and pending[0] == turn_on and now_ts - pending[1] < 30:
+            return
+
+        self._switch_command_sent_at[entity_id] = (turn_on, now_ts)
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                entity_id.split(".", 1)[0],
+                "turn_on" if turn_on else "turn_off",
+                {"entity_id": entity_id},
+                blocking=True,
+            )
+        )
+
+    def _turn_off_disabled_room_switches(self) -> None:
+        """Schalter-Aktoren deaktivierter Räume ausschalten."""
+        rooms = self.config.get(CONF_ROOMS, {})
+        if not isinstance(rooms, dict):
+            return
+        for room in rooms.values():
+            if isinstance(room, dict) and not room.get(CONF_ROOM_ENABLED, True):
+                for actuator in self._room_switch_actuators(room):
+                    self._set_room_switch_if_needed(room, actuator, False, force=True)
+
     def _set_hvac_mode_if_needed(self, entity_id: str, hvac_mode: str) -> None:
         """HVAC-Modus setzen, aber nur wenn er sich geändert hat."""
         if self._last_hvac_mode.get(entity_id) == hvac_mode:
@@ -1052,12 +1153,17 @@ class SmartHeatingController:
         self._last_hvac_mode.clear()
         self._last_fan_mode.clear()
         self._last_preset_mode.clear()
+        self._switch_command_sent_at.clear()
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
         rooms = self._active_rooms()
 
         for room_id, room in rooms.items():
+            # Relais regeln nicht selbst → beim Deaktivieren ausschalten
+            for actuator in self._room_switch_actuators(room):
+                self._set_room_switch_if_needed(room, actuator, False, force=True)
+
             thermostats = self._room_thermostats(room)
             if not thermostats:
                 continue
@@ -1279,9 +1385,10 @@ class SmartHeatingController:
             target = self._effective_target_for_room(room)
             pause_active = self._window_pause_active(room_id, room)
             mode = self._get_room_heating_mode(room)
+            room_tolerance = self._room_tolerance(room, tolerance)
 
             predicted_overshoot = (
-                self._get_predicted_overshoot(room, tolerance)
+                self._get_predicted_overshoot(room, room_tolerance)
                 if mode == HEATING_MODE_ADAPTIVE
                 else 0.0
             )
@@ -1292,7 +1399,7 @@ class SmartHeatingController:
                 target=target,
                 actual=actual,
                 pause_active=pause_active,
-                tolerance=tolerance,
+                tolerance=room_tolerance,
                 predicted_overshoot=predicted_overshoot,
             )
 
@@ -1336,7 +1443,9 @@ class SmartHeatingController:
         room_managed_thermostats = {
             thermostat
             for room in rooms.values()
-            for thermostat in self._room_thermostats(room)
+            for thermostat in (
+                self._room_thermostats(room) + self._room_switch_actuators(room)
+            )
         }
 
         circuits = self.config.get(CONF_CIRCUITS, {})
@@ -1499,6 +1608,26 @@ class SmartHeatingController:
             use_climate = bool(room.get(CONF_ROOM_USE_CLIMATE, False))
             cooling_active = self._is_cooling_active()
 
+            # --- Schalter-Aktoren (Relais, z.B. Fußbodenheizung) ---
+            # An nur im Zustand HEATING; Restwärme-Halten, Leerlauf, Kühlen
+            # und Heizen über Klimaanlage → aus. Fensterpause schaltet sofort.
+            switch_actuators = self._room_switch_actuators(room)
+            if switch_actuators:
+                rstate = room_states.get(room_id, {})
+                relay_on = (
+                    rstate.get("state") == ROOM_STATE_HEATING
+                    and not rstate.get("pause_active")
+                    and not cooling_active
+                    and not (climate_entity and use_climate)
+                )
+                for actuator in switch_actuators:
+                    self._set_room_switch_if_needed(
+                        room,
+                        actuator,
+                        relay_on,
+                        force=bool(rstate.get("pause_active")),
+                    )
+
             # --- Klimaanlage / Kühllogik (#69 + #70) ---
             if climate_entity:
                 rstate = room_states.get(room_id, {})
@@ -1623,6 +1752,8 @@ class SmartHeatingController:
             # Raumzustand erst nach Verarbeitung ALLER Ventile aktualisieren, damit
             # jedes Ventil den Zustandswechsel (state_changed) korrekt erkennt.
             self._last_applied_room_state[room_id] = effective_state
+
+        self._turn_off_disabled_room_switches()
 
         self._last_room_states = room_states
         async_dispatcher_send(self.hass, SIGNAL_ROOM_STATE_UPDATED, room_states)

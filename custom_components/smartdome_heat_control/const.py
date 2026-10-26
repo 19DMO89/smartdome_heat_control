@@ -172,6 +172,17 @@ CONF_ROOM_USE_CLIMATE = "use_climate"
 CONF_ROOM_EXTRA_THERMOSTATS = "extra_thermostats"
 DEFAULT_ROOM_EXTRA_THERMOSTATS: list[str] = []
 
+# Feature #77 – Schalter-Aktoren pro Raum (z.B. Shelly-Relais für Fußbodenheizung)
+CONF_ROOM_SWITCH_ACTUATORS = "switch_actuators"
+CONF_ROOM_HYSTERESIS = "hysteresis"
+CONF_ROOM_SWITCH_MIN_ON = "switch_min_on"
+CONF_ROOM_SWITCH_MIN_OFF = "switch_min_off"
+DEFAULT_ROOM_SWITCH_ACTUATORS: list[str] = []
+DEFAULT_ROOM_HYSTERESIS = None  # None = globale Toleranz verwenden
+DEFAULT_ROOM_SWITCH_MIN_ON = 5  # Minuten
+DEFAULT_ROOM_SWITCH_MIN_OFF = 5  # Minuten
+SWITCH_ACTUATOR_DOMAINS = ("switch", "input_boolean")
+
 # Feature – Away-Modus pro Raum
 CONF_ROOM_AWAY_ENABLED = "room_away_enabled"
 DEFAULT_ROOM_AWAY_ENABLED = False

@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.8.0] – 2026-10-26
+
+### ✨ Feat: Schalter-Aktoren pro Raum (z. B. Shelly-Relais für Fußbodenheizung) (#77)
+
+Räume können jetzt zusätzlich oder statt eines Heizkörperventils **Schalter-Aktoren** (`switch.*` oder `input_boolean.*`) bekommen. Smart Heat Control schaltet sie selbst anhand von Raumsensor und Solltemperatur – ein „Generic Thermostat“ als Zwischenschicht ist nicht mehr nötig.
+
+- **An** nur, wenn der Raum heizt; **aus** bei Leerlauf, Restwärme-Halten (Energy), Kühlen, Heizen über Klimaanlage, Außentemperatur-Abschaltung und deaktiviertem Raum bzw. deaktivierter Integration.
+- **Hysterese pro Raum** (Erweitert): Einschalten unter *Ziel − Hysterese*, Ausschalten bei Erreichen des Ziels. Leer = globale Toleranz. Gilt für den ganzen Raum, also auch für Heizkörperventile.
+- **Mindest-Laufzeit und Mindest-Pause** (Standard je 5 min) schützen Relais und Stellantriebe vor häufigem Takten. Eine **Fensterpause** und das Deaktivieren schalten trotzdem sofort aus.
+- Es wird nur geschaltet, wenn der Zustand abweicht; nicht erreichbare Relais (`unavailable`) werden übersprungen.
+- Voraussetzung: ein **Raumtemperatursensor**. Ohne Sensor bleibt das Relais aus.
+
+---
+
+**EN:** Rooms can now use switch actuators (`switch.*` / `input_boolean.*`, e.g. Shelly relays for floor heating) directly. They are turned on only while the room is heating, with an optional per-room hysteresis and minimum on/off times (default 5 min). Window pause and disabling switch off immediately. A room temperature sensor is required.
+
+---
+
 ## [3.7.0] – 2026-10-26
 
 ### ✨ Feat: −/+ Knöpfe für Temperaturfelder
