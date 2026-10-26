@@ -135,6 +135,55 @@
       font-size: 13px;
     }
 
+    /* −/+ stepper for temperature inputs */
+    .num-stepper {
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .num-stepper input {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+      -moz-appearance: textfield;
+    }
+
+    .num-stepper input::-webkit-outer-spin-button,
+    .num-stepper input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .num-stepper-btn {
+      flex-shrink: 0;
+      min-width: 42px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      background: #0f151d;
+      box-shadow: none;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .num-stepper-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .num-stepper-compact {
+      width: auto;
+      gap: 4px;
+    }
+
+    .num-stepper-compact .num-stepper-btn {
+      min-width: 30px;
+      padding: 0 6px;
+      font-size: 15px;
+      border-radius: 10px;
+    }
+
     /* Mode picker */
     .mode-picker {
       position: relative;

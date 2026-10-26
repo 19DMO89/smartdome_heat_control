@@ -1007,6 +1007,22 @@ function roomTitleMeta(room, roomId) {
 
   const metaParts = [];
 
+  // live temperatures next to the room name: measured (sensor) and valve setpoint
+  const tempSrc = room.sensor || room.thermostat;
+  const currentTemp = tempSrc ? getSensorTemperature(tempSrc) : null;
+  if (currentTemp !== null) {
+    metaParts.push(
+      `<span class="label-live" data-entity="${escapeHtml(tempSrc)}" title="${escapeHtml(t("room_sensor"))}">🌡️ ${escapeHtml(formatTemperature(currentTemp))}</span>`
+    );
+  }
+
+  const setpoint = room.thermostat ? getThermostatSetpoint(room.thermostat) : null;
+  if (setpoint !== null) {
+    metaParts.push(
+      `<span class="label-live" data-entity="${escapeHtml(room.thermostat)}" title="${escapeHtml(t("room_thermostat"))}">🎯 ${escapeHtml(formatTemperature(setpoint))}</span>`
+    );
+  }
+
   if (heating) {
     metaParts.push(
       `<span class="room-heating" title="${escapeHtml(t("room_heating_now"))}">🔥</span>`
@@ -3131,8 +3147,71 @@ async function setupLiveUpdates() {
   }
 }
 
+// ─── −/+ stepper for temperature inputs ──────────────────────────────────────
+const STEPPER_SELECTOR = 'input[type="number"][step="0.5"]';
+
+function enhanceNumberStepper(input) {
+  if (input.closest(".num-stepper")) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "num-stepper";
+  if (input.classList.contains("toggle-temp")) {
+    wrapper.classList.add("num-stepper-compact");
+  }
+
+  const makeButton = (label, direction) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "num-stepper-btn";
+    btn.textContent = label;
+    btn.tabIndex = -1;
+    btn.addEventListener("click", () => {
+      if (input.disabled || input.readOnly) return;
+      const step = Number(input.step) || 0.5;
+      const min = input.min !== "" ? Number(input.min) : -Infinity;
+      const max = input.max !== "" ? Number(input.max) : Infinity;
+      let value = Number(input.value);
+      if (input.value === "" || !Number.isFinite(value)) {
+        value = Number.isFinite(min) ? min : 0;
+      } else {
+        // snap to the step grid first, then move one step
+        value = Math.round(value / step) * step + direction * step;
+      }
+      value = Math.min(max, Math.max(min, value));
+      input.value = String(Number(value.toFixed(2)));
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    return btn;
+  };
+
+  input.parentNode.insertBefore(wrapper, input);
+  wrapper.append(makeButton("−", -1), input, makeButton("+", 1));
+}
+
+function enhanceNumberSteppers(root) {
+  if (root.matches?.(STEPPER_SELECTOR)) {
+    enhanceNumberStepper(root);
+  }
+  root.querySelectorAll?.(STEPPER_SELECTOR).forEach(enhanceNumberStepper);
+}
+
+function observeNumberSteppers() {
+  enhanceNumberSteppers(document.body);
+  new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE && !node.classList.contains("num-stepper")) {
+          enhanceNumberSteppers(node);
+        }
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+}
+
 async function init() {
   initEls();
+  observeNumberSteppers();
   applyTranslations();
   bindEvents();
   enableEditTracking();

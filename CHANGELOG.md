@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.7.0] – 2026-10-26
+
+### ✨ Feat: −/+ Knöpfe für Temperaturfelder
+
+Alle Temperatur-Eingabefelder (Tag/Nacht/Away pro Raum, Kalibrierungsoffset, Kühlziele, Wochenschema, globale Zieltemperaturen, Urlaubs-, Außen- und Kühlschwelle, Boost-Delta, Toleranz) haben jetzt **−/+ Knöpfe**. Ein Klick ändert den Wert um 0,5 °C – bequem auf dem Handy, Eintippen bleibt weiterhin möglich. Die Knöpfe halten Min/Max ein und rasten krumme Werte (z. B. 21,3) auf das 0,5er-Raster ein.
+
+### ✨ Feat: Ist-/Soll-Temperatur neben dem Raumnamen
+
+In der Kopfzeile jeder Raumkarte stehen jetzt direkt neben dem Namen die gemessene Temperatur (🌡️, Raumsensor bzw. Ventil als Fallback) und der Sollwert des Heizkörperventils (🎯). Beide aktualisieren sich live, sind auch bei eingeklappter Karte sichtbar und öffnen per Klick die Detailansicht in Home Assistant.
+
+---
+
+**EN:** Temperature inputs now have −/+ buttons (0.5 °C steps, respecting min/max). Room card headers show the current temperature and the valve setpoint next to the room name.
+
+---
+
 ## [3.6.0] – 2026-10-13
 
 ### ✨ Feat: Climate-Entity pro Raum (Soll/Ist wie ein Thermostat)
