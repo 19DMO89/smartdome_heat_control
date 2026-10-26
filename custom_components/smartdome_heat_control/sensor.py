@@ -92,6 +92,11 @@ class SmartdomeRoomStatusSensor(SensorEntity):
             "heating_mode": status["heating_mode"],
             "enabled": status["enabled"],
             "away_active": status["away_active"],
+            "control_reason": status.get("control_reason"),
+            "control_target_temperature": status.get("control_target_temperature"),
+            "outdoor_cutoff_active": status.get("outdoor_cutoff_active"),
+            "outdoor_minimum_active": status.get("outdoor_minimum_active"),
+            "sensor_fault": status.get("sensor_fault"),
         }
 
     async def async_added_to_hass(self) -> None:

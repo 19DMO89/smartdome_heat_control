@@ -222,6 +222,10 @@ const I18N = {
     outdoor_temp_cutoff_enabled: "Cutoff enabled",
     outdoor_temp_cutoff_enabled_hint: "Heating is suppressed when outdoor temperature ≥ threshold.",
     outdoor_temp_cutoff: "Threshold (°C)",
+    outdoor_cutoff_hysteresis: "Hysteresis (°C)",
+    outdoor_cutoff_hysteresis_hint: "The cutoff is only released once the outdoor temperature drops below threshold − hysteresis.",
+    outdoor_min_room_temperature: "Minimum room temperature (°C)",
+    outdoor_min_room_temperature_hint: "While the cutoff is active, rooms are only heated up to this temperature. 0 = heating fully blocked.",
     section_cooling: "Cooling",
     cooling_enabled: "Cooling active",
     cooling_enabled_hint: "Manually activates cooling mode via air conditioning. Heating valves are set to minimum.",
@@ -434,6 +438,10 @@ const I18N = {
     outdoor_temp_cutoff_enabled: "Abschaltung aktiv",
     outdoor_temp_cutoff_enabled_hint: "Heizung wird unterdrückt wenn Außentemperatur ≥ Schwellenwert.",
     outdoor_temp_cutoff: "Schwellenwert (°C)",
+    outdoor_cutoff_hysteresis: "Hysterese (°C)",
+    outdoor_cutoff_hysteresis_hint: "Die Sperre wird erst wieder aufgehoben, wenn die Außentemperatur unter Schwellenwert − Hysterese fällt.",
+    outdoor_min_room_temperature: "Mindest-Raumtemperatur (°C)",
+    outdoor_min_room_temperature_hint: "Während der Sperre wird nur noch bis zu dieser Temperatur geheizt. 0 = Heizung komplett gesperrt.",
     section_cooling: "Kühlen",
     cooling_enabled: "Kühlen aktiv",
     cooling_enabled_hint: "Aktiviert den Kühlmodus manuell über Klimaanlagen. Heizventile werden auf Minimum gesetzt.",
@@ -496,6 +504,8 @@ const DEFAULTS = {
   outdoor_sensor: "",
   outdoor_temp_cutoff_enabled: false,
   outdoor_temp_cutoff: 15.0,
+  outdoor_cutoff_hysteresis: 2.0,
+  outdoor_min_room_temperature: 0.0,
   global_target_day: 21.0,
   global_target_night: 18.0,
   global_away_temperature: 17.0,
@@ -590,6 +600,8 @@ function initEls() {
     outdoorSensorPicker: document.getElementById("outdoor_sensor_picker"),
     outdoorTempCutoffEnabled: document.getElementById("outdoor_temp_cutoff_enabled"),
     outdoorTempCutoff: document.getElementById("outdoor_temp_cutoff"),
+    outdoorCutoffHysteresis: document.getElementById("outdoor_cutoff_hysteresis"),
+    outdoorMinRoomTemperature: document.getElementById("outdoor_min_room_temperature"),
   };
 }
 
@@ -735,8 +747,15 @@ function normalizeTime(value, fallback = "") {
     return fallback;
   }
 
-  const hours = match[1].padStart(2, "0");
-  const minutes = match[2];
+  const hoursNumber = Number(match[1]);
+  const minutesNumber = Number(match[2]);
+
+  if (hoursNumber > 23 || minutesNumber > 59) {
+    return fallback;
+  }
+
+  const hours = String(hoursNumber).padStart(2, "0");
+  const minutes = String(minutesNumber).padStart(2, "0");
 
   return `${hours}:${minutes}`;
 }
@@ -1752,6 +1771,18 @@ function renderGlobalSettings() {
     );
   }
 
+  if (els.outdoorCutoffHysteresis) {
+    els.outdoorCutoffHysteresis.value = String(
+      normalizeNumber(cfg.outdoor_cutoff_hysteresis, DEFAULTS.outdoor_cutoff_hysteresis)
+    );
+  }
+
+  if (els.outdoorMinRoomTemperature) {
+    els.outdoorMinRoomTemperature.value = String(
+      normalizeNumber(cfg.outdoor_min_room_temperature, DEFAULTS.outdoor_min_room_temperature)
+    );
+  }
+
   if (els.globalTargetDay) {
     els.globalTargetDay.value = String(normalizeNumber(cfg.global_target_day, DEFAULTS.global_target_day));
   }
@@ -2548,6 +2579,12 @@ function collectFormState() {
   cfg.outdoor_temp_cutoff = els.outdoorTempCutoff
     ? normalizeNumber(els.outdoorTempCutoff.value, DEFAULTS.outdoor_temp_cutoff)
     : DEFAULTS.outdoor_temp_cutoff;
+  cfg.outdoor_cutoff_hysteresis = els.outdoorCutoffHysteresis
+    ? Math.max(0, normalizeNumber(els.outdoorCutoffHysteresis.value, DEFAULTS.outdoor_cutoff_hysteresis))
+    : DEFAULTS.outdoor_cutoff_hysteresis;
+  cfg.outdoor_min_room_temperature = els.outdoorMinRoomTemperature
+    ? Math.max(0, normalizeNumber(els.outdoorMinRoomTemperature.value, DEFAULTS.outdoor_min_room_temperature))
+    : DEFAULTS.outdoor_min_room_temperature;
 
   cfg.global_target_day = els.globalTargetDay
     ? normalizeNumber(els.globalTargetDay.value, DEFAULTS.global_target_day)
@@ -2859,6 +2896,24 @@ function sortScheduleEntries(entries) {
   entries.sort((a, b) => a.start.localeCompare(b.start));
 }
 
+function commitScheduleEntryInputs(entry, row, restoreInvalid = false) {
+  const timeInput = row.querySelector(".schedule-time");
+  const tempInput = row.querySelector(".schedule-temp");
+  const normalizedTime = normalizeTime(timeInput?.value, "");
+
+  if (normalizedTime) {
+    entry.start = normalizedTime;
+  } else if (restoreInvalid && timeInput) {
+    timeInput.value = entry.start;
+  }
+
+  if (tempInput?.value !== undefined && tempInput.value !== "") {
+    entry.temperature = normalizeNumber(tempInput.value, entry.temperature);
+  } else if (restoreInvalid && tempInput) {
+    tempInput.value = String(entry.temperature);
+  }
+}
+
 function flushScheduleEditorValues() {
   if (!draftWeeklySchedule || !scheduleRoomId) return;
   const entries = draftWeeklySchedule[currentScheduleDay];
@@ -2866,10 +2921,7 @@ function flushScheduleEditorValues() {
   const rows = els.scheduleEntries.querySelectorAll(".schedule-entry");
   rows.forEach((row, i) => {
     if (!entries[i]) return;
-    const timeVal = row.querySelector(".schedule-time")?.value;
-    const tempVal = row.querySelector(".schedule-temp")?.value;
-    if (timeVal) entries[i].start = normalizeTime(timeVal, "06:00");
-    if (tempVal !== undefined && tempVal !== "") entries[i].temperature = normalizeNumber(tempVal, 21.0);
+    commitScheduleEntryInputs(entries[i], row);
   });
 }
 
@@ -2913,18 +2965,22 @@ function renderScheduleEditor() {
     const tempInput = row.querySelector(".schedule-temp");
     const deleteBtn = row.querySelector(".schedule-delete");
 
-    timeInput.addEventListener("change", () => {
-      entry.start = normalizeTime(timeInput.value, "06:00");
-      sortScheduleEntries(entries);
-      renderScheduleEditor();
-    });
+    const commitInputs = (restoreInvalid = false) => {
+      commitScheduleEntryInputs(entry, row, restoreInvalid);
+    };
 
-    tempInput.addEventListener("change", () => {
-      entry.temperature = normalizeNumber(tempInput.value, 21.0);
-    });
+    // A time input may emit `change` while only one segment is being edited.
+    // Keep the existing DOM node and defer sorting until a structural action
+    // (day change, add/delete or save) so typing never loses focus or selection.
+    timeInput.addEventListener("change", () => commitInputs());
+    timeInput.addEventListener("blur", () => commitInputs(true));
+    tempInput.addEventListener("change", () => commitInputs());
+    tempInput.addEventListener("blur", () => commitInputs(true));
 
     deleteBtn.addEventListener("click", () => {
+      flushScheduleEditorValues();
       entries.splice(index, 1);
+      sortScheduleEntries(entries);
       renderScheduleEditor();
     });
 
@@ -3084,6 +3140,10 @@ function bindScheduleEvents() {
   els.scheduleDayButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       flushScheduleEditorValues();
+      const entries = draftWeeklySchedule?.[currentScheduleDay];
+      if (Array.isArray(entries)) {
+        sortScheduleEntries(entries);
+      }
       currentScheduleDay = btn.dataset.day;
       renderScheduleEditor();
     });

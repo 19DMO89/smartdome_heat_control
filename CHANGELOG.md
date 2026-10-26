@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.9.0] – 2026-10-26
+
+### ✨ Außentemperatur-Sperre: Mindest-Raumtemperatur und Hysterese (aus #76/#78, danke @SniperWCW)
+
+- **Mindest-Raumtemperatur:** Während der Außensperre kann weiter bis zu einer reduzierten Temperatur geheizt werden, statt die Heizung komplett zu sperren. Standard **0 = aus**, das bisherige Verhalten bleibt also unverändert. Räume ohne eigenen Raumsensor regeln über das Ventil auf diese Temperatur.
+- **Hysterese** (Standard 2 °C): Die Sperre wird erst wieder aufgehoben, wenn die Außentemperatur unter *Schwellenwert − Hysterese* fällt – kein Flattern bei schwankender Außentemperatur.
+- Beide Einstellungen gibt es im Panel (Bereich Außentemperatur) und in den Integrationsoptionen.
+- Heizen über eine Klimaanlage hält sich jetzt ebenfalls an die Außensperre.
+
+### 🛡️ Zuverlässigkeit
+
+- **Raumsensor-Ausfall:** Liefert ein eingetragener Raumsensor länger als 5 Minuten keinen Wert, heizt der Raum nicht mehr weiter (Ventile auf Minimum, Relais aus) und es wird eine Warnung geloggt. Räume ohne eingetragenen Sensor sind davon nicht betroffen.
+- **Diagnose:** Der Raumstatus-Sensor hat neue Attribute: `control_reason` (z. B. `heating`, `window_pause`, `outdoor_cutoff`, `minimum_temperature_heating`, `sensor_fault`), `control_target_temperature`, `outdoor_cutoff_active`, `outdoor_minimum_active`, `sensor_fault`.
+- **Raum-Erkennung:** Es werden nur noch echte Temperatursensoren (`device_class: temperature`, °C/°F) automatisch zugeordnet.
+- **Integrationsoptionen:** Leere optionale Entity-/Zeitfelder werden nicht mehr als ungültiger Standardwert übergeben.
+
+### 🔧 Wochenplan-Editor
+
+- Zeit- und Temperaturfelder werden beim Tippen nicht mehr neu aufgebaut (kein Fokusverlust mehr); sortiert wird erst bei Tageswechsel, Hinzufügen/Löschen oder Speichern.
+- Ungültige Zeiten außerhalb von 00:00–23:59 werden abgelehnt.
+
+---
+
+**EN:** Outdoor cutoff gains an optional minimum room temperature (default 0 = off, previous behaviour unchanged) and a hysteresis (default 2 °C), both configurable in the panel. A configured room sensor missing for 5 min now stops heating for that room. New diagnostic attributes on the room status sensor, stricter temperature-sensor autodetection, options-flow fix for empty defaults, and a stable weekly-schedule editor. Based on PRs #76/#78 by @SniperWCW.
+
+---
+
 ## [3.8.0] – 2026-10-26
 
 ### ✨ Feat: Schalter-Aktoren pro Raum (z. B. Shelly-Relais für Fußbodenheizung) (#77)

@@ -1163,6 +1163,28 @@
                 <input id="outdoor_temp_cutoff_enabled" type="checkbox" />
               </div>
             </div>
+            <div class="toggle" style="margin-top:10px;">
+              <div class="toggle-text">
+                <strong data-i18n="outdoor_cutoff_hysteresis">Hysterese (°C)</strong>
+                <span data-i18n="outdoor_cutoff_hysteresis_hint">
+                  Die Sperre wird erst wieder aufgehoben, wenn die Außentemperatur unter Schwellenwert − Hysterese fällt.
+                </span>
+              </div>
+              <div class="toggle-right">
+                <input id="outdoor_cutoff_hysteresis" class="toggle-temp" type="number" min="0" max="5" step="0.5" value="2" />
+              </div>
+            </div>
+            <div class="toggle" style="margin-top:10px;">
+              <div class="toggle-text">
+                <strong data-i18n="outdoor_min_room_temperature">Mindest-Raumtemperatur (°C)</strong>
+                <span data-i18n="outdoor_min_room_temperature_hint">
+                  Während der Sperre wird nur noch bis zu dieser Temperatur geheizt. 0 = Heizung komplett gesperrt.
+                </span>
+              </div>
+              <div class="toggle-right">
+                <input id="outdoor_min_room_temperature" class="toggle-temp" type="number" min="0" max="25" step="0.5" value="0" />
+              </div>
+            </div>
           </div>
 
           <!-- Kühlen -->

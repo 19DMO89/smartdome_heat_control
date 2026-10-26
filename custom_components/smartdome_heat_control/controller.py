@@ -39,6 +39,10 @@ from .const import (
     CONF_OUTDOOR_SENSOR,
     CONF_OUTDOOR_TEMP_CUTOFF,
     CONF_OUTDOOR_TEMP_CUTOFF_ENABLED,
+    CONF_OUTDOOR_CUTOFF_HYSTERESIS,
+    CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
+    DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS,
+    DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE,
     DEFAULT_OUTDOOR_TEMP_CUTOFF,
     DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
     CONF_CIRCUIT_CONTROL_TYPE,
@@ -171,6 +175,14 @@ class SmartHeatingController:
 
         # Letzte echte Schreibzeit pro Thermostat
         self._last_command_sent_at: dict[str, float] = {}
+
+        # Raumsensor-Ausfall: seit wann fehlt der Messwert, welche Räume gelten
+        # als gestört (nur Räume mit eingetragenem Sensor).
+        self._room_sensor_missing_since: dict[str, float] = {}
+        self._room_sensor_fault: set[str] = set()
+
+        # Außensperre mit Hysterese: bleibt aktiv bis cutoff - hysterese
+        self._outdoor_cutoff_latched = False
 
         # Zuletzt wirklich angewendeter effektiver Zustand pro Raum
         self._last_applied_room_state: dict[str, str] = {}
@@ -305,6 +317,12 @@ class SmartHeatingController:
             CONF_OUTDOOR_TEMP_CUTOFF_ENABLED, DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED
         )
         self.config.setdefault(CONF_OUTDOOR_TEMP_CUTOFF, DEFAULT_OUTDOOR_TEMP_CUTOFF)
+        self.config.setdefault(
+            CONF_OUTDOOR_CUTOFF_HYSTERESIS, DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS
+        )
+        self.config.setdefault(
+            CONF_OUTDOOR_MIN_ROOM_TEMPERATURE, DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE
+        )
         self.config.setdefault(
             CONF_ENERGY_RESIDUAL_HEAT_HOLD,
             DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD,
@@ -702,18 +720,41 @@ class SmartHeatingController:
 
         enabled = bool(room.get(CONF_ROOM_ENABLED, True))
         last_state = self._last_room_states.get(room_id, {})
+        current_status = last_state.get(
+            "state", self._room_state.get(room_id, ROOM_STATE_IDLE)
+        )
+
+        if not enabled:
+            reason = "disabled"
+        elif room_id in self._room_sensor_fault:
+            reason = "sensor_fault"
+        elif last_state.get("pause_active"):
+            reason = "window_pause"
+        elif last_state.get("outdoor_cutoff_active"):
+            reason = (
+                "minimum_temperature_heating"
+                if current_status == ROOM_STATE_HEATING
+                else "outdoor_cutoff"
+            )
+        elif current_status == ROOM_STATE_HEATING:
+            reason = "heating"
+        elif current_status == ROOM_STATE_RESIDUAL_HOLD:
+            reason = "residual_hold"
+        else:
+            reason = "normal_idle"
 
         return {
-            "state": last_state.get(
-                "state", self._room_state.get(room_id, ROOM_STATE_IDLE)
-            )
-            if enabled
-            else "off",
+            "state": current_status if enabled else "off",
+            "control_reason": reason,
             "target_temperature": last_state.get("target"),
+            "control_target_temperature": last_state.get("control_target"),
             "current_temperature": last_state.get("actual"),
             "heating_mode": self._get_room_heating_mode(room),
             "enabled": enabled,
             "away_active": self._is_room_away_active(room),
+            "outdoor_cutoff_active": last_state.get("outdoor_cutoff_active", False),
+            "outdoor_minimum_active": last_state.get("outdoor_minimum_active", False),
+            "sensor_fault": room_id in self._room_sensor_fault,
         }
 
     def get_room_setpoint_key(self, room_id: str) -> str | None:
@@ -1148,6 +1189,9 @@ class SmartHeatingController:
         self._last_room_states.clear()
         self._residual_heat_hold_until.clear()
         self._last_command_sent_at.clear()
+        self._room_sensor_missing_since.clear()
+        self._room_sensor_fault.clear()
+        self._outdoor_cutoff_latched = False
         self._last_applied_room_state.clear()
         self._circuit_heating_active.clear()
         self._last_hvac_mode.clear()
@@ -1224,7 +1268,27 @@ class SmartHeatingController:
             # Wenn der Raum bereits heizte, weiter heizen – nicht abrupt stoppen,
             # nur weil ein Sensor kurz "unavailable" meldet.
             # Heizung STARTEN ohne Sensor ist nicht erlaubt (bleibt IDLE).
+            # Fehlt der Messwert eines eingetragenen Sensors länger als 5 min,
+            # gilt der Raum als gestört und heizt nicht mehr (kein Dauer-Boost).
+            # Räume ohne eingetragenen Sensor sind davon nicht betroffen.
+            if self._as_entity_id(room.get(CONF_ROOM_SENSOR)):
+                missing_since = self._room_sensor_missing_since.setdefault(
+                    room_id, now_ts
+                )
+                if now_ts - missing_since >= 300:
+                    if room_id not in self._room_sensor_fault:
+                        _LOGGER.warning(
+                            "Raum %s: Raumsensor seit 5 min ohne Messwert – Heizung gestoppt",
+                            room.get("label", room_id),
+                        )
+                    self._room_sensor_fault.add(room_id)
+                    self._room_state[room_id] = ROOM_STATE_IDLE
+                    self._residual_heat_hold_until.pop(room_id, None)
+                    return ROOM_STATE_IDLE
             return self._room_state.get(room_id, ROOM_STATE_IDLE)
+
+        self._room_sensor_missing_since.pop(room_id, None)
+        self._room_sensor_fault.discard(room_id)
 
         if current_state == ROOM_STATE_IDLE:
             if actual < (target - tolerance):
@@ -1353,7 +1417,33 @@ class SmartHeatingController:
         )
         if cutoff is None:
             cutoff = float(DEFAULT_OUTDOOR_TEMP_CUTOFF)
-        return outdoor_temp >= cutoff
+        hysteresis = self._safe_float(
+            self.config.get(
+                CONF_OUTDOOR_CUTOFF_HYSTERESIS, DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS
+            )
+        )
+        if hysteresis is None:
+            hysteresis = float(DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS)
+        hysteresis = max(0.0, hysteresis)
+        # Einschalten ab cutoff, wieder freigeben erst unter cutoff - hysterese,
+        # damit die Sperre bei schwankender Außentemperatur nicht flattert.
+        if self._outdoor_cutoff_latched:
+            if outdoor_temp < cutoff - hysteresis:
+                self._outdoor_cutoff_latched = False
+        elif outdoor_temp >= cutoff:
+            self._outdoor_cutoff_latched = True
+        return self._outdoor_cutoff_latched
+
+    def _outdoor_min_room_temperature(self) -> float | None:
+        """Mindest-Raumtemperatur während der Außensperre (None = aus)."""
+        minimum = self._safe_float(
+            self.config.get(
+                CONF_OUTDOOR_MIN_ROOM_TEMPERATURE, DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE
+            )
+        )
+        if minimum is None or minimum <= 0:
+            return None
+        return minimum
 
     def _evaluate(self) -> None:
         """Heizlogik auswerten."""
@@ -1377,8 +1467,14 @@ class SmartHeatingController:
         room_states: dict[str, dict[str, Any]] = {}
 
         outdoor_cutoff_active = self._is_outdoor_cutoff_active()
+        outdoor_minimum = (
+            self._outdoor_min_room_temperature() if outdoor_cutoff_active else None
+        )
         if outdoor_cutoff_active:
-            _LOGGER.debug("Außentemperatur-Abschaltung aktiv – Heizung gesperrt")
+            _LOGGER.debug(
+                "Außentemperatur-Abschaltung aktiv – Mindesttemperatur: %s",
+                outdoor_minimum,
+            )
 
         for room_id, room in rooms.items():
             actual = self._room_temp(room)
@@ -1393,27 +1489,42 @@ class SmartHeatingController:
                 else 0.0
             )
 
+            # Bei Außensperre mit Mindesttemperatur wird nur bis zu dieser
+            # reduzierten Temperatur geregelt. Die Zustandsmaschine wird genau
+            # einmal gegen den wirksamen Sollwert ausgewertet.
+            control_target = (
+                min(target, outdoor_minimum) if outdoor_minimum is not None else target
+            )
+            minimum_active = outdoor_minimum is not None and control_target < target
+
             state = self._update_room_state(
                 room_id=room_id,
                 room=room,
-                target=target,
+                target=control_target,
                 actual=actual,
                 pause_active=pause_active,
                 tolerance=room_tolerance,
-                predicted_overshoot=predicted_overshoot,
+                predicted_overshoot=0.0 if minimum_active else predicted_overshoot,
             )
 
-            # Außentemperatur-Abschaltung: Heizung unterdrücken, aber
-            # Raumthermostate auf normalen Idle-Sollwert belassen (kein Frost-Modus).
-            if outdoor_cutoff_active and state == ROOM_STATE_HEATING:
+            # Außentemperatur-Abschaltung ohne Mindesttemperatur: Heizung
+            # unterdrücken, Raumthermostate auf normalem Idle-Sollwert belassen.
+            if (
+                outdoor_cutoff_active
+                and outdoor_minimum is None
+                and state == ROOM_STATE_HEATING
+            ):
                 state = ROOM_STATE_IDLE
                 self._room_state[room_id] = ROOM_STATE_IDLE
 
             room_states[room_id] = {
                 "actual": actual,
                 "target": target,
+                "control_target": control_target,
                 "state": state,
                 "pause_active": pause_active,
+                "outdoor_cutoff_active": outdoor_cutoff_active,
+                "outdoor_minimum_active": minimum_active,
             }
 
             if state == ROOM_STATE_HEATING:
@@ -1650,13 +1761,21 @@ class SmartHeatingController:
                         )
                     continue
                 elif use_climate:
-                    # Heizen via Klimaanlage
-                    if rstate.get("pause_active"):
+                    # Heizen via Klimaanlage – Fensterpause, Sensorausfall und
+                    # Außensperre gelten wie bei den Heizkörperventilen.
+                    if (
+                        rstate.get("pause_active")
+                        or room_id in self._room_sensor_fault
+                        or (
+                            rstate.get("outdoor_cutoff_active")
+                            and outdoor_minimum is None
+                        )
+                    ):
                         self._set_hvac_mode_if_needed(climate_entity, "off")
                     else:
                         heat_target = float(
                             rstate.get(
-                                "target",
+                                "control_target",
                                 room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
                             )
                         )
@@ -1684,21 +1803,31 @@ class SmartHeatingController:
                 room.get(CONF_ROOM_THERMOSTAT_OFFSET, DEFAULT_ROOM_THERMOSTAT_OFFSET)
             )
             effective_state = ROOM_STATE_IDLE
+            minimum_closes_valve = (
+                room_state["outdoor_minimum_active"]
+                and room_state["actual"] is not None
+                and state != ROOM_STATE_HEATING
+            )
 
             for thermostat in thermostats:
                 if room_state["pause_active"]:
                     room_target = self._thermostat_min_temp(thermostat)
                     effective_state = ROOM_STATE_WINDOW_PAUSE
+                elif room_id in self._room_sensor_fault:
+                    # Raumsensor ausgefallen → nicht blind weiterheizen
+                    room_target = self._thermostat_min_temp(thermostat)
+                    effective_state = ROOM_STATE_IDLE
                 elif state == ROOM_STATE_HEATING:
+                    heating_target = room_state["control_target"]
                     if self._is_self_regulating_room(room):
                         room_target = self._round_to_step(
-                            target,
+                            heating_target,
                             self._thermostat_target_step(thermostat),
                         )
                     else:
                         room_target = self._get_heating_target_for_room(
                             thermostat,
-                            target,
+                            heating_target,
                             boost_delta,
                         )
                     effective_state = ROOM_STATE_HEATING
@@ -1708,16 +1837,28 @@ class SmartHeatingController:
                         target,
                     )
                     effective_state = ROOM_STATE_RESIDUAL_HOLD
+                elif minimum_closes_valve:
+                    # Außensperre mit Mindesttemperatur: Ventil zu, bis die
+                    # Mindesttemperatur unterschritten wird.
+                    room_target = self._thermostat_min_temp(thermostat)
+                    effective_state = ROOM_STATE_IDLE
                 else:
+                    # Ohne Raumsensor regelt das Ventil selbst – bei aktiver
+                    # Mindesttemperatur dann auf diese statt auf den Sollwert.
                     room_target = self._get_idle_target_for_room(
                         room_id,
                         room,
                         thermostat,
-                        target,
+                        room_state["control_target"],
                     )
                     effective_state = ROOM_STATE_IDLE
 
-                if not room_state["pause_active"] and thermostat_offset != 0.0:
+                at_min_temp = (
+                    room_state["pause_active"]
+                    or room_id in self._room_sensor_fault
+                    or minimum_closes_valve
+                )
+                if not at_min_temp and thermostat_offset != 0.0:
                     room_target = room_target + thermostat_offset
 
                 desired = self._round_to_step(
