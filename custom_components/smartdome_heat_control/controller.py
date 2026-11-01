@@ -85,7 +85,6 @@ from .const import (
     CONF_ROOM_TARGET_NIGHT,
     CONF_ROOM_THERMOSTAT,
     CONF_ROOM_WEEKLY_SCHEDULE,
-    CONF_ROOM_WINDOW_SENSOR,
     CONF_ROOM_WINDOW_SENSORS,
     CONF_TOLERANCE,
     CONF_VACATION_ENABLED,
@@ -336,7 +335,7 @@ class SmartHeatingController:
                         CONF_ROOM_AWAY_TEMPERATURE,
                         DEFAULT_ROOM_AWAY_TEMPERATURE,
                     )
-                    room.setdefault(CONF_ROOM_WINDOW_SENSOR, "")
+                    room.setdefault(CONF_ROOM_WINDOW_SENSORS, [])
                     room.setdefault(
                         CONF_ROOM_EXTRA_THERMOSTATS,
                         list(DEFAULT_ROOM_EXTRA_THERMOSTATS),

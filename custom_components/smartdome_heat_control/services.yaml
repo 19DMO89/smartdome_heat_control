@@ -39,9 +39,18 @@ add_room:
       description: Temperature sensor entity for the room.
       required: false
       example: sensor.kinderzimmer_temperatur
+    window_sensors:
+      name: Window sensors
+      description: Binary sensors for window open detection (list).
+      required: false
+      example: '["binary_sensor.kinderzimmer_fenster"]'
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
     window_sensor:
-      name: Window sensor
-      description: Binary sensor for window open detection.
+      name: Window sensor (legacy)
+      description: Single binary sensor; deprecated, use window_sensors.
       required: false
       example: binary_sensor.kinderzimmer_fenster
     target_day:

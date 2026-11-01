@@ -110,7 +110,7 @@ from .const import (
     SERVICE_REMOVE_ROOM,
     SERVICE_UPDATE_CONFIG,
 )
-from .helpers import async_discover_rooms, deep_merge
+from .helpers import async_discover_rooms, deep_merge, normalize_window_sensors
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -298,16 +298,6 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     hass.data[DOMAIN]["_frontend_registered"] = True
 
 
-def _normalize_window_sensors(room: dict[str, Any]) -> list[str]:
-    """Fenstersensoren normalisieren und altes window_sensor-Feld migrieren."""
-    sensors = room.get(CONF_ROOM_WINDOW_SENSORS)
-    if isinstance(sensors, list):
-        return [s for s in sensors if isinstance(s, str) and s]
-    # migrate legacy single-sensor field
-    old = room.get("window_sensor", "")
-    return [old] if isinstance(old, str) and old else []
-
-
 def _normalize_extra_thermostats(room: dict[str, Any]) -> list[str]:
     """Zusätzliche Heizkörperventile normalisieren."""
     thermostats = room.get(CONF_ROOM_EXTRA_THERMOSTATS)
@@ -370,8 +360,9 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
                 room.get(CONF_ROOM_SWITCH_MIN_OFF), DEFAULT_ROOM_SWITCH_MIN_OFF
             ),
             "sensor": room.get("sensor", ""),
-            "window_sensor": room.get("window_sensor", ""),
-            CONF_ROOM_WINDOW_SENSORS: _normalize_window_sensors(room),
+            # Altes Einzelfeld wird in window_sensors migriert und geleert.
+            "window_sensor": "",
+            CONF_ROOM_WINDOW_SENSORS: normalize_window_sensors(room),
             "target_day": room.get("target_day", 21.0),
             "target_night": room.get("target_night", 18.0),
             "away_temperature": room.get(
@@ -583,7 +574,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
                 "area_id": call.data.get("area_id", ""),
                 "thermostat": call.data.get("thermostat", ""),
                 "sensor": call.data.get("sensor", ""),
-                "window_sensor": call.data.get("window_sensor", ""),
+                CONF_ROOM_WINDOW_SENSORS: normalize_window_sensors(
+                    {
+                        CONF_ROOM_WINDOW_SENSORS: call.data.get("window_sensors", []),
+                        "window_sensor": call.data.get("window_sensor", ""),
+                    }
+                ),
                 "target_day": call.data.get("target_day", 21.0),
                 "target_night": call.data.get("target_night", 18.0),
                 "away_temperature": call.data.get(
@@ -660,13 +656,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
                     discovered_room.get("thermostat", ""),
                 ),
                 "sensor": existing.get("sensor", discovered_room.get("sensor", "")),
-                "window_sensor": existing.get(
-                    "window_sensor",
-                    discovered_room.get("window_sensor", ""),
-                ),
-                CONF_ROOM_WINDOW_SENSORS: existing.get(
-                    CONF_ROOM_WINDOW_SENSORS,
-                    _normalize_window_sensors(discovered_room),
+                "window_sensor": "",
+                CONF_ROOM_WINDOW_SENSORS: (
+                    normalize_window_sensors(existing)
+                    if CONF_ROOM_WINDOW_SENSORS in existing
+                    or existing.get("window_sensor")
+                    else normalize_window_sensors(discovered_room)
                 ),
                 "target_day": existing.get(
                     "target_day",

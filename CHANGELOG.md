@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### 🐛 Fix: Fensterkontakte in Integration und Seitenpanel einheitlich
+
+- Fensterkontakte werden überall als Liste `window_sensors` gespeichert. Der Dialog *Integration → Räume bearbeiten/hinzufügen* bietet dafür eine Mehrfachauswahl und zeigt dieselben Kontakte wie das Seitenpanel. Man muss sie nicht mehr an zwei Stellen pflegen.
+- Bisher schrieb der Dialog nur das alte Einzelfeld `window_sensor`, das Panel und Regelung nicht auswerten: im Panel gesetzte Kontakte fehlten im Dialog, im Dialog gesetzte wurden ignoriert.
+- Migration: Ein noch im alten Feld stehender Kontakt wird beim Laden in die Liste übernommen, das Altfeld danach geleert.
+- Dienst `add_room` akzeptiert `window_sensors` (Liste); `window_sensor` funktioniert weiterhin.
+
+---
+
 ## [3.9.0] – 2026-10-26
 
 ### ✨ Außentemperatur-Sperre: Mindest-Raumtemperatur und Hysterese (aus #76/#78, danke @SniperWCW)
