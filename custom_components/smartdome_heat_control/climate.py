@@ -17,6 +17,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    CONF_ROOM_COMFORT_OVERRIDE_ENABLED,
     CONF_ROOMS,
     CONF_ROOM_ENABLED,
     CONF_ROOM_LABEL,
@@ -144,7 +145,8 @@ class SmartdomeRoomClimate(ClimateEntity):
         if controller is None or not room:
             return None
         try:
-            return float(controller._effective_target_for_room(room))
+            target = controller.get_room_target_temperature(self._room_id)
+            return float(target) if target is not None else None
         except (TypeError, ValueError):
             return None
 
@@ -153,11 +155,17 @@ class SmartdomeRoomClimate(ClimateEntity):
         status = self._status()
         if status is None:
             return {}
-        return {
+        attrs = {
             "room_state": status["state"],
             "heating_mode": status["heating_mode"],
             "away_active": status["away_active"],
         }
+        if self._get_room().get(CONF_ROOM_COMFORT_OVERRIDE_ENABLED, False):
+            attrs["comfort_override_active"] = status.get("comfort_override_active", False)
+            attrs["comfort_override_remaining_seconds"] = status.get(
+                "comfort_override_remaining_seconds", 0
+            )
+        return attrs
 
     # --- Steuerung --------------------------------------------------------
 
@@ -167,6 +175,21 @@ class SmartdomeRoomClimate(ClimateEntity):
             return
 
         controller = self._get_controller()
+
+        # Räume mit aktiviertem Komfort-Override: Sollwert gilt zeitlich begrenzt
+        # (60 min) und verändert weder Tag/Nacht-Werte noch Wochenplan. Ohne die
+        # Option bleibt das Verhalten unverändert (Sollwert wird gespeichert).
+        if controller is not None and self._get_room().get(
+            CONF_ROOM_COMFORT_OVERRIDE_ENABLED, False
+        ):
+            value = min(MAX_TEMP, max(MIN_TEMP, float(temperature)))
+            if not controller.set_comfort_override(self._room_id, value):
+                raise ServiceValidationError(
+                    "Der Komfort-Override ist im Urlaubsmodus nicht verfügbar."
+                )
+            self.async_write_ha_state()
+            return
+
         key = controller.get_room_setpoint_key(self._room_id) if controller else None
         if key is None:
             raise ServiceValidationError(

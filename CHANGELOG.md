@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### ⏱️ Komfort-Override (Option pro Raum, Standard aus)
+
+Pro Raum zuschaltbar (Panel und Integrationsoptionen: *Komfort-Override*). **Ohne die Option bleibt das Verhalten komplett unverändert**, auch das der Climate-Entity aus 3.6.0.
+
+- Wird der Sollwert am Heizkörperthermostat um ≥ 0,5 °C **über den geplanten Wert** angehoben, oder an der Climate-Entity des Raums gesetzt, gilt das **60 Minuten** als Komfortanforderung. Tag/Nacht-Werte und Wochenplan werden dabei **nicht verändert**, der Override läuft darüber und endet von selbst.
+- **Mit aktivierter Option** speichert die Climate-Entity des Raums den Sollwert nicht mehr, sondern setzt den zeitlich begrenzten Override (auch bei aktivem Wochenplan). Im **Urlaubsmodus** ist der Override nicht verfügbar: die Climate-Entity lehnt ihn mit einer Meldung ab, ein laufender Override endet.
+- **Gegen Fehlauslöser:**
+  - Eigene Befehle zählen nie, auch nicht, wenn das Gerät sie verzögert bestätigt.
+  - Die Anhebung muss von dem Wert ausgehen, den wir zuletzt gesendet haben. Stellt ein Ventil nach seiner eigenen Fenster-offen-Erkennung einen früheren Sollwert wieder her, wird das nicht als Eingriff gewertet.
+  - Keine Erkennung bei offenem Fenster, bei Fensterpause und 10 min danach.
+  - 3 min Ruhezeit nach dem Speichern im Panel (verzögerte Bestätigungen).
+  - Nicht bei Sensorausfall, Urlaubsmodus oder wenn der Raum die Wunschtemperatur bereits erreicht hat.
+- Der Override umgeht bewusst die Außensperre samt Mindesttemperatur (der Nutzer will gerade heizen) und endet bei Ablauf, Fenster-offen, Urlaubsmodus oder Deaktivierung der Option.
+- Neue Statusattribute am Raumstatus-Sensor: `comfort_override_active`, `comfort_override_target`, `comfort_override_remaining_seconds`; `control_reason: comfort_override`.
+- Tests unter `tests/` (laufen ohne Home-Assistant-Installation: `pytest`).
+
+---
+
+**EN:** Optional per-room timed comfort override (default off, existing behaviour unchanged without it): raising the setpoint at the valve or on the room's climate entity heats for 60 min without touching schedules. With the option on, the climate entity sets the override instead of storing the setpoint; not available in vacation mode. Guards against false triggers (own commands, valve restoring its setpoint after its own window detection, window pause + 10 min, 3 min after saving in the panel, sensor fault). It deliberately bypasses the outdoor cutoff.
+
+---
+
 ## [3.9.0] – 2026-10-26
 
 ### ✨ Außentemperatur-Sperre: Mindest-Raumtemperatur und Hysterese (aus #76/#78, danke @SniperWCW)

@@ -192,6 +192,19 @@ SWITCH_ACTUATOR_DOMAINS = ("switch", "input_boolean")
 CONF_ROOM_AWAY_ENABLED = "room_away_enabled"
 DEFAULT_ROOM_AWAY_ENABLED = False
 
+# Feature – Zeitlich begrenzter Komfort-Override pro Raum (opt-in)
+# Ein am Heizkörperthermostat oder an der Climate-Entity des Raums angehobener
+# Sollwert wird als temporäre Komfortanforderung behandelt, ohne Tag/Nacht-
+# Werte, Wochenplan oder Urlaubsmodus dauerhaft zu verändern.
+CONF_ROOM_COMFORT_OVERRIDE_ENABLED = "room_comfort_override_enabled"
+DEFAULT_ROOM_COMFORT_OVERRIDE_ENABLED = False
+COMFORT_OVERRIDE_DURATION_SECONDS = 3600
+COMFORT_OVERRIDE_MIN_DELTA = 0.5  # °C Anhebung, ab der ein Override erkannt wird
+COMFORT_OVERRIDE_OWN_VALUE_TOLERANCE = 0.25  # °C, Treffer = eigener Wert
+COMFORT_OVERRIDE_OWN_VALUE_WINDOW = 900  # s, so lange gelten gesendete Werte als "eigen"
+COMFORT_OVERRIDE_CONFIG_GRACE = 180  # s Ruhezeit nach Panel-/Config-Änderung
+COMFORT_OVERRIDE_WINDOW_GRACE = 600  # s Ruhezeit nach Fenster-offen-Pause
+
 # Feature #70 – Kühlen
 CONF_COOLING_ENABLED = "cooling_enabled"
 CONF_COOLING_AUTO = "cooling_auto"
