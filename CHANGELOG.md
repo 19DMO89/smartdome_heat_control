@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### 🎯 Sollwert-Abgleich (Option pro Raum, Standard aus)
+
+Pro Raum zuschaltbar (Panel und Integrationsoptionen: *Sollwert-Abgleich*). Ohne die Option ändert sich nichts.
+
+- Prüft, ob das Thermostat den gesendeten Sollwert übernommen hat, und sendet bei Abweichung ≥ 0,5 °C **höchstens zweimal** (Abstand ≥ 10 min) erneut. Das Senden läuft nicht über `_set_temp_if_needed`, dessen Verhalten bleibt unverändert.
+- **Begrenzende Ventile** (z. B. max. 28 °C) gelten danach als begrenzt: kein dauerndes Wiedersenden, keine Warnung im Log (nur ein Info-Eintrag), bis sich der Zielwert ändert.
+- **Manuelle Absenkungen** am Ventil werden erkannt und bis zur nächsten Änderung des Zielwerts nicht überschrieben.
+- Tests unter `tests/` (laufen ohne Home-Assistant-Installation: `pytest`).
+
+---
+
+**EN:** Optional per-room setpoint reconciliation (default off): re-sends the setpoint at most twice (≥ 10 min apart) if the valve did not accept it, treats clamping valves as limited (info log only, no warning) and does not overwrite manual lowering at the valve until the target changes.
+
+---
 ## [3.9.0] – 2026-10-26
 
 ### ✨ Außentemperatur-Sperre: Mindest-Raumtemperatur und Hysterese (aus #76/#78, danke @SniperWCW)
