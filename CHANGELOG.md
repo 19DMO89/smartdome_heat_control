@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.9.1] – 2026-11-07
+
+### 🔧 Heizen über Klimaanlage: Ausschalten statt Herunterdrehen
+
+- Die Klimaanlage läuft nur noch, solange der Raum heizt. Ist die Solltemperatur erreicht, wird sie **ausgeschaltet** (`hvac_mode: off`), statt im Heizmodus zu bleiben. Unterschreitet der Raum wieder *Soll − Toleranz*, schaltet sie sich mit dem aktuellen Sollwert wieder ein.
+- Räume ohne Raumsensor verhalten sich wie bisher: Die Klimaanlage regelt selbst auf den Sollwert.
+
+---
+
+**EN:** When heating via air conditioning, the unit is now switched off once the room reaches its target instead of staying in heat mode, and switched back on with the current setpoint when the room drops below target minus tolerance. Rooms without a room sensor keep the previous behaviour.
+
+---
+
 ## [3.9.0] – 2026-10-26
 
 ### ✨ Außentemperatur-Sperre: Mindest-Raumtemperatur und Hysterese (aus #76/#78, danke @SniperWCW)

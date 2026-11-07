@@ -1761,26 +1761,34 @@ class SmartHeatingController:
                         )
                     continue
                 elif use_climate:
-                    # Heizen via Klimaanlage – Fensterpause, Sensorausfall und
-                    # Außensperre gelten wie bei den Heizkörperventilen.
-                    if (
-                        rstate.get("pause_active")
-                        or room_id in self._room_sensor_fault
-                        or (
-                            rstate.get("outdoor_cutoff_active")
-                            and outdoor_minimum is None
-                        )
-                    ):
-                        self._set_hvac_mode_if_needed(climate_entity, "off")
+                    # Heizen via Klimaanlage: an nur im Zustand HEATING, sonst aus
+                    # statt nur den Sollwert zu senken. Fensterpause, Sensorausfall
+                    # und Außensperre setzen den Raumzustand bereits auf IDLE.
+                    if self._as_entity_id(room.get(CONF_ROOM_SENSOR)):
+                        climate_heating = rstate.get("state") == ROOM_STATE_HEATING
                     else:
+                        # Ohne Raumsensor regelt die Klimaanlage selbst auf den Sollwert.
+                        climate_heating = not (
+                            rstate.get("pause_active")
+                            or (
+                                rstate.get("outdoor_cutoff_active")
+                                and outdoor_minimum is None
+                            )
+                        )
+                    if climate_heating:
                         heat_target = float(
                             rstate.get(
                                 "control_target",
                                 room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
                             )
                         )
+                        # Beim Einschalten Sollwert garantiert erneut senden.
+                        if self._last_hvac_mode.get(climate_entity) != "heat":
+                            self._desired_targets.pop(climate_entity, None)
                         self._set_hvac_mode_if_needed(climate_entity, "heat")
                         self._set_temp_if_needed(climate_entity, heat_target)
+                    else:
+                        self._set_hvac_mode_if_needed(climate_entity, "off")
                     # Heizventile ausschalten
                     for thermostat in thermostats:
                         self._set_temp_if_needed(
