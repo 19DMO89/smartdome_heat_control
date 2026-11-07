@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.10.1] – 2026-11-07
+
+### 🔧 Raum-Dialog: fehlende Beschriftungen
+
+- Im Dialog *Integration → Räume bearbeiten/hinzufügen* haben *Weitere Heizkörperventile*, *Away-Modus für diesen Raum aktiv* und *Sollwert-Abgleich* jetzt eine Beschriftung statt des technischen Feldnamens.
+
+---
+
+**EN:** The integration's room dialog now shows proper labels for additional radiator valves, per-room away mode and setpoint reconciliation instead of raw field names.
+
+---
+
 ## [3.10.0] – 2026-11-07
 
 ### 🎯 Sollwert-Abgleich (Option pro Raum, Standard aus, aus #79, danke @SniperWCW)

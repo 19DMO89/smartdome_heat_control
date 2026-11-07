@@ -88,6 +88,9 @@
           "night_start": "Night start",
           "enabled": "Room enabled",
           "delete_room": "Delete room",
+          "extra_thermostats": "Additional radiator valves",
+          "room_away_enabled": "Away mode active for this room",
+          "room_target_reconcile_enabled": "Setpoint reconciliation: re-send the setpoint if the valve did not accept it (limited retries, respects manual changes)",
           "window_sensors": "Window sensors",
           "control_profile": "Thermostat control profile"
         }
@@ -105,6 +108,9 @@
           "day_start": "Day start",
           "night_start": "Night start",
           "enabled": "Room enabled",
+          "extra_thermostats": "Additional radiator valves",
+          "room_away_enabled": "Away mode active for this room",
+          "room_target_reconcile_enabled": "Setpoint reconciliation: re-send the setpoint if the valve did not accept it (limited retries, respects manual changes)",
           "window_sensors": "Window sensors",
           "control_profile": "Thermostat control profile"
         }

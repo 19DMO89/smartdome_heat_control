@@ -88,6 +88,9 @@
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
           "delete_room": "Raum löschen",
+          "extra_thermostats": "Weitere Heizkörperventile",
+          "room_away_enabled": "Away-Modus für diesen Raum aktiv",
+          "room_target_reconcile_enabled": "Sollwert-Abgleich: Sollwert erneut senden, wenn das Ventil ihn nicht übernommen hat (begrenzte Wiederholungen, manuelle Änderungen werden respektiert)",
           "window_sensors": "Fensterkontakte",
           "control_profile": "Thermostat-Regelprofil"
         }
@@ -105,6 +108,9 @@
           "day_start": "Tag-Start",
           "night_start": "Nacht-Start",
           "enabled": "Raum aktiv",
+          "extra_thermostats": "Weitere Heizkörperventile",
+          "room_away_enabled": "Away-Modus für diesen Raum aktiv",
+          "room_target_reconcile_enabled": "Sollwert-Abgleich: Sollwert erneut senden, wenn das Ventil ihn nicht übernommen hat (begrenzte Wiederholungen, manuelle Änderungen werden respektiert)",
           "window_sensors": "Fensterkontakte",
           "control_profile": "Thermostat-Regelprofil"
         }
