@@ -23,6 +23,7 @@ from .const import (
     CONF_OUTDOOR_CUTOFF_HYSTERESIS,
     CONF_OUTDOOR_MIN_ROOM_TEMPERATURE,
     CONF_ROOM_WINDOW_SENSOR,
+    CONF_ROOM_WINDOW_SENSORS,
     CONF_NIGHT_START,
     CONF_ROOMS,
     CONF_ROOM_AWAY_ENABLED,
@@ -58,7 +59,7 @@ from .const import (
     DEFAULT_VACATION_TEMPERATURE,
     DOMAIN,
 )
-from .helpers import async_discover_rooms
+from .helpers import async_discover_rooms, normalize_window_sensors
 
 
 def _temperature_sensor_selector() -> selector.EntitySelector:
@@ -93,7 +94,7 @@ def _window_sensor_selector() -> selector.EntitySelector:
     return selector.EntitySelector(
         selector.EntitySelectorConfig(
             domain="binary_sensor",
-            multiple=False,
+            multiple=True,
         )
     )
 
@@ -520,7 +521,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     CONF_ROOM_DAY_START: user_input.get(CONF_ROOM_DAY_START, ""),
                     CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                     CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
-                    CONF_ROOM_WINDOW_SENSOR: user_input.get(CONF_ROOM_WINDOW_SENSOR),
+                    CONF_ROOM_WINDOW_SENSOR: "",
+                    CONF_ROOM_WINDOW_SENSORS: normalize_window_sensors(
+                        {CONF_ROOM_WINDOW_SENSORS: user_input.get(CONF_ROOM_WINDOW_SENSORS, [])}
+                    ),
                     CONF_ROOM_EXTRA_THERMOSTATS: user_input.get(
                         CONF_ROOM_EXTRA_THERMOSTATS,
                         list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
@@ -593,9 +597,11 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     ),
                 ): bool,
                 vol.Optional("delete_room", default=False): bool,
+                # suggested_value statt default: sonst lässt sich ein
+                # Fensterkontakt im Dialog nicht wieder entfernen.
                 vol.Optional(
-                    CONF_ROOM_WINDOW_SENSOR,
-                    default=_optional_default(room.get(CONF_ROOM_WINDOW_SENSOR)),
+                    CONF_ROOM_WINDOW_SENSORS,
+                    description={"suggested_value": normalize_window_sensors(room)},
                 ): _window_sensor_selector(),
             }
         )
@@ -627,7 +633,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 CONF_ROOM_DAY_START: user_input.get(CONF_ROOM_DAY_START, ""),
                 CONF_ROOM_NIGHT_START: user_input.get(CONF_ROOM_NIGHT_START, ""),
                 CONF_ROOM_ENABLED: user_input.get(CONF_ROOM_ENABLED, True),
-                CONF_ROOM_WINDOW_SENSOR: user_input.get(CONF_ROOM_WINDOW_SENSOR),
+                CONF_ROOM_WINDOW_SENSOR: "",
+                CONF_ROOM_WINDOW_SENSORS: normalize_window_sensors(
+                    {CONF_ROOM_WINDOW_SENSORS: user_input.get(CONF_ROOM_WINDOW_SENSORS, [])}
+                ),
                 CONF_ROOM_EXTRA_THERMOSTATS: user_input.get(
                     CONF_ROOM_EXTRA_THERMOSTATS,
                     list(DEFAULT_ROOM_EXTRA_THERMOSTATS),
@@ -672,7 +681,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                         CONF_ROOM_AWAY_ENABLED,
                         default=DEFAULT_ROOM_AWAY_ENABLED,
                     ): bool,
-                    vol.Optional(CONF_ROOM_WINDOW_SENSOR): _window_sensor_selector(),
+                    vol.Optional(
+                        CONF_ROOM_WINDOW_SENSORS,
+                        default=[],
+                    ): _window_sensor_selector(),
                 }
             ),
         )

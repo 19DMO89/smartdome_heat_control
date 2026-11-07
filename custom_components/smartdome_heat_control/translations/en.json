@@ -88,7 +88,7 @@
           "night_start": "Night start",
           "enabled": "Room enabled",
           "delete_room": "Delete room",
-          "window_sensor": "Window sensor",
+          "window_sensors": "Window sensors",
           "control_profile": "Thermostat control profile"
         }
       },
@@ -105,7 +105,7 @@
           "day_start": "Day start",
           "night_start": "Night start",
           "enabled": "Room enabled",
-          "window_sensor": "Window sensor",
+          "window_sensors": "Window sensors",
           "control_profile": "Thermostat control profile"
         }
       }

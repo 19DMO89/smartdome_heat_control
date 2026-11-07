@@ -23,6 +23,8 @@ from .const import (
     CONF_ROOM_TARGET_DAY,
     CONF_ROOM_TARGET_NIGHT,
     CONF_ROOM_THERMOSTAT,
+    CONF_ROOM_WINDOW_SENSOR,
+    CONF_ROOM_WINDOW_SENSORS,
     CONF_ROOMS,
     DATA_CONTROLLER,
     DATA_ENABLED,
@@ -33,6 +35,29 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def normalize_window_sensors(room: dict[str, Any] | None) -> list[str]:
+    """Fensterkontakte eines Raums als Liste liefern.
+
+    Einzige Quelle ist ``window_sensors`` (Liste). Das alte Einzelfeld
+    ``window_sensor`` wird nur noch migriert und dabei mit der Liste
+    zusammengeführt, damit ein dort gesetzter Wert nicht verloren geht.
+    """
+    if not isinstance(room, dict):
+        return []
+    result: list[str] = []
+    sensors = room.get(CONF_ROOM_WINDOW_SENSORS)
+    if isinstance(sensors, str):
+        sensors = [sensors]
+    if isinstance(sensors, list):
+        for sensor in sensors:
+            if isinstance(sensor, str) and sensor and sensor not in result:
+                result.append(sensor)
+    legacy = room.get(CONF_ROOM_WINDOW_SENSOR)
+    if isinstance(legacy, str) and legacy and legacy not in result:
+        result.append(legacy)
+    return result
 
 
 def _is_state_available(state: State | None) -> bool:
