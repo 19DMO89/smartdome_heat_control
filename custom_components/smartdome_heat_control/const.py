@@ -192,6 +192,16 @@ SWITCH_ACTUATOR_DOMAINS = ("switch", "input_boolean")
 CONF_ROOM_AWAY_ENABLED = "room_away_enabled"
 DEFAULT_ROOM_AWAY_ENABLED = False
 
+# Feature – Sollwert-Abgleich pro Raum (opt-in)
+# Prüft, ob das Thermostat den gesendeten Sollwert übernommen hat, und sendet
+# bei Abweichung begrenzt erneut. Begrenzende Ventile (z. B. max. 28 °C) werden
+# erkannt; manuelle Änderungen am Ventil werden nicht überschrieben.
+CONF_ROOM_TARGET_RECONCILE_ENABLED = "room_target_reconcile_enabled"
+DEFAULT_ROOM_TARGET_RECONCILE_ENABLED = False
+RECONCILE_TOLERANCE = 0.5  # °C
+RECONCILE_RETRY_INTERVAL = 600  # s zwischen Wiederholungen
+RECONCILE_MAX_ATTEMPTS = 2  # danach gilt das Ventil als begrenzend
+
 # Feature #70 – Kühlen
 CONF_COOLING_ENABLED = "cooling_enabled"
 CONF_COOLING_AUTO = "cooling_auto"

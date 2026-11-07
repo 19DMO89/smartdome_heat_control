@@ -27,6 +27,7 @@ from .const import (
     CONF_NIGHT_START,
     CONF_ROOMS,
     CONF_ROOM_AWAY_ENABLED,
+    CONF_ROOM_TARGET_RECONCILE_ENABLED,
     CONF_ROOM_AWAY_TEMPERATURE,
     CONF_ROOM_DAY_START,
     CONF_ROOM_ENABLED,
@@ -50,6 +51,7 @@ from .const import (
     DEFAULT_OUTDOOR_CUTOFF_HYSTERESIS,
     DEFAULT_OUTDOOR_MIN_ROOM_TEMPERATURE,
     DEFAULT_ROOM_AWAY_ENABLED,
+    DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
     DEFAULT_ROOM_AWAY_TEMPERATURE,
     DEFAULT_ROOM_EXTRA_THERMOSTATS,
     DEFAULT_TARGET_DAY,
@@ -148,6 +150,10 @@ class SmartdomeHeatControlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     room_data.setdefault(
                         CONF_ROOM_AWAY_ENABLED,
                         DEFAULT_ROOM_AWAY_ENABLED,
+                    )
+                    room_data.setdefault(
+                        CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                        DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
                     )
 
             return await self.async_step_rooms()
@@ -290,6 +296,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                 room_data.setdefault(
                     CONF_ROOM_AWAY_ENABLED,
                     DEFAULT_ROOM_AWAY_ENABLED,
+                )
+                room_data.setdefault(
+                    CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                    DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
                 )
 
     async def async_step_init(
@@ -533,6 +543,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                         CONF_ROOM_AWAY_ENABLED,
                         DEFAULT_ROOM_AWAY_ENABLED,
                     ),
+                    CONF_ROOM_TARGET_RECONCILE_ENABLED: user_input.get(
+                        CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                        DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
+                    ),
                 }
 
             new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
@@ -596,6 +610,13 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                         DEFAULT_ROOM_AWAY_ENABLED,
                     ),
                 ): bool,
+                vol.Optional(
+                    CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                    default=room.get(
+                        CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                        DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
+                    ),
+                ): bool,
                 vol.Optional("delete_room", default=False): bool,
                 # suggested_value statt default: sonst lässt sich ein
                 # Fensterkontakt im Dialog nicht wieder entfernen.
@@ -645,6 +666,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     CONF_ROOM_AWAY_ENABLED,
                     DEFAULT_ROOM_AWAY_ENABLED,
                 ),
+                CONF_ROOM_TARGET_RECONCILE_ENABLED: user_input.get(
+                    CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                    DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
+                ),
             }
 
             new_data = {**self._entry.data, CONF_ROOMS: self._rooms}
@@ -682,6 +707,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                         default=DEFAULT_ROOM_AWAY_ENABLED,
                     ): bool,
                     vol.Optional(
+                        CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                        default=DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
+                    ): bool,
+                    vol.Optional(
                         CONF_ROOM_WINDOW_SENSORS,
                         default=[],
                     ): _window_sensor_selector(),
@@ -709,6 +738,10 @@ class SmartdomeOptionsFlow(config_entries.OptionsFlow):
                     room_data.setdefault(
                         CONF_ROOM_AWAY_ENABLED,
                         DEFAULT_ROOM_AWAY_ENABLED,
+                    )
+                    room_data.setdefault(
+                        CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                        DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
                     )
                 self._rooms[room_id] = room_data
 

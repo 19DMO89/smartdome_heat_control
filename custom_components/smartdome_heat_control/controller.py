@@ -22,13 +22,18 @@ from .const import (
     ADAPTIVE_BUCKET_SHORT_MAX_SECS,
     CONF_AWAY_ENABLED,
     CONF_ROOM_AWAY_ENABLED,
+    CONF_ROOM_TARGET_RECONCILE_ENABLED,
     CONF_ROOM_EXTRA_THERMOSTATS,
     CONF_ROOM_HYSTERESIS,
     CONF_ROOM_SWITCH_ACTUATORS,
     CONF_ROOM_SWITCH_MIN_OFF,
     CONF_ROOM_SWITCH_MIN_ON,
     DEFAULT_ROOM_AWAY_ENABLED,
+    DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
     DEFAULT_ROOM_EXTRA_THERMOSTATS,
+    RECONCILE_MAX_ATTEMPTS,
+    RECONCILE_RETRY_INTERVAL,
+    RECONCILE_TOLERANCE,
     DEFAULT_ROOM_SWITCH_ACTUATORS,
     DEFAULT_ROOM_SWITCH_MIN_OFF,
     DEFAULT_ROOM_SWITCH_MIN_ON,
@@ -201,6 +206,9 @@ class SmartHeatingController:
         # Gerät den neuen Zustand noch nicht gemeldet hat.
         self._switch_command_sent_at: dict[str, tuple[bool, float]] = {}
 
+        # Sollwert-Abgleich pro Thermostat (nur Räume mit aktivierter Option)
+        self._reconcile: dict[str, dict[str, Any]] = {}
+
         self._apply_config_defaults()
 
     async def async_start(self) -> None:
@@ -245,7 +253,7 @@ class SmartHeatingController:
 
             # Bei selbst regelnden Räumen auch die Thermostate beobachten,
             # damit _evaluate() greift sobald die CCU den State bestätigt.
-            if self._is_self_regulating_room(room):
+            if self._is_self_regulating_room(room) or self._reconcile_enabled(room):
                 for thermostat in self._room_thermostats(room):
                     watch_entities.add(thermostat)
 
@@ -347,6 +355,10 @@ class SmartHeatingController:
                     room.setdefault(
                         CONF_ROOM_AWAY_ENABLED,
                         DEFAULT_ROOM_AWAY_ENABLED,
+                    )
+                    room.setdefault(
+                        CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                        DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
                     )
                     room.setdefault(
                         CONF_ROOM_CONTROL_PROFILE,
@@ -925,6 +937,108 @@ class SmartHeatingController:
             )
         )
 
+    # --- Sollwert-Abgleich (opt-in pro Raum) ------------------------------
+
+    def _reconcile_enabled(self, room: dict[str, Any]) -> bool:
+        return bool(
+            room.get(
+                CONF_ROOM_TARGET_RECONCILE_ENABLED,
+                DEFAULT_ROOM_TARGET_RECONCILE_ENABLED,
+            )
+        )
+
+    def _note_possible_manual_change(
+        self, entity_id: str, old_target: float, new_target: float
+    ) -> None:
+        """Manuelle Änderung am Ventil erkennen und respektieren.
+
+        Ein Ventil, das zuvor unseren Wert hatte und nun mindestens 0,5 °C
+        davon abweicht (ohne dass wir kürzlich gesendet haben), wird bis zur
+        nächsten Änderung unseres Sollwerts nicht überschrieben.
+        """
+        desired = self._desired_targets.get(entity_id)
+        if desired is None:
+            return
+        now_ts = dt_util.now().timestamp()
+        if abs(old_target - new_target) < RECONCILE_TOLERANCE:
+            return
+        if abs(old_target - desired) > RECONCILE_TOLERANCE:
+            return
+        if abs(new_target - desired) <= RECONCILE_TOLERANCE:
+            return
+        if now_ts - self._last_command_sent_at.get(entity_id, 0.0) <= 120:
+            return
+        tracker = self._reconcile.setdefault(entity_id, {})
+        tracker.update(
+            {"desired": desired, "attempts": 0, "last": now_ts, "hold": True}
+        )
+        _LOGGER.debug(
+            "Manuelle Änderung an %s erkannt (%.1f → %.1f), kein Abgleich bis zur nächsten Änderung",
+            entity_id,
+            old_target,
+            new_target,
+        )
+
+    def _reconcile_thermostat_target(self, entity_id: str) -> None:
+        """Prüfen, ob das Thermostat den gesendeten Sollwert übernommen hat.
+
+        Begrenzt: höchstens ``RECONCILE_MAX_ATTEMPTS`` Wiederholungen mit
+        Mindestabstand. Übernimmt das Gerät den Wert danach weiterhin nicht
+        (z. B. Maximalwert 28 °C), gilt es als begrenzend und wird bis zur
+        nächsten Änderung des Sollwerts in Ruhe gelassen – ohne Warnungen.
+        """
+        desired = self._desired_targets.get(entity_id)
+        state = self.hass.states.get(entity_id)
+        if desired is None or state is None:
+            return
+        observed = self._safe_float(state.attributes.get("temperature"))
+        if observed is None:
+            return
+
+        tracker = self._reconcile.get(entity_id)
+        if tracker is None or abs(float(tracker.get("desired", -999.0)) - desired) > 0.01:
+            tracker = {"desired": desired, "attempts": 0, "last": 0.0}
+            self._reconcile[entity_id] = tracker
+
+        if abs(observed - desired) < RECONCILE_TOLERANCE:
+            tracker.update({"attempts": 0, "hold": False, "limited": False})
+            return
+        if tracker.get("hold") or tracker.get("limited"):
+            return
+
+        now_ts = dt_util.now().timestamp()
+        if now_ts - self._last_command_sent_at.get(entity_id, 0.0) < RECONCILE_RETRY_INTERVAL:
+            return
+        if tracker["attempts"] >= RECONCILE_MAX_ATTEMPTS:
+            tracker["limited"] = True
+            _LOGGER.info(
+                "%s übernimmt Sollwert %.1f °C nicht (steht auf %.1f °C) – "
+                "gilt als begrenzt, kein weiterer Abgleich bis zur nächsten Änderung",
+                entity_id,
+                desired,
+                observed,
+            )
+            return
+
+        tracker["attempts"] += 1
+        tracker["last"] = now_ts
+        self._last_command_sent_at[entity_id] = now_ts
+        _LOGGER.debug(
+            "Sollwert-Abgleich %s: gesendet %.1f °C, Gerät %.1f °C (Versuch %d)",
+            entity_id,
+            desired,
+            observed,
+            tracker["attempts"],
+        )
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                CLIMATE_DOMAIN,
+                "set_temperature",
+                {"entity_id": entity_id, ATTR_TEMPERATURE: desired},
+                blocking=True,
+            )
+        )
+
     def _turn_switch_if_needed(self, entity_id: str, turn_on: bool) -> None:
         """Switch ein- oder ausschalten, aber nur wenn sich der Zustand ändert."""
         last = self._desired_targets.get(entity_id)
@@ -1197,6 +1311,7 @@ class SmartHeatingController:
         self._last_fan_mode.clear()
         self._last_preset_mode.clear()
         self._switch_command_sent_at.clear()
+        self._reconcile.clear()
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
@@ -1897,6 +2012,10 @@ class SmartHeatingController:
                         min_interval=min_interval,
                     )
 
+            if self._reconcile_enabled(room):
+                for thermostat in thermostats:
+                    self._reconcile_thermostat_target(thermostat)
+
             # Raumzustand erst nach Verarbeitung ALLER Ventile aktualisieren, damit
             # jedes Ventil den Zustandswechsel (state_changed) korrekt erkennt.
             self._last_applied_room_state[room_id] = effective_state
@@ -1911,7 +2030,27 @@ class SmartHeatingController:
 
     @callback
     def _on_state_change(self, event: Event) -> None:
-        """Bei Sensor-Änderung sofort neu bewerten."""
+        """Bei Sensor-Änderung sofort neu bewerten.
+
+        Bei Thermostaten von Räumen mit aktiviertem Sollwert-Abgleich wird
+        zusätzlich geprüft, ob der Sollwert am Gerät manuell geändert wurde.
+        """
+        entity_id = event.data.get("entity_id")
+        old = event.data.get("old_state")
+        new = event.data.get("new_state")
+        if entity_id and old is not None and new is not None:
+            old_target = self._safe_float(old.attributes.get("temperature"))
+            new_target = self._safe_float(new.attributes.get("temperature"))
+            if (
+                old_target is not None
+                and new_target is not None
+                and abs(old_target - new_target) >= RECONCILE_TOLERANCE
+                and any(
+                    self._reconcile_enabled(room) and entity_id in self._room_thermostats(room)
+                    for room in self._active_rooms().values()
+                )
+            ):
+                self._note_possible_manual_change(entity_id, old_target, new_target)
         self._evaluate()
 
     @callback

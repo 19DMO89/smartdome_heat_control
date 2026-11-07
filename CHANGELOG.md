@@ -1,13 +1,27 @@
 # Changelog
 
-## [Unreleased]
+## [3.10.0] – 2026-11-07
 
-### 🐛 Fix: Fensterkontakte in Integration und Seitenpanel einheitlich
+### 🎯 Sollwert-Abgleich (Option pro Raum, Standard aus, aus #79, danke @SniperWCW)
+
+Pro Raum zuschaltbar (Panel und Integrationsoptionen: *Sollwert-Abgleich*). Ohne die Option ändert sich nichts.
+
+- Prüft, ob das Thermostat den gesendeten Sollwert übernommen hat, und sendet bei Abweichung ≥ 0,5 °C **höchstens zweimal** (Abstand ≥ 10 min) erneut. Das Senden läuft nicht über `_set_temp_if_needed`, dessen Verhalten bleibt unverändert.
+- **Begrenzende Ventile** (z. B. max. 28 °C) gelten danach als begrenzt: kein dauerndes Wiedersenden, keine Warnung im Log (nur ein Info-Eintrag), bis sich der Zielwert ändert.
+- **Manuelle Änderungen** am Ventil (Absenken und Anheben) werden erkannt und bis zur nächsten Änderung des Zielwerts nicht überschrieben.
+- Gilt für Heizkörperventile, nicht für Klimaanlagen.
+- Tests unter `tests/` (laufen ohne Home-Assistant-Installation: `pytest`).
+
+### 🐛 Fensterkontakte in Integration und Seitenpanel einheitlich (aus #81, danke @SniperWCW)
 
 - Fensterkontakte werden überall als Liste `window_sensors` gespeichert. Der Dialog *Integration → Räume bearbeiten/hinzufügen* bietet dafür eine Mehrfachauswahl und zeigt dieselben Kontakte wie das Seitenpanel. Man muss sie nicht mehr an zwei Stellen pflegen.
 - Bisher schrieb der Dialog nur das alte Einzelfeld `window_sensor`, das Panel und Regelung nicht auswerten: im Panel gesetzte Kontakte fehlten im Dialog, im Dialog gesetzte wurden ignoriert.
-- Migration: Ein noch im alten Feld stehender Kontakt wird beim Laden in die Liste übernommen, das Altfeld danach geleert.
+- Migration: Ein noch im alten Feld stehender Kontakt wird beim Laden in die Liste übernommen, das Altfeld danach geleert. **Achtung:** Ein Kontakt, der bisher nur im Dialog eingetragen und deshalb wirkungslos war, wird dadurch aktiv und kann das Heizen pausieren.
 - Dienst `add_room` akzeptiert `window_sensors` (Liste); `window_sensor` funktioniert weiterhin.
+
+---
+
+**EN:** Optional per-room setpoint reconciliation (default off): re-sends the setpoint at most twice (≥ 10 min apart) if the valve did not accept it, treats clamping valves as limited (info log only, no warning) and does not overwrite manual changes at the valve until the target changes. Radiator valves only. Window contacts are now stored as the `window_sensors` list everywhere, with a multi-select in the integration dialog; a contact still in the legacy field is migrated on load, so a contact that was previously ignored becomes active. Based on PRs #79/#81 by @SniperWCW.
 
 ---
 
