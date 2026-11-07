@@ -206,7 +206,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     controller.set_persist_callback(_persist_learned)
 
     def _on_room_states_updated(room_states: dict[str, str]) -> None:
-        _push_state(hass, domain_data["config"], room_states=room_states)
+        _push_state(
+            hass,
+            domain_data["config"],
+            room_states=room_states,
+            room_status=controller.get_panel_room_status(),
+        )
 
     controller.set_state_callback(_on_room_states_updated)
 
@@ -457,6 +462,9 @@ def _normalize_circuits(circuits: Any) -> dict[str, dict[str, Any]]:
 def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     """Gesamte Config normalisieren."""
     normalized = dict(cfg)
+    # Live-Status gehört nicht in die gespeicherte Konfiguration.
+    normalized.pop("room_states", None)
+    normalized.pop("room_status", None)
     normalized.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
     normalized.setdefault(CONF_MAIN_CONTROL_TYPE, DEFAULT_MAIN_CONTROL_TYPE)
     normalized.setdefault(CONF_MAIN_SWITCH, "")
@@ -735,11 +743,14 @@ def _push_state(
     hass: HomeAssistant,
     cfg: dict[str, Any],
     room_states: dict[str, str] | None = None,
+    room_status: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """Globalen UI-State aktualisieren."""
     state_cfg = _normalize_config(cfg)
     if room_states is not None:
         state_cfg["room_states"] = room_states
+    if room_status is not None:
+        state_cfg["room_status"] = room_status
 
     hass.states.async_set(
         f"{DOMAIN}.config",

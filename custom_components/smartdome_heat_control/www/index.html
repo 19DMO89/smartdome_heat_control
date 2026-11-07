@@ -88,17 +88,6 @@
       font-weight: 700;
     }
 
-    .room-heating {
-      font-size: 16px;
-      line-height: 1;
-    }
-
-    .room-window-open {
-      font-size: 16px;
-      line-height: 1;
-      filter: drop-shadow(0 0 4px rgba(77, 163, 255, 0.2));
-    }
-
     .settings-group {
       margin-bottom: 20px;
     }
@@ -441,19 +430,6 @@
       color: #ffc1c1;
     }
 
-    .layout {
-      display: grid;
-      grid-template-columns: 430px minmax(0, 1fr);
-      gap: 20px;
-      align-items: start;
-    }
-
-    .sticky-col {
-      position: sticky;
-      top: 16px;
-      align-self: start;
-    }
-
     .card {
       background: rgba(20, 26, 34, 0.94);
       border: 1px solid var(--line);
@@ -552,62 +528,31 @@
       color: var(--muted);
     }
 
-    .rooms-card {
-      min-height: 70vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .rooms-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 14px;
-      flex-wrap: wrap;
-    }
-
-    .rooms-scroll {
-      overflow-y: auto;
-      max-height: calc(100vh - 170px);
-      padding-right: 6px;
-    }
-
     .rooms {
       display: grid;
       gap: 14px;
     }
 
     .room {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 16px;
-      background: #10161e;
+      display: none;
     }
 
-    .room.drag-over {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px var(--accent);
+    .room.active {
+      display: block;
     }
 
     .room-top {
       display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
+      flex-direction: column;
+      gap: 10px;
       margin-bottom: 14px;
+    }
+
+    .room-top-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       flex-wrap: wrap;
-    }
-
-    .room-title {
-      font-weight: 700;
-      font-size: 16px;
-    }
-
-    .room-subtitle {
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 3px;
     }
 
     .room-grid {
@@ -905,22 +850,6 @@
       font-size: 14px;
     }
 
-    @media (max-width: 1100px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
-
-      .sticky-col {
-        position: static;
-      }
-
-      .rooms-scroll {
-        max-height: none;
-        overflow: visible;
-        padding-right: 0;
-      }
-    }
-
     /* Live label badges */
     .label-live {
       color: var(--accent);
@@ -1038,6 +967,323 @@
       margin-top: 10px;
     }
 
+    /* Tile wall */
+    .tile-wall {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .tile-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 14px;
+    }
+
+    .tile {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
+      min-height: 188px;
+      padding: 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.12s ease, border-color 0.12s ease;
+    }
+
+    .tile:hover {
+      transform: translateY(-2px);
+      border-color: var(--muted);
+    }
+
+    .tile:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .tile.drag-over {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    .tile.dragging {
+      opacity: 0.5;
+    }
+
+    .tile.heating {
+      background: linear-gradient(180deg, rgba(245, 185, 66, 0.1), var(--panel) 80%);
+      border-color: rgba(245, 185, 66, 0.42);
+    }
+
+    .tile.cooling {
+      background: linear-gradient(180deg, rgba(77, 163, 255, 0.11), var(--panel) 80%);
+      border-color: rgba(77, 163, 255, 0.45);
+    }
+
+    .tile.pause {
+      border-color: rgba(159, 176, 195, 0.45);
+    }
+
+    .tile.fault {
+      background: linear-gradient(180deg, rgba(255, 107, 107, 0.09), var(--panel) 80%);
+      border-color: rgba(255, 107, 107, 0.45);
+    }
+
+    .tile.off {
+      opacity: 0.58;
+    }
+
+    .tile.global {
+      background: var(--panel-2);
+    }
+
+    .tile.add {
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: transparent;
+      border-style: dashed;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .tile-add-icon {
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .tile-name {
+      font-size: 15px;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
+    .tile-reading {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .tile-temp {
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .tile-temp small {
+      margin-left: 2px;
+      font-size: 16px;
+      font-weight: 500;
+      letter-spacing: 0;
+      color: var(--muted);
+    }
+
+    .tile-target {
+      color: var(--muted);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .tile-foot {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tile-gauge {
+      position: relative;
+      height: 4px;
+      border-radius: 4px;
+      background: var(--line);
+    }
+
+    .tile-gauge i {
+      position: absolute;
+      top: 50%;
+      display: block;
+      transform: translate(-50%, -50%);
+    }
+
+    .tile-gauge .now {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text);
+    }
+
+    .tile-gauge .goal {
+      width: 2px;
+      height: 12px;
+      border-radius: 1px;
+      background: var(--muted);
+    }
+
+    .heating .tile-gauge .now {
+      background: var(--warning);
+    }
+
+    .cooling .tile-gauge .now {
+      background: var(--accent);
+    }
+
+    .tile-pill {
+      align-self: flex-start;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--panel-2);
+    }
+
+    .global .tile-pill {
+      background: var(--panel);
+    }
+
+    .heating .tile-pill {
+      color: var(--warning);
+      background: rgba(245, 185, 66, 0.1);
+    }
+
+    .cooling .tile-pill {
+      color: var(--accent);
+      background: rgba(77, 163, 255, 0.11);
+    }
+
+    .fault .tile-pill {
+      color: var(--danger);
+      background: rgba(255, 107, 107, 0.09);
+    }
+
+    .tile-kv {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 7px 12px;
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .tile-kv dt {
+      color: var(--muted);
+    }
+
+    .tile-kv dd {
+      margin: 0;
+      text-align: right;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    /* Edit popup */
+    .edit-modal-content {
+      display: flex;
+      flex-direction: column;
+      width: min(820px, 100%);
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .edit-modal-header {
+      align-items: flex-start;
+      margin: 0;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .edit-modal-header h2 {
+      overflow-wrap: anywhere;
+    }
+
+    .edit-modal-live {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .edit-modal-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      padding: 18px;
+      overflow-y: auto;
+    }
+
+    .edit-pane {
+      display: none;
+    }
+
+    .edit-pane.active {
+      display: block;
+    }
+
+    .edit-status {
+      margin: 0 18px 12px;
+    }
+
+    .edit-modal-footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 14px 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .edit-question {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-weight: 600;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tile {
+        transition: none;
+      }
+
+      .tile:hover {
+        transform: none;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .tile-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .tile {
+        min-height: 172px;
+        padding: 13px;
+      }
+
+      .tile-temp {
+        font-size: 30px;
+      }
+
+      #edit-modal {
+        padding: 0;
+      }
+
+      .edit-modal-content {
+        width: 100%;
+        height: 100%;
+        max-height: none;
+        border: 0;
+        border-radius: 0;
+      }
+    }
+
     @media (max-width: 700px) {
       .fields,
       .room-grid,
@@ -1071,7 +1317,7 @@
       <div class="title-block">
         <h1 data-i18n="title">Smartdome Heat Control</h1>
         <p data-i18n="subtitle">
-          Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.
+          Tippe auf eine Kachel, um den Raum oder die globalen Einstellungen zu bearbeiten.
         </p>
         <div class="version-badge" id="versionBadge">Version</div>
       </div>
@@ -1086,9 +1332,6 @@
         <button id="reloadConfigBtn" class="ghost" data-i18n="reload_config">
           Neu laden
         </button>
-        <button id="saveBtn" class="primary" data-i18n="save_config">
-          Konfiguration speichern
-        </button>
       </div>
     </div>
 
@@ -1096,10 +1339,29 @@
       Lade Konfiguration …
     </div>
 
-    <div class="layout">
-      <div class="sticky-col">
-        <section class="card">
-          <h2 data-i18n="global_settings">Globale Einstellungen</h2>
+    <div id="tileWall" class="tile-wall"></div>
+  </div>
+
+  <!-- Vor den anderen Dialogen, damit Wochenplan und Entity-Auswahl darüber liegen. -->
+  <div id="edit-modal" class="modal hidden">
+    <div
+      id="edit-modal-content"
+      class="modal-content edit-modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-modal-title"
+      tabindex="-1"
+    >
+      <div class="modal-header edit-modal-header">
+        <div>
+          <h2 id="edit-modal-title"></h2>
+          <div id="edit-modal-live" class="edit-modal-live"></div>
+        </div>
+        <button id="edit-modal-close" type="button" class="ghost">✕</button>
+      </div>
+
+      <div id="edit-modal-body" class="edit-modal-body">
+        <section id="globalForm" class="edit-pane">
 
           <!-- Steuerung -->
           <div class="settings-group">
@@ -1345,23 +1607,19 @@
             </button>
           </div>
         </section>
+
+        <div id="roomsContainer" class="rooms"></div>
       </div>
 
-      <section class="card rooms-card">
-        <div class="rooms-header">
-          <div>
-            <h2 data-i18n="rooms_title">Räume</h2>
-          </div>
+      <div id="edit-status" class="status edit-status hidden" role="status"></div>
 
-          <button id="addRoomBtn" class="success" data-i18n="add_room">
-            Raum hinzufügen
-          </button>
-        </div>
-
-        <div class="rooms-scroll">
-          <div id="roomsContainer" class="rooms"></div>
-        </div>
-      </section>
+      <div class="edit-modal-footer">
+        <button id="edit-delete" type="button" class="danger" data-i18n="edit_delete">Löschen</button>
+        <span id="edit-question" class="edit-question"></span>
+        <button id="edit-cancel" type="button" class="ghost" data-i18n="edit_cancel">Abbrechen</button>
+        <button id="edit-confirm" type="button" class="danger hidden"></button>
+        <button id="saveBtn" type="button" class="primary" data-i18n="save_config">Speichern</button>
+      </div>
     </div>
   </div>
 
@@ -1455,10 +1713,11 @@
             <p>Nach der Installation über HACS erscheint die Integration unter <strong>Einstellungen → Integrationen</strong>. Füge sie dort hinzu — danach öffnet sich dieses Panel automatisch.</p>
             <ul>
               <li><strong>Steuerung aktiv</strong> muss eingeschaltet sein, damit die Integration Thermostate steuert.</li>
-              <li>Lege über <strong>Raum hinzufügen</strong> deine Räume an oder erkenne vorhandene über <strong>Räume neu erkennen</strong>.</li>
-              <li>Klicke auf <strong>Konfiguration speichern</strong> um alle Änderungen zu übernehmen.</li>
+              <li>Lege über die Kachel <strong>Raum hinzufügen</strong> deine Räume an oder erkenne vorhandene über <strong>Räume neu erkennen</strong>.</li>
+              <li>Ein Klick auf eine Kachel öffnet ihre Einstellungen. <strong>Speichern</strong> übernimmt die Änderungen sofort.</li>
+              <li>Die Reihenfolge änderst du, indem du eine Raumkachel auf eine andere ziehst.</li>
             </ul>
-            <div class="help-tip">💡 Änderungen werden erst wirksam nachdem du gespeichert hast.</div>
+            <div class="help-tip">💡 Änderungen werden erst wirksam, wenn du im Popup auf Speichern klickst.</div>
           </div>
 
           <div class="help-section">
@@ -1538,8 +1797,7 @@
               <li><strong>Steuerung aktiv aus:</strong> Die Integration schreibt keinerlei Sollwerte auf Thermostate — sie greift komplett nicht ein.</li>
               <li><strong>climate-Entity als Sensor:</strong> Trage eine climate-Entity als Temperatursensor ein — die Integration liest automatisch das Attribut <code>current_temperature</code> aus.</li>
               <li><strong>Mehrere Fensterkontakte:</strong> Pro Raum können beliebig viele Sensoren hinzugefügt werden. Es reicht wenn <em>einer</em> offen ist um die Heizung zu pausieren.</li>
-              <li><strong>Räume verschwinden nach Reload:</strong> Nutze <em>Konfiguration speichern</em> bevor du <em>Neu laden</em> klickst — sonst gehen ungespeicherte Änderungen verloren.</li>
-              <li><strong>HACS-Update erscheint nicht:</strong> Stelle sicher dass die Versionsnummer in <code>manifest.json</code> mit dem GitHub-Release-Tag übereinstimmt.</li>
+                            <li><strong>HACS-Update erscheint nicht:</strong> Stelle sicher dass die Versionsnummer in <code>manifest.json</code> mit dem GitHub-Release-Tag übereinstimmt.</li>
             </ul>
           </div>
 
@@ -1553,10 +1811,11 @@
             <p>After installing via HACS, the integration appears under <strong>Settings → Integrations</strong>. Add it there — this panel will open automatically.</p>
             <ul>
               <li><strong>Control enabled</strong> must be switched on for the integration to control thermostats.</li>
-              <li>Add rooms using <strong>Add room</strong> or discover existing areas via <strong>Reload rooms</strong>.</li>
-              <li>Click <strong>Save configuration</strong> to apply all changes.</li>
+              <li>Add rooms using the <strong>Add room</strong> tile or discover existing areas via <strong>Reload rooms</strong>.</li>
+              <li>Clicking a tile opens its settings. <strong>Save</strong> applies the changes right away.</li>
+              <li>To change the order, drag one room tile onto another.</li>
             </ul>
-            <div class="help-tip">💡 Changes only take effect after you save.</div>
+            <div class="help-tip">💡 Changes only take effect when you click Save in the popup.</div>
           </div>
 
           <div class="help-section">
@@ -1636,8 +1895,7 @@
               <li><strong>Control disabled:</strong> The integration writes no setpoints to any thermostat — it does not intervene at all.</li>
               <li><strong>Climate entity as sensor:</strong> Enter a climate entity as the temperature sensor — the integration automatically reads its <code>current_temperature</code> attribute.</li>
               <li><strong>Multiple window sensors:</strong> Add as many sensors as you like per room. It only takes <em>one</em> to be open to pause heating.</li>
-              <li><strong>Rooms disappear after reload:</strong> Use <em>Save configuration</em> before clicking <em>Reload</em> — unsaved changes are lost otherwise.</li>
-              <li><strong>HACS update not showing:</strong> Make sure the version in <code>manifest.json</code> matches the GitHub release tag exactly.</li>
+                            <li><strong>HACS update not showing:</strong> Make sure the version in <code>manifest.json</code> matches the GitHub release tag exactly.</li>
             </ul>
           </div>
 
