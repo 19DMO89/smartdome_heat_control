@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.11.0] – 2026-11-07
+
+### ✨ Neue Kachelansicht im Panel
+
+- Das Panel zeigt jetzt Kacheln: eine für die globalen Einstellungen und eine pro Raum. Die Raumkachel zeigt Ist-Temperatur, Zieltemperatur, einen kleinen Temperatur-Balken und den Status (heizt, heizt über Klima, kühlt, bereit, Restwärme, Fenster offen, Außensperre, Sensor ausgefallen, deaktiviert). Mit Heizkreisen sind die Kacheln nach Kreis gruppiert.
+- Ein Klick auf eine Kachel öffnet die Einstellungen im Popup. **Speichern** übernimmt sofort, **Abbrechen** verwirft die Änderungen und fragt vorher nach. Der bisherige Knopf *Konfiguration speichern* entfällt.
+- Löschen liegt im Raum-Popup und fragt nach. *Raum hinzufügen* ist eine eigene Kachel.
+- Die Reihenfolge änderst du, indem du eine Raumkachel auf eine andere ziehst. Sie wird direkt gespeichert. Einklappen von Räumen entfällt.
+- Die Kachel zeigt den echten Raum-Sollwert statt des Ventilwerts mit Boost. Dafür meldet die Integration jetzt pro Raum einen Live-Status an das Panel.
+
+### 🛡️ Speichern unterbricht die Regelung nicht mehr
+
+- Speichern setzte bisher den Zustand aller Räume zurück: Ein Raum knapp unter dem Soll hörte auf zu heizen, eine Klimaanlage ging aus und eine laufende Fensterpause endete. Heizzustand, Restwärme-Phase, Fensterpause, Sensor-Überwachung und Außensperre bleiben jetzt erhalten. Die Sollwerte werden trotzdem sofort neu gesendet.
+- Der Live-Status wird nicht mehr in der gespeicherten Konfiguration abgelegt.
+
+---
+
+**EN:** New tile view in the panel: one tile for global settings and one per room, showing current and target temperature, a small gauge and the status. Clicking a tile opens its settings in a popup with Save and Cancel, replacing the global save button. Rooms are reordered by dragging tiles, and the order is saved right away. Saving no longer resets the control state, so heating, residual heat, window pause, sensor monitoring and outdoor cutoff carry on while new setpoints are still sent immediately.
+
+---
+
 ## [3.10.1] – 2026-11-07
 
 ### 🔧 Raum-Dialog: fehlende Beschriftungen

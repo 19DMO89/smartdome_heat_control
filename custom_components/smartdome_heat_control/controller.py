@@ -304,10 +304,11 @@ class SmartHeatingController:
         )
         self.config = config
         self._apply_config_defaults()
-        self._reset_runtime_states()
-        self._window_open_since.clear()
-        self._window_closed_since.clear()
-        self._window_paused_rooms.clear()
+        # Speichern setzt nur gesendete Befehle zurück, damit die neue Config
+        # sofort greift. Heizzustand und Fensterpause der Räume bleiben erhalten.
+        self._reset_room_cycles()
+        self._reset_command_caches()
+        self._forget_stale_room_states()
 
         if self._enabled:
             self.hass.async_create_task(self.async_start())
@@ -767,6 +768,42 @@ class SmartHeatingController:
             "outdoor_minimum_active": last_state.get("outdoor_minimum_active", False),
             "sensor_fault": room_id in self._room_sensor_fault,
         }
+
+    def get_panel_room_status(self) -> dict[str, dict[str, Any]]:
+        """Kompakter Live-Status aller Räume für die Kacheln im Panel."""
+        rooms = self.config.get(CONF_ROOMS, {})
+        if not isinstance(rooms, dict):
+            return {}
+
+        cooling_active = self._is_cooling_active()
+        result: dict[str, dict[str, Any]] = {}
+        for room_id, room in rooms.items():
+            if not isinstance(room, dict):
+                continue
+            status = self.get_room_status(room_id)
+            # Kühlen läuft nur über eine Klimaanlage, sonst gilt der Heiz-Sollwert.
+            cooling = cooling_active and bool(
+                self._as_entity_id(room.get(CONF_ROOM_CLIMATE_ENTITY, ""))
+            )
+            if cooling:
+                target = float(
+                    room.get(CONF_ROOM_COOL_TARGET_DAY, DEFAULT_ROOM_COOL_TARGET_DAY)
+                )
+            else:
+                target = status.get("control_target_temperature")
+                if target is None:
+                    target = self._effective_target_for_room(room)
+            result[room_id] = {
+                "state": status.get("state"),
+                "reason": status.get("control_reason"),
+                "target": target,
+                "cooling": cooling,
+                "cooling_active": cooling_active,
+                "away_active": status.get("away_active"),
+                "outdoor_cutoff_active": status.get("outdoor_cutoff_active"),
+                "outdoor_minimum_active": status.get("outdoor_minimum_active"),
+            }
+        return result
 
     def get_room_setpoint_key(self, room_id: str) -> str | None:
         """Config-Key, den ein manuell gesetzter Sollwert gerade ändern soll.
@@ -1288,23 +1325,19 @@ class SmartHeatingController:
         step = self._thermostat_target_step(thermostat_id)
         return self._round_to_step(target_temp, step)
 
-    def _reset_runtime_states(self) -> None:
-        """Laufzeit-Heizzustände zurücksetzen."""
+    def _reset_room_cycles(self) -> None:
+        """Laufende Heizzyklen der Lernlogik beenden."""
         for room in self._active_rooms().values():
             room[CONF_ROOM_HEATING_CYCLE_ACTIVE] = False
             room[CONF_ROOM_CYCLE_TARGET_TEMP] = None
             room[CONF_ROOM_CYCLE_PEAK_TEMP] = None
             room[CONF_ROOM_CYCLE_PEAKED] = False
 
+    def _reset_command_caches(self) -> None:
+        """Vergessen, was zuletzt gesendet wurde, damit alles neu gesendet wird."""
         self._desired_targets.clear()
         self._last_computed_targets.clear()
-        self._room_state.clear()
-        self._last_room_states.clear()
-        self._residual_heat_hold_until.clear()
         self._last_command_sent_at.clear()
-        self._room_sensor_missing_since.clear()
-        self._room_sensor_fault.clear()
-        self._outdoor_cutoff_latched = False
         self._last_applied_room_state.clear()
         self._circuit_heating_active.clear()
         self._last_hvac_mode.clear()
@@ -1312,6 +1345,42 @@ class SmartHeatingController:
         self._last_preset_mode.clear()
         self._switch_command_sent_at.clear()
         self._reconcile.clear()
+
+    def _forget_stale_room_states(self) -> None:
+        """Zustände von Räumen löschen, die so nicht mehr geregelt werden."""
+        active_rooms = self._active_rooms()
+        for store in (
+            self._room_state,
+            self._last_room_states,
+            self._residual_heat_hold_until,
+            self._room_sensor_missing_since,
+            self._window_open_since,
+            self._window_closed_since,
+        ):
+            for room_id in [rid for rid in store if rid not in active_rooms]:
+                del store[room_id]
+        self._room_sensor_fault.intersection_update(active_rooms)
+        self._window_paused_rooms.intersection_update(active_rooms)
+
+        # Ohne Sensor würde der Zustand eingefroren: ein heizender Raum käme
+        # nie wieder aus HEATING heraus.
+        for room_id, room in active_rooms.items():
+            if not self._as_entity_id(room.get(CONF_ROOM_SENSOR)):
+                self._room_state.pop(room_id, None)
+                self._residual_heat_hold_until.pop(room_id, None)
+                self._room_sensor_missing_since.pop(room_id, None)
+                self._room_sensor_fault.discard(room_id)
+
+    def _reset_runtime_states(self) -> None:
+        """Laufzeit-Heizzustände zurücksetzen."""
+        self._reset_room_cycles()
+        self._reset_command_caches()
+        self._room_state.clear()
+        self._last_room_states.clear()
+        self._residual_heat_hold_until.clear()
+        self._room_sensor_missing_since.clear()
+        self._room_sensor_fault.clear()
+        self._outdoor_cutoff_latched = False
 
     def _restore_non_boost_targets(self) -> None:
         """Thermostate beim Deaktivieren auf normale Zielwerte zurücksetzen."""
@@ -1868,11 +1937,12 @@ class SmartHeatingController:
                     if preset:
                         self._set_preset_mode_if_needed(climate_entity, preset)
                     self._set_temp_if_needed(climate_entity, cool_target)
-                    # Heizventile ausschalten
+                    # Heizventile ausschalten (nicht die Klimaanlage selbst)
                     for thermostat in thermostats:
-                        self._set_temp_if_needed(
-                            thermostat, self._thermostat_min_temp(thermostat)
-                        )
+                        if thermostat != climate_entity:
+                            self._set_temp_if_needed(
+                                thermostat, self._thermostat_min_temp(thermostat)
+                            )
                     continue
                 elif use_climate:
                     # Heizen via Klimaanlage: an nur im Zustand HEATING, sonst aus
@@ -1903,11 +1973,12 @@ class SmartHeatingController:
                         self._set_temp_if_needed(climate_entity, heat_target)
                     else:
                         self._set_hvac_mode_if_needed(climate_entity, "off")
-                    # Heizventile ausschalten
+                    # Heizventile ausschalten (nicht die Klimaanlage selbst)
                     for thermostat in thermostats:
-                        self._set_temp_if_needed(
-                            thermostat, self._thermostat_min_temp(thermostat)
-                        )
+                        if thermostat != climate_entity:
+                            self._set_temp_if_needed(
+                                thermostat, self._thermostat_min_temp(thermostat)
+                            )
                     continue
                 else:
                     # Klimaanlage vorhanden aber nicht verwendet → ausschalten

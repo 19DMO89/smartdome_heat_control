@@ -43,12 +43,51 @@ const I18N = {
   en: {
     title: "Smartdome Heat Control",
     subtitle:
-      "Global settings on the left, rooms on the right. Rooms can use their own schedules.",
+      "Click a tile to edit a room or the global settings.",
     version: "Version",
 
     reload_rooms: "Reload rooms",
     reload_config: "Reload",
-    save_config: "Save configuration",
+    save_config: "Save",
+    edit_cancel: "Cancel",
+    edit_delete: "Delete",
+    edit_close: "Close",
+    edit_discard_question: "Discard changes?",
+    edit_discard_confirm: "Discard",
+    edit_keep_editing: "Keep editing",
+    edit_delete_question: "Really delete {name}?",
+    edit_delete_keep: "Keep",
+    tile_target: "Target",
+    tile_now: "Now",
+    tile_no_reading: "No reading",
+    tile_control: "Control",
+    tile_control_on: "Active",
+    tile_control_off: "Off",
+    tile_operation: "Operation",
+    tile_outdoor: "Outdoor",
+    tile_heating_mode: "Heating mode",
+    tile_running_heat: "{count} of {total} heating",
+    tile_running_cool: "{count} of {total} cooling",
+    op_normal: "Normal",
+    op_vacation: "Vacation",
+    op_away: "Away",
+    op_cooling: "Cooling",
+    op_cutoff: "Outdoor cutoff",
+    note_vacation: "Vacation",
+    note_away: "Away",
+    note_minimum: "Minimum temperature",
+    status_disabled: "Disabled",
+    status_control_off: "Control off",
+    status_sensor_fault: "Sensor failed",
+    status_window_pause: "Window open, paused",
+    status_window_open: "Window open",
+    status_cooling: "Cooling",
+    status_heating: "Heating",
+    status_heating_ac: "Heating via AC",
+    status_residual: "Residual heat",
+    status_cutoff: "Outdoor cutoff",
+    status_idle: "Ready",
+    tile_open: "Open settings",
 
     status_loading: "Loading configuration …",
     status_initializing: "Initializing panel …",
@@ -130,8 +169,6 @@ const I18N = {
     room_mode_global: "Global",
 
     rooms_title: "Rooms",
-    rooms_subtitle:
-      "Scrollable on the right so the global settings remain visible.",
     add_room: "Add room",
     no_rooms: "No rooms configured yet.",
 
@@ -259,12 +296,51 @@ const I18N = {
   de: {
     title: "Smartdome Heat Control",
     subtitle:
-      "Haupteinstellungen links, Räume rechts. Räume können unabhängig eigene Zeiten bekommen.",
+      "Tippe auf eine Kachel, um den Raum oder die globalen Einstellungen zu bearbeiten.",
     version: "Version",
 
     reload_rooms: "Räume neu erkennen",
     reload_config: "Neu laden",
-    save_config: "Konfiguration speichern",
+    save_config: "Speichern",
+    edit_cancel: "Abbrechen",
+    edit_delete: "Löschen",
+    edit_close: "Schließen",
+    edit_discard_question: "Änderungen verwerfen?",
+    edit_discard_confirm: "Verwerfen",
+    edit_keep_editing: "Weiter bearbeiten",
+    edit_delete_question: "{name} wirklich löschen?",
+    edit_delete_keep: "Behalten",
+    tile_target: "Ziel",
+    tile_now: "Aktuell",
+    tile_no_reading: "Kein Messwert",
+    tile_control: "Steuerung",
+    tile_control_on: "Aktiv",
+    tile_control_off: "Aus",
+    tile_operation: "Betrieb",
+    tile_outdoor: "Außen",
+    tile_heating_mode: "Heizmodus",
+    tile_running_heat: "{count} von {total} heizen",
+    tile_running_cool: "{count} von {total} kühlen",
+    op_normal: "Normal",
+    op_vacation: "Urlaub",
+    op_away: "Nicht zuhause",
+    op_cooling: "Kühlen",
+    op_cutoff: "Außensperre",
+    note_vacation: "Urlaub",
+    note_away: "Nicht zuhause",
+    note_minimum: "Mindesttemperatur",
+    status_disabled: "Deaktiviert",
+    status_control_off: "Steuerung aus",
+    status_sensor_fault: "Sensor ausgefallen",
+    status_window_pause: "Fenster offen, Pause",
+    status_window_open: "Fenster offen",
+    status_cooling: "Kühlt",
+    status_heating: "Heizt",
+    status_heating_ac: "Heizt über Klima",
+    status_residual: "Restwärme",
+    status_cutoff: "Außensperre",
+    status_idle: "Bereit",
+    tile_open: "Einstellungen öffnen",
 
     status_loading: "Lade Konfiguration …",
     status_initializing: "Initialisiere Panel …",
@@ -347,8 +423,6 @@ const I18N = {
     room_mode_global: "Global",
 
     rooms_title: "Räume",
-    rooms_subtitle:
-      "Rechts scrollbar, damit die Haupteinstellungen sichtbar bleiben.",
     add_room: "Raum hinzufügen",
     no_rooms: "Noch keine Räume vorhanden.",
 
@@ -530,10 +604,10 @@ const state = {
   switches: [],
   binarySensors: [],
   allStates: [],
+  roomStatus: {},
 };
 
 const entityPickerState = new Map();
-const roomCollapsedState = new Map();
 let dragSrcRoomId = null;
 
 let els = {};
@@ -544,7 +618,20 @@ function initEls() {
     saveBtn: document.getElementById("saveBtn"),
     reloadConfigBtn: document.getElementById("reloadConfigBtn"),
     reloadRoomsBtn: document.getElementById("reloadRoomsBtn"),
-    addRoomBtn: document.getElementById("addRoomBtn"),
+    mainWrap: document.querySelector(".wrap"),
+    tileWall: document.getElementById("tileWall"),
+    globalForm: document.getElementById("globalForm"),
+    editModal: document.getElementById("edit-modal"),
+    editModalContent: document.getElementById("edit-modal-content"),
+    editModalBody: document.getElementById("edit-modal-body"),
+    editModalTitle: document.getElementById("edit-modal-title"),
+    editModalLive: document.getElementById("edit-modal-live"),
+    editModalClose: document.getElementById("edit-modal-close"),
+    editStatus: document.getElementById("edit-status"),
+    editDelete: document.getElementById("edit-delete"),
+    editQuestion: document.getElementById("edit-question"),
+    editCancel: document.getElementById("edit-cancel"),
+    editConfirm: document.getElementById("edit-confirm"),
     applyTimesToRoomsBtn: document.getElementById("applyTimesToRoomsBtn"),
     applyTempsToRoomsBtn: document.getElementById("applyTempsToRoomsBtn"),
     globalTargetDay: document.getElementById("global_target_day"),
@@ -615,17 +702,27 @@ let activeEntityPickerId = null;
 let scheduleRoomId = null;
 let currentScheduleDay = "monday";
 let draftWeeklySchedule = null;
+// Offenes Popup: { kind: "global" | "room", roomId, isNew, snapshot, baseline, confirm }
+let editSession = null;
 
 function setStatus(message, type = "warn") {
   els.statusBox.textContent = message;
   els.statusBox.className = `status ${type}`;
+
+  // Hinter dem offenen Popup wäre die Statuszeile nicht zu sehen.
+  if (editSession) {
+    els.editStatus.textContent = message;
+    els.editStatus.className = `status edit-status ${type}`;
+  }
 }
 
 function setButtonsDisabled(disabled) {
   els.saveBtn.disabled = disabled;
+  els.editCancel.disabled = disabled;
+  els.editConfirm.disabled = disabled;
+  els.editDelete.disabled = disabled;
   els.reloadConfigBtn.disabled = disabled;
   els.reloadRoomsBtn.disabled = disabled;
-  els.addRoomBtn.disabled = disabled;
   els.applyTimesToRoomsBtn.disabled = disabled;
 
   if (els.energyResidualHeatHold) {
@@ -1044,43 +1141,6 @@ function openEntityMoreInfo(entityId) {
 function isAnyWindowOpen(room) {
   const sensors = Array.isArray(room.window_sensors) ? room.window_sensors : [];
   return sensors.some((id) => isWindowOpen(id));
-}
-
-function roomTitleMeta(room, roomId) {
-  const heating = isRoomHeating(roomId);
-  const windowOpen = isAnyWindowOpen(room);
-
-  const metaParts = [];
-
-  // live temperatures next to the room name: measured (sensor) and valve setpoint
-  const tempSrc = room.sensor || room.thermostat;
-  const currentTemp = tempSrc ? getSensorTemperature(tempSrc) : null;
-  if (currentTemp !== null) {
-    metaParts.push(
-      `<span class="label-live" data-entity="${escapeHtml(tempSrc)}" title="${escapeHtml(t("room_sensor"))}">🌡️ ${escapeHtml(formatTemperature(currentTemp))}</span>`
-    );
-  }
-
-  const setpoint = room.thermostat ? getThermostatSetpoint(room.thermostat) : null;
-  if (setpoint !== null) {
-    metaParts.push(
-      `<span class="label-live" data-entity="${escapeHtml(room.thermostat)}" title="${escapeHtml(t("room_thermostat"))}">🎯 ${escapeHtml(formatTemperature(setpoint))}</span>`
-    );
-  }
-
-  if (heating) {
-    metaParts.push(
-      `<span class="room-heating" title="${escapeHtml(t("room_heating_now"))}">🔥</span>`
-    );
-  }
-
-  if (windowOpen) {
-    metaParts.push(
-      `<span class="room-window-open" title="${escapeHtml(t("room_window_open"))}">🪟</span>`
-    );
-  }
-
-  return metaParts.join(" ");
 }
 
 function renderVersion() {
@@ -1674,6 +1734,7 @@ async function loadConfig() {
     (s) => s.entity_id === CONFIG_ENTITY_ID
   );
   state.config = normalizeConfig(entity?.attributes || {});
+  state.roomStatus = entity?.attributes?.room_status || {};
 }
 
 function updateMainControlTypeVisibility(type) {
@@ -1913,11 +1974,7 @@ function createRoomCard(roomId, room) {
   const wrapper = document.createElement("div");
   wrapper.className = "room";
   wrapper.dataset.roomId = roomId;
-  wrapper.draggable = true;
 
-  const isCollapsed = roomCollapsedState.get(roomId) === true;
-  const areaText = room.area_id ? `Area: ${room.area_id}` : t("room_manual");
-  const roomMeta = roomTitleMeta(room, roomId);
   const isAdaptive = getModePickerValue() === "adaptive";
   const ovShort = normalizeNumber(room.learned_overshoot_short, 0.2);
   const ovMedium = normalizeNumber(room.learned_overshoot_medium, 0.4);
@@ -1933,45 +1990,31 @@ function createRoomCard(roomId, room) {
 
   wrapper.innerHTML = `
     <div class="room-top">
-      <div style="display:flex; align-items:flex-start; gap:10px; width:100%;">
-        <span class="room-drag-handle" title="Ziehen zum Verschieben" style="cursor:grab; font-size:18px; padding:4px 2px; color:var(--muted); user-select:none; flex-shrink:0;">≡</span>
-        <div style="flex:1; min-width:0;">
-          <div class="room-title-row" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-            <div class="room-title">${escapeHtml(room.label || roomId)}</div>
-            <div class="room-title-meta" style="display:flex; align-items:center; gap:8px; font-size:14px;">
-              ${roomMeta}
-            </div>
-          </div>
-          <div class="room-subtitle">${escapeHtml(areaText)}</div>
-          ${isAdaptive ? `
-          <div class="room-adaptive room-adaptive-display">
-            <span class="adaptive-bucket">
-              <span style="color:var(--muted)">▲ &lt;15min</span>
-              <span class="adaptive-bucket-value">${ovShort.toFixed(2)} °C</span>
-            </span>
-            <span class="adaptive-bucket">
-              <span style="color:var(--muted)">▲ 15–45min</span>
-              <span class="adaptive-bucket-value">${ovMedium.toFixed(2)} °C</span>
-            </span>
-            <span class="adaptive-bucket">
-              <span style="color:var(--muted)">▲ &gt;45min</span>
-              <span class="adaptive-bucket-value">${ovLong.toFixed(2)} °C</span>
-            </span>
-          </div>` : ""}
-        </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex-shrink:0;">
-          <span class="pill">
-            <input class="room-enabled" type="checkbox" ${
-              room.enabled ? "checked" : ""
-            } />
-            <span>${escapeHtml(t("room_active"))}</span>
-          </span>
-          <button class="ghost room-schedule-btn" type="button">${escapeHtml(t("room_schedule"))}</button>
-          <button class="danger room-delete-btn" type="button">${escapeHtml(t("room_delete"))}</button>
-          <button class="ghost room-collapse-btn" type="button" title="${isCollapsed ? "Aufklappen" : "Einklappen"}" style="padding:4px 10px; font-size:16px;">${isCollapsed ? "▶" : "▼"}</button>
-        </div>
+      <div class="room-top-row">
+        <span class="pill">
+          <input class="room-enabled" type="checkbox" ${
+            room.enabled ? "checked" : ""
+          } />
+          <span>${escapeHtml(t("room_active"))}</span>
+        </span>
+        <button class="ghost room-schedule-btn" type="button">${escapeHtml(t("room_schedule"))}</button>
       </div>
-      <div class="room-mode-row" style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+      ${isAdaptive ? `
+      <div class="room-adaptive room-adaptive-display">
+        <span class="adaptive-bucket">
+          <span style="color:var(--muted)">▲ &lt;15min</span>
+          <span class="adaptive-bucket-value">${ovShort.toFixed(2)} °C</span>
+        </span>
+        <span class="adaptive-bucket">
+          <span style="color:var(--muted)">▲ 15–45min</span>
+          <span class="adaptive-bucket-value">${ovMedium.toFixed(2)} °C</span>
+        </span>
+        <span class="adaptive-bucket">
+          <span style="color:var(--muted)">▲ &gt;45min</span>
+          <span class="adaptive-bucket-value">${ovLong.toFixed(2)} °C</span>
+        </span>
+      </div>` : ""}
+      <div class="room-mode-row" style="display:flex; align-items:center; gap:8px;">
         <label style="font-size:13px; color:var(--muted); white-space:nowrap;">${escapeHtml(t("room_heating_mode"))}:</label>
         <select class="room-heating-mode" style="font-size:13px; padding:3px 6px;">${modeOptions}</select>
       </div>
@@ -2211,7 +2254,6 @@ function createRoomCard(roomId, room) {
     </div>
   `;
 
-  const deleteBtn = wrapper.querySelector(".room-delete-btn");
   const scheduleBtn = wrapper.querySelector(".room-schedule-btn");
 
   createEntityPicker({
@@ -2323,164 +2365,524 @@ function createRoomCard(roomId, room) {
   }
   nightSetbackCheckbox.addEventListener("change", updateNightSetbackVisibility);
 
-  deleteBtn.addEventListener("click", () => {
-    delete state.config.rooms[roomId];
-    roomCollapsedState.delete(roomId);
-    renderRooms();
-  });
-
   scheduleBtn.addEventListener("click", () => {
     openScheduleModal(roomId);
   });
 
-  // Collapse / Expand
-  const collapseBtn = wrapper.querySelector(".room-collapse-btn");
-  const roomGrid = wrapper.querySelector(".room-grid");
-  const roomAdvanced = wrapper.querySelector(".room-advanced");
-  const roomModeRow = wrapper.querySelector(".room-mode-row");
+  return wrapper;
+}
 
-  function applyCollapsed(collapsed) {
-    if (roomGrid) roomGrid.style.display = collapsed ? "none" : "";
-    if (roomAdvanced) {
-      // Beim Einklappen: Inline-Style erzwingen + Klasse zurücksetzen
-      // Beim Aufklappen: Inline-Style leeren, damit .hidden-Klasse wieder greift
-      roomAdvanced.style.display = collapsed ? "none" : "";
-      if (collapsed) roomAdvanced.classList.add("hidden");
-    }
-    if (roomModeRow) roomModeRow.style.display = collapsed ? "none" : "";
-    if (collapseBtn) collapseBtn.textContent = collapsed ? "▶" : "▼";
+// Räume in Anzeigereihenfolge, bei Heizkreisen nach Kreis gruppiert.
+function getRoomGroups() {
+  const entries = Object.entries(state.config.rooms || {});
+  entries.sort((a, b) => (a[1].order ?? 0) - (b[1].order ?? 0));
+
+  const circuits = state.config.circuits || {};
+  if (!Object.keys(circuits).length) {
+    return [{ label: null, rooms: entries }];
   }
 
-  applyCollapsed(isCollapsed);
+  const byCircuit = {};
+  for (const entry of entries) {
+    const circuitId = circuits[entry[1].circuit_id] ? entry[1].circuit_id : "";
+    (byCircuit[circuitId] ||= []).push(entry);
+  }
 
-  collapseBtn.addEventListener("click", () => {
-    const nowCollapsed = roomCollapsedState.get(roomId) !== true;
-    roomCollapsedState.set(roomId, nowCollapsed);
-    applyCollapsed(nowCollapsed);
-  });
+  const groups = Object.keys(circuits)
+    .filter((circuitId) => byCircuit[circuitId])
+    .map((circuitId) => ({
+      label: circuits[circuitId]?.label || circuitId,
+      rooms: byCircuit[circuitId],
+    }));
 
-  // Drag and Drop
-  wrapper.addEventListener("dragstart", (e) => {
-    dragSrcRoomId = roomId;
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", roomId);
-    wrapper.style.opacity = "0.5";
-  });
-
-  wrapper.addEventListener("dragend", () => {
-    wrapper.style.opacity = "";
-    els.roomsContainer.querySelectorAll(".room").forEach(n => n.classList.remove("drag-over"));
-  });
-
-  wrapper.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    els.roomsContainer.querySelectorAll(".room").forEach(n => n.classList.remove("drag-over"));
-    wrapper.classList.add("drag-over");
-  });
-
-  wrapper.addEventListener("dragleave", () => {
-    wrapper.classList.remove("drag-over");
-  });
-
-  wrapper.addEventListener("drop", (e) => {
-    e.preventDefault();
-    wrapper.classList.remove("drag-over");
-    if (!dragSrcRoomId || dragSrcRoomId === roomId) return;
-
-    const srcNode = els.roomsContainer.querySelector(`.room[data-room-id="${dragSrcRoomId}"]`);
-    if (!srcNode) return;
-
-    const allNodes = [...els.roomsContainer.querySelectorAll(".room")];
-    const srcIdx = allNodes.indexOf(srcNode);
-    const dstIdx = allNodes.indexOf(wrapper);
-
-    if (srcIdx < dstIdx) {
-      wrapper.after(srcNode);
-    } else {
-      wrapper.before(srcNode);
-    }
-
-    // Update order in state
-    const updatedNodes = [...els.roomsContainer.querySelectorAll(".room")];
-    updatedNodes.forEach((n, i) => {
-      const rid = n.dataset.roomId;
-      if (state.config.rooms[rid]) state.config.rooms[rid].order = i;
-    });
-
-    dragSrcRoomId = null;
-  });
-
-  return wrapper;
+  if (byCircuit[""]) {
+    groups.push({ label: t("circuit_none"), rooms: byCircuit[""] });
+  }
+  return groups;
 }
 
 function renderRooms() {
   if (!els.roomsContainer) return;
   els.roomsContainer.innerHTML = "";
 
-  const entries = Object.entries(state.config.rooms || {});
-  if (!entries.length) {
-    const empty = document.createElement("div");
-    empty.className = "muted";
-    empty.textContent = t("no_rooms");
-    els.roomsContainer.appendChild(empty);
+  for (const group of getRoomGroups()) {
+    for (const [roomId, room] of group.rooms) {
+      els.roomsContainer.appendChild(createRoomCard(roomId, room));
+    }
+  }
+
+  applyActiveEditPane();
+  renderTiles();
+}
+
+function formatTileNumber(value) {
+  return Number(value).toLocaleString(UI_LANG, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function formatTileTemperature(value) {
+  return `${formatTileNumber(value)} °C`;
+}
+
+function getRoomTileInfo(roomId, room) {
+  const live = state.roomStatus?.[roomId] || {};
+  const tempSrc = room.sensor || room.thermostat;
+  const actual = tempSrc ? getSensorTemperature(tempSrc) : null;
+  const target = Number.isFinite(live.target) ? live.target : Number(room.target_day);
+
+  let note = "";
+  if (!live.cooling) {
+    if (state.config.vacation_enabled) note = t("note_vacation");
+    else if (live.away_active) note = t("note_away");
+    else if (live.outdoor_minimum_active) note = t("note_minimum");
+  }
+
+  const status = (cls, icon, label) => ({ cls, icon, label, actual, target, note });
+
+  if (!room.enabled) return status("off", "", t("status_disabled"));
+  if (state.config.enabled === false) return status("off", "", t("status_control_off"));
+  if (live.reason === "sensor_fault") return status("fault", "⚠️", t("status_sensor_fault"));
+  if (live.reason === "window_pause") return status("pause", "🪟", t("status_window_pause"));
+
+  if (live.cooling) {
+    const action = findState(room.climate_entity)?.attributes?.hvac_action;
+    const cooling = action ? action === "cooling" : actual !== null && actual > target;
+    return cooling ? status("cooling", "❄️", t("status_cooling")) : status("idle", "", t("status_idle"));
+  }
+
+  // Ohne Raumsensor regelt das Gerät selbst, der Raumzustand bleibt dann idle.
+  const heatedByAc = Boolean(room.climate_entity && room.use_climate);
+  const deviceHeating =
+    !room.sensor && isThermostatHeating(heatedByAc ? room.climate_entity : room.thermostat);
+  if (live.state === "heating" || deviceHeating) {
+    return status("heating", "🔥", t(heatedByAc ? "status_heating_ac" : "status_heating"));
+  }
+
+  if (live.state === "residual_hold") return status("idle", "", t("status_residual"));
+  if (isAnyWindowOpen(room)) return status("pause", "🪟", t("status_window_open"));
+  if (live.reason === "outdoor_cutoff") return status("pause", "", t("status_cutoff"));
+  return status("idle", "", t("status_idle"));
+}
+
+function roomTileGauge(actual, target) {
+  // Skala 14–28 °C: Punkt = Ist-Temperatur, Strich = Zieltemperatur
+  const position = (value) => Math.min(100, Math.max(0, ((value - 14) / 14) * 100));
+  const goal = Number.isFinite(target)
+    ? `<i class="goal" style="left:${position(target)}%"></i>`
+    : "";
+  const now = actual !== null ? `<i class="now" style="left:${position(actual)}%"></i>` : "";
+  return `<div class="tile-gauge" aria-hidden="true">${goal}${now}</div>`;
+}
+
+function roomTileHtml(room, info) {
+  const temp = info.actual !== null ? formatTileNumber(info.actual) : "–";
+  const target = Number.isFinite(info.target) ? formatTileTemperature(info.target) : "–";
+  const note = info.note ? ` · ${escapeHtml(info.note)}` : "";
+  const icon = info.icon ? `<span aria-hidden="true">${info.icon}</span>` : "";
+  return `
+    <div class="tile-name">${escapeHtml(room.label)}</div>
+    <div class="tile-reading">
+      <div class="tile-temp">${temp}<small>°C</small></div>
+      <div class="tile-target">${escapeHtml(t("tile_target"))} ${target}${note}</div>
+    </div>
+    <div class="tile-foot">
+      ${roomTileGauge(info.actual, info.target)}
+      <span class="tile-pill">${icon}${escapeHtml(info.label)}</span>
+    </div>
+  `;
+}
+
+function globalTileHtml() {
+  const cfg = state.config;
+  const liveList = Object.values(state.roomStatus || {});
+  const activeRooms = Object.entries(cfg.rooms || {}).filter(([, room]) => room.enabled);
+  const countIn = (cls) =>
+    activeRooms.filter(([roomId, room]) => getRoomTileInfo(roomId, room).cls === cls).length;
+
+  const coolingActive = liveList.some((live) => live.cooling_active);
+  let operation = t("op_normal");
+  if (cfg.vacation_enabled) operation = t("op_vacation");
+  else if (cfg.away_enabled) operation = t("op_away");
+  else if (coolingActive) operation = t("op_cooling");
+  else if (liveList.some((live) => live.outdoor_cutoff_active)) operation = t("op_cutoff");
+
+  const outdoor = cfg.outdoor_sensor ? getSensorTemperature(cfg.outdoor_sensor) : null;
+  const outdoorRow =
+    outdoor !== null
+      ? `<dt>${escapeHtml(t("tile_outdoor"))}</dt><dd>${formatTileTemperature(outdoor)}</dd>`
+      : "";
+
+  const running = t(coolingActive ? "tile_running_cool" : "tile_running_heat")
+    .replace("{count}", countIn(coolingActive ? "cooling" : "heating"))
+    .replace("{total}", activeRooms.length);
+
+  return `
+    <div class="tile-name">${escapeHtml(t("global_settings"))}</div>
+    <dl class="tile-kv">
+      <dt>${escapeHtml(t("tile_control"))}</dt>
+      <dd>${escapeHtml(t(cfg.enabled ? "tile_control_on" : "tile_control_off"))}</dd>
+      <dt>${escapeHtml(t("tile_operation"))}</dt><dd>${escapeHtml(operation)}</dd>
+      ${outdoorRow}
+      <dt>${escapeHtml(t("tile_heating_mode"))}</dt>
+      <dd>${escapeHtml(t(`mode_${cfg.heating_mode}`))}</dd>
+    </dl>
+    <div class="tile-foot"><span class="tile-pill">${escapeHtml(running)}</span></div>
+  `;
+}
+
+function setTileContent(tile, className, ariaLabel, html) {
+  // Nur bei Änderung schreiben: Live-Updates kommen bei jedem HA-Ereignis.
+  if (tile.dataset.className !== className) {
+    tile.className = className;
+    tile.dataset.className = className;
+  }
+  if (tile.getAttribute("aria-label") !== ariaLabel) {
+    tile.setAttribute("aria-label", ariaLabel);
+  }
+  if (tile.tileHtml !== html) {
+    tile.innerHTML = html;
+    tile.tileHtml = html;
+  }
+}
+
+function updateTile(tile) {
+  if (tile.dataset.tile === "global") {
+    setTileContent(tile, "tile global", t("global_settings"), globalTileHtml());
+    return;
+  }
+  if (tile.dataset.tile !== "room") {
     return;
   }
 
-  // Sort by order field
-  entries.sort((a, b) => (a[1].order ?? 0) - (b[1].order ?? 0));
+  const room = state.config.rooms?.[tile.dataset.roomId];
+  if (!room) {
+    return;
+  }
+  const info = getRoomTileInfo(tile.dataset.roomId, room);
+  const dragging = tile.classList.contains("dragging") ? " dragging" : "";
+  const dragOver = tile.classList.contains("drag-over") ? " drag-over" : "";
+  setTileContent(
+    tile,
+    `tile ${info.cls}${dragging}${dragOver}`,
+    `${room.label}: ${info.label}. ${t("tile_open")}`,
+    roomTileHtml(room, info)
+  );
+}
 
-  const circuits = state.config.circuits || {};
-  const hasCircuits = Object.keys(circuits).length > 0;
+function updateTiles() {
+  els.tileWall?.querySelectorAll(".tile").forEach(updateTile);
+}
 
-  if (!hasCircuits) {
-    for (const [roomId, room] of entries) {
-      els.roomsContainer.appendChild(createRoomCard(roomId, room));
+function createTile(kind, roomId = "") {
+  const tile = document.createElement("div");
+  tile.setAttribute("role", "button");
+  tile.tabIndex = 0;
+  tile.dataset.tile = kind;
+
+  const open = () => {
+    if (kind === "global") openEditModal("global");
+    else if (kind === "add") openNewRoomModal();
+    else openEditModal("room", roomId);
+  };
+
+  tile.addEventListener("click", open);
+  tile.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      open();
     }
+  });
+
+  if (kind === "add") {
+    tile.className = "tile add";
+    tile.innerHTML = `<span class="tile-add-icon" aria-hidden="true">+</span>${escapeHtml(t("add_room"))}`;
+  } else if (kind === "room") {
+    tile.dataset.roomId = roomId;
+    bindTileDrag(tile, roomId);
+  }
+
+  updateTile(tile);
+  return tile;
+}
+
+function bindTileDrag(tile, roomId) {
+  tile.draggable = true;
+
+  tile.addEventListener("dragstart", (e) => {
+    dragSrcRoomId = roomId;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", roomId);
+    tile.classList.add("dragging");
+  });
+
+  tile.addEventListener("dragend", () => {
+    dragSrcRoomId = null;
+    tile.classList.remove("dragging");
+    els.tileWall.querySelectorAll(".drag-over").forEach((n) => n.classList.remove("drag-over"));
+  });
+
+  tile.addEventListener("dragover", (e) => {
+    if (!dragSrcRoomId || dragSrcRoomId === roomId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    tile.classList.add("drag-over");
+  });
+
+  tile.addEventListener("dragleave", () => {
+    tile.classList.remove("drag-over");
+  });
+
+  tile.addEventListener("drop", (e) => {
+    e.preventDefault();
+    tile.classList.remove("drag-over");
+    const srcRoomId = dragSrcRoomId;
+    dragSrcRoomId = null;
+    if (srcRoomId && srcRoomId !== roomId) {
+      moveRoom(srcRoomId, roomId);
+    }
+  });
+}
+
+function moveRoom(srcRoomId, dstRoomId) {
+  const ids = getRoomGroups().flatMap((group) => group.rooms.map(([roomId]) => roomId));
+  const srcIdx = ids.indexOf(srcRoomId);
+  const dstIdx = ids.indexOf(dstRoomId);
+  ids.splice(srcIdx, 1);
+  ids.splice(dstIdx, 0, srcRoomId);
+  ids.forEach((roomId, index) => {
+    state.config.rooms[roomId].order = index;
+  });
+
+  renderRooms();
+  saveConfig();
+}
+
+function renderTiles() {
+  if (!els.tileWall) return;
+  els.tileWall.innerHTML = "";
+
+  const groups = getRoomGroups();
+  const addGrid = (children) => {
+    const grid = document.createElement("div");
+    grid.className = "tile-grid";
+    grid.append(...children);
+    els.tileWall.appendChild(grid);
+    return grid;
+  };
+
+  const firstGrid = addGrid([createTile("global")]);
+  let lastGrid = firstGrid;
+
+  for (const group of groups) {
+    const tiles = group.rooms.map(([roomId]) => createTile("room", roomId));
+    if (group.label === null) {
+      firstGrid.append(...tiles);
+      continue;
+    }
+    const header = document.createElement("div");
+    header.className = "room-group-header";
+    header.textContent = group.label;
+    els.tileWall.appendChild(header);
+    lastGrid = addGrid(tiles);
+  }
+
+  lastGrid.appendChild(createTile("add"));
+}
+
+// ─── Edit popup ──────────────────────────────────────────────────────────────
+// Global- und Raumformulare bleiben dauerhaft im DOM, weil collectFormState()
+// immer alle liest. Das Popup blendet nur das gerade bearbeitete ein.
+function applyActiveEditPane() {
+  const session = editSession;
+  els.globalForm?.classList.toggle("active", session?.kind === "global");
+  els.roomsContainer?.querySelectorAll(".room").forEach((node) => {
+    node.classList.toggle("active", session?.kind === "room" && node.dataset.roomId === session.roomId);
+  });
+}
+
+function updateEditHeader() {
+  if (!editSession) return;
+
+  if (editSession.kind === "global") {
+    els.editModalTitle.textContent = t("global_settings");
+    els.editModalLive.textContent = "";
     return;
   }
 
-  // Group rooms by circuit_id
-  const groups = {};
-  for (const [roomId, room] of entries) {
-    const cid = room.circuit_id || "";
-    if (!groups[cid]) groups[cid] = [];
-    groups[cid].push([roomId, room]);
-  }
+  const room = state.config.rooms?.[editSession.roomId];
+  if (!room) return;
 
-  // Render circuit groups in circuit order, then ungrouped
-  const circuitOrder = Object.keys(circuits);
-  const renderedCids = new Set();
+  const labelInput = els.roomsContainer.querySelector(
+    `.room[data-room-id="${CSS.escape(editSession.roomId)}"] .room-label`
+  );
+  els.editModalTitle.textContent = labelInput?.value.trim() || room.label;
 
-  for (const cid of circuitOrder) {
-    if (!groups[cid]) continue;
-    renderedCids.add(cid);
-    const header = document.createElement("div");
-    header.className = "room-group-header";
-    header.textContent = circuits[cid]?.label || cid;
-    els.roomsContainer.appendChild(header);
-    for (const [roomId, room] of groups[cid]) {
-      els.roomsContainer.appendChild(createRoomCard(roomId, room));
-    }
-  }
+  const info = getRoomTileInfo(editSession.roomId, room);
+  const actual =
+    info.actual !== null
+      ? `${t("tile_now")} ${formatTileTemperature(info.actual)}`
+      : t("tile_no_reading");
+  const target = Number.isFinite(info.target)
+    ? ` · ${t("tile_target")} ${formatTileTemperature(info.target)}`
+    : "";
+  els.editModalLive.textContent = editSession.isNew ? "" : `${actual}${target} · ${info.label}`;
+}
 
-  // Rooms with no/invalid circuit_id
-  const unassigned = groups[""] || [];
-  for (const [cid, roomList] of Object.entries(groups)) {
-    if (!renderedCids.has(cid) && cid !== "") {
-      unassigned.push(...roomList);
-    }
-  }
+function setEditConfirm(mode) {
+  editSession.confirm = mode;
+  const hasConfirm = mode !== null;
 
-  if (unassigned.length) {
-    const header = document.createElement("div");
-    header.className = "room-group-header";
-    header.textContent = t("circuit_none");
-    els.roomsContainer.appendChild(header);
-    for (const [roomId, room] of unassigned) {
-      els.roomsContainer.appendChild(createRoomCard(roomId, room));
-    }
+  els.saveBtn.classList.toggle("hidden", hasConfirm);
+  els.editConfirm.classList.toggle("hidden", !hasConfirm);
+  els.editDelete.classList.toggle(
+    "hidden",
+    hasConfirm || editSession.kind !== "room" || editSession.isNew
+  );
+
+  if (mode === "discard") {
+    els.editQuestion.textContent = t("edit_discard_question");
+    els.editConfirm.textContent = t("edit_discard_confirm");
+    els.editCancel.textContent = t("edit_keep_editing");
+  } else if (mode === "delete") {
+    const name = state.config.rooms?.[editSession.roomId]?.label || "";
+    els.editQuestion.textContent = t("edit_delete_question").replace("{name}", name);
+    els.editConfirm.textContent = t("edit_delete");
+    els.editCancel.textContent = t("edit_delete_keep");
+  } else {
+    els.editQuestion.textContent = "";
+    els.editCancel.textContent = t("edit_cancel");
   }
+}
+
+function openEditModal(kind, roomId = null, { isNew = false, snapshot = null } = {}) {
+  editSession = {
+    kind,
+    roomId,
+    isNew,
+    snapshot: snapshot || structuredClone(state.config),
+    baseline: JSON.stringify(collectFormState()),
+    confirm: null,
+  };
+
+  applyActiveEditPane();
+  setEditConfirm(null);
+  updateEditHeader();
+  els.editStatus.className = "status edit-status hidden";
+  els.editModal.classList.remove("hidden");
+  els.mainWrap.inert = true;
+  els.editModalBody.scrollTop = 0;
+
+  if (isNew) {
+    const labelInput = els.roomsContainer.querySelector(
+      `.room[data-room-id="${CSS.escape(roomId)}"] .room-label`
+    );
+    labelInput?.focus();
+    labelInput?.select();
+  } else {
+    els.editModalContent.focus();
+  }
+}
+
+function openNewRoomModal() {
+  const snapshot = structuredClone(state.config);
+  const roomId = addRoom();
+  openEditModal("room", roomId, { isNew: true, snapshot });
+}
+
+function closeEditModal() {
+  const session = editSession;
+  editSession = null;
+  isEditing = false;
+
+  els.editModal.classList.add("hidden");
+  els.mainWrap.inert = false;
+  applyActiveEditPane();
+  updateRoomLiveState();
+
+  const selector =
+    session?.kind === "room"
+      ? `.tile[data-room-id="${CSS.escape(session.roomId)}"]`
+      : '.tile[data-tile="global"]';
+  (els.tileWall.querySelector(selector) || els.tileWall.querySelector(".tile"))?.focus();
+}
+
+function restoreEditSnapshot() {
+  state.config = editSession.snapshot;
+  pendingCircuits = null;
+  entityPickerState.clear();
+  renderGlobalSettings();
+  renderRooms();
+}
+
+function discardEdit() {
+  restoreEditSnapshot();
+  closeEditModal();
+}
+
+function requestCloseEdit() {
+  if (!editSession) return;
+  if (JSON.stringify(collectFormState()) === editSession.baseline) {
+    discardEdit();
+  } else {
+    setEditConfirm("discard");
+  }
+}
+
+async function saveEdit() {
+  if (await saveConfig()) {
+    closeEditModal();
+  }
+}
+
+async function deleteEditedRoom() {
+  const { roomId } = editSession;
+  delete state.config.rooms[roomId];
+  renderRooms();
+
+  if (await saveConfig()) {
+    closeEditModal();
+    return;
+  }
+  restoreEditSnapshot();
+  setEditConfirm(null);
+}
+
+function bindEditModalEvents() {
+  els.saveBtn.addEventListener("click", saveEdit);
+  els.editModalClose.setAttribute("aria-label", t("edit_close"));
+  els.editModalClose.addEventListener("click", requestCloseEdit);
+  els.editDelete.addEventListener("click", () => setEditConfirm("delete"));
+
+  els.editCancel.addEventListener("click", () => {
+    if (editSession?.confirm) setEditConfirm(null);
+    else requestCloseEdit();
+  });
+
+  els.editConfirm.addEventListener("click", () => {
+    if (editSession?.confirm === "discard") discardEdit();
+    else if (editSession?.confirm === "delete") deleteEditedRoom();
+  });
+
+  els.editModal.addEventListener("mousedown", (e) => {
+    if (e.target === els.editModal) requestCloseEdit();
+  });
+
+  els.editModalBody.addEventListener("input", (e) => {
+    if (e.target.classList.contains("room-label")) updateEditHeader();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !editSession) return;
+    // Darüber liegende Dialoge (Wochenplan, Entity-Auswahl, Hilfe) gehen vor.
+    const otherModalOpen = [...document.querySelectorAll(".modal:not(.hidden)")].some(
+      (modal) => modal !== els.editModal
+    );
+    if (otherModalOpen) return;
+    if (editSession.confirm) setEditConfirm(null);
+    else requestCloseEdit();
+  });
 }
 
 function updateRoomLiveState() {
@@ -2492,11 +2894,6 @@ function updateRoomLiveState() {
 
     if (!room) {
       continue;
-    }
-
-    const titleMeta = node.querySelector(".room-title-meta");
-    if (titleMeta) {
-      titleMeta.innerHTML = roomTitleMeta(room, roomId);
     }
 
     // live thermostat label: setpoint + heating indicator
@@ -2543,6 +2940,8 @@ function updateRoomLiveState() {
   }
 
   updateMainLiveStatus();
+  updateTiles();
+  updateEditHeader();
 }
 
 function collectFormState() {
@@ -2690,6 +3089,10 @@ function collectFormState() {
   }
   cfg.circuits = circuits;
 
+  // Live-Status gehört nicht in die gespeicherte Konfiguration.
+  delete cfg.room_states;
+  delete cfg.room_status;
+
   return normalizeConfig(cfg);
 }
 
@@ -2737,6 +3140,7 @@ function addRoom() {
     climate_hvac_mode: DEFAULTS.room_climate_hvac_mode,
   };
   renderRooms();
+  return roomId;
 }
 
 function applyGlobalTempsToAllRooms() {
@@ -2807,9 +3211,11 @@ async function saveConfig() {
     renderGlobalSettings();
     renderRooms();
     setStatus(t("status_save_ok"), "ok");
+    return true;
   } catch (error) {
     console.error(error);
     setStatus(`${t("status_save_failed")}: ${error.message}`, "err");
+    return false;
   } finally {
     isSaving = false;
     setButtonsDisabled(false);
@@ -3180,10 +3586,8 @@ function bindScheduleEvents() {
 }
 
 function bindEvents() {
-  els.saveBtn.addEventListener("click", saveConfig);
   els.reloadRoomsBtn.addEventListener("click", reloadRooms);
   els.reloadConfigBtn.addEventListener("click", reloadConfig);
-  els.addRoomBtn.addEventListener("click", addRoom);
   els.applyTimesToRoomsBtn.addEventListener(
     "click",
     applyGlobalTimesToAllRooms
@@ -3217,6 +3621,7 @@ function bindEvents() {
   });
 
   bindScheduleEvents();
+  bindEditModalEvents();
 }
 
 function enableEditTracking() {
@@ -3315,6 +3720,9 @@ async function setupLiveUpdates() {
         if (incoming.room_states) {
           state.config.room_states = incoming.room_states;
         }
+        if (entity.attributes?.room_status) {
+          state.roomStatus = entity.attributes.room_status;
+        }
 
         // Config still update im Hintergrund (damit collectFormState() frische
         // Metadaten wie learned_overshoot, weekly_schedule hat), aber KEIN
@@ -3323,7 +3731,7 @@ async function setupLiveUpdates() {
         // Fensterkontakt-Picker) überschreiben.
         // Vollständiger Re-Render nur bei: init→refreshAll(), saveConfig()-Erfolg,
         // explizitem Reload-Button.
-        if (!isSaving && !isEditing) {
+        if (!isSaving && !isEditing && !editSession) {
           state.config = incoming;
           if (pendingCircuits !== null) {
             state.config.circuits = pendingCircuits;
