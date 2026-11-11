@@ -1000,6 +1000,12 @@
       border-color: var(--muted);
     }
 
+    .tile:active {
+      transform: none;
+      border-color: var(--accent);
+      transition: none;
+    }
+
     .tile:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: 2px;
@@ -1217,6 +1223,8 @@
       min-height: 0;
       padding: 18px;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
     }
 
     .edit-pane {

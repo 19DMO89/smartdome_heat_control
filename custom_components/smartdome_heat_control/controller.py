@@ -1937,11 +1937,12 @@ class SmartHeatingController:
                     if preset:
                         self._set_preset_mode_if_needed(climate_entity, preset)
                     self._set_temp_if_needed(climate_entity, cool_target)
-                    # Heizventile ausschalten
+                    # Heizventile ausschalten (nicht die Klimaanlage selbst)
                     for thermostat in thermostats:
-                        self._set_temp_if_needed(
-                            thermostat, self._thermostat_min_temp(thermostat)
-                        )
+                        if thermostat != climate_entity:
+                            self._set_temp_if_needed(
+                                thermostat, self._thermostat_min_temp(thermostat)
+                            )
                     continue
                 elif use_climate:
                     # Heizen via Klimaanlage: an nur im Zustand HEATING, sonst aus
@@ -1972,11 +1973,12 @@ class SmartHeatingController:
                         self._set_temp_if_needed(climate_entity, heat_target)
                     else:
                         self._set_hvac_mode_if_needed(climate_entity, "off")
-                    # Heizventile ausschalten
+                    # Heizventile ausschalten (nicht die Klimaanlage selbst)
                     for thermostat in thermostats:
-                        self._set_temp_if_needed(
-                            thermostat, self._thermostat_min_temp(thermostat)
-                        )
+                        if thermostat != climate_entity:
+                            self._set_temp_if_needed(
+                                thermostat, self._thermostat_min_temp(thermostat)
+                            )
                     continue
                 else:
                     # Klimaanlage vorhanden aber nicht verwendet → ausschalten
