@@ -3464,7 +3464,14 @@ function renderCalBlocks(day, col) {
     });
     block.appendChild(del);
 
+    const resizeHandle = document.createElement("div");
+    resizeHandle.className = "schedule-block-resize";
+    resizeHandle.addEventListener("mousedown",  e => e.stopPropagation());
+    resizeHandle.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
+    block.appendChild(resizeHandle);
+
     calBlockMoveDrag(block, day, entry, col);
+    calBlockResizeDrag(resizeHandle, day, entry, col);
     col.appendChild(block);
   });
 }
@@ -3504,20 +3511,35 @@ function calCreateDragStart(e, col, day) {
     const cy  = ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY;
     const r2   = col.getBoundingClientRect();
     const endM = calSnapMin(calClampMin(Math.round(calPxToMin(cy - r2.top))));
-    const finalMin = Math.min(startMin, endM);
-    const hhmm = calMinToHHMM(finalMin);
+
+    const topMin = Math.min(startMin, endM);
+    const botMin = Math.max(startMin + CAL_SNAP_MIN, Math.max(startMin, endM));
+    const hhmm   = calMinToHHMM(topMin);
 
     if (!Array.isArray(draftWeeklySchedule[day])) draftWeeklySchedule[day] = [];
     if (draftWeeklySchedule[day].some(en => en.start === hhmm)) return;
 
-    // default temp: active temperature at that time, or 21
+    // temp that was active at topMin before this new block (used as restore temp)
     const sorted = [...draftWeeklySchedule[day]].sort((a, b) => a.start.localeCompare(b.start));
-    let defTemp = 21.0;
+    let activeTemp = 21.0;
     for (const en of sorted) {
-      if (en.start <= hhmm) defTemp = en.temperature;
+      if (calHHMMToMin(en.start) <= topMin) activeTemp = en.temperature;
     }
 
-    draftWeeklySchedule[day].push({ start: hhmm, temperature: defTemp });
+    draftWeeklySchedule[day].push({ start: hhmm, temperature: 21.0 });
+
+    // add restore entry at drag end only if no existing entry lies between topMin and botMin
+    if (botMin < 24 * 60) {
+      const botHHMM = calMinToHHMM(botMin);
+      const hasBlockBetween = draftWeeklySchedule[day].some(en => {
+        const m = calHHMMToMin(en.start);
+        return m > topMin && m <= botMin;
+      });
+      if (!hasBlockBetween) {
+        draftWeeklySchedule[day].push({ start: botHHMM, temperature: activeTemp });
+      }
+    }
+
     draftWeeklySchedule[day].sort((a, b) => a.start.localeCompare(b.start));
     renderCalBlocks(day, col);
   };
@@ -3528,10 +3550,78 @@ function calCreateDragStart(e, col, day) {
   document.addEventListener("touchend",  onUp);
 }
 
+// ── Drag: resize block (bottom handle) ─────────────
+function calBlockResizeDrag(handle, day, entry, col) {
+  const onDown = (e) => {
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
+
+    const onMove = (ev) => {
+      if (ev.cancelable) ev.preventDefault();
+      const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const r  = col.getBoundingClientRect();
+      const newEndMin  = calSnapMin(calClampMin(Math.round(calPxToMin(cy - r.top))));
+      const startMin   = calHHMMToMin(entry.start);
+      const finalEndPx = calMinToPx(Math.max(startMin + CAL_SNAP_MIN, newEndMin) - startMin);
+      const block = handle.closest(".schedule-block");
+      if (block) block.style.height = `${Math.max(22, finalEndPx)}px`;
+    };
+
+    const onUp = (ev) => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup",   onUp);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend",  onUp);
+
+      const cy = ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY;
+      const r  = col.getBoundingClientRect();
+      const newEndMin = calSnapMin(calClampMin(Math.round(calPxToMin(cy - r.top))));
+      const startMin  = calHHMMToMin(entry.start);
+      const minEnd    = startMin + CAL_SNAP_MIN;
+      const finalEnd  = Math.max(minEnd, newEndMin);
+
+      const arr = draftWeeklySchedule[day];
+      if (!arr) return;
+      const sortedArr = [...arr].sort((a, b) => a.start.localeCompare(b.start));
+      const idx = sortedArr.findIndex(en => en.start === entry.start);
+      if (idx < 0) return;
+
+      if (idx < sortedArr.length - 1) {
+        // non-last block: move next entry's start time
+        const nextEntry = sortedArr[idx + 1];
+        const maxEnd    = idx + 2 < sortedArr.length
+          ? calHHMMToMin(sortedArr[idx + 2].start) - CAL_SNAP_MIN
+          : 24 * 60;
+        const clampedEnd = Math.min(maxEnd, Math.max(minEnd, finalEnd));
+        const actualNext = arr.find(en => en.start === nextEntry.start);
+        if (actualNext) actualNext.start = calMinToHHMM(clampedEnd);
+      } else {
+        // last block: create a new restore entry at finalEnd
+        if (finalEnd >= 24 * 60) return;
+        const newEndHHMM = calMinToHHMM(finalEnd);
+        if (!arr.some(en => en.start === newEndHHMM)) {
+          const prevTemp = idx > 0 ? sortedArr[idx - 1].temperature : 21.0;
+          arr.push({ start: newEndHHMM, temperature: prevTemp });
+        }
+      }
+      arr.sort((a, b) => a.start.localeCompare(b.start));
+      renderCalBlocks(day, col);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup",   onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend",  onUp);
+  };
+
+  handle.addEventListener("mousedown",  onDown);
+  handle.addEventListener("touchstart", onDown, { passive: false });
+}
+
 // ── Drag: move block ────────────────────────────────
 function calBlockMoveDrag(block, fromDay, entry, fromCol) {
   const onDown = (e) => {
-    if (e.target.closest(".schedule-block-del") || e.target.tagName === "INPUT") return;
+    if (e.target.closest(".schedule-block-del") || e.target.closest(".schedule-block-resize") || e.target.tagName === "INPUT") return;
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
