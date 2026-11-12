@@ -878,7 +878,10 @@ function normalizeControlProfile(value) {
 function normalizeScheduleEntry(entry) {
   return {
     start: normalizeTime(entry?.start, "06:00"),
-    temperature: normalizeNumber(entry?.temperature, 21.0),
+    temperature:
+      entry && entry.temperature === null
+        ? null
+        : normalizeNumber(entry?.temperature, 21.0),
   };
 }
 
@@ -3408,6 +3411,57 @@ function buildCalDayCol(day, totalH) {
   return col;
 }
 
+// Ein Eintrag mit temperature === null ist ein Lücken-Marker: "kein Plan ab hier"
+// (es gilt Standard Tag/Nacht). Er beendet den davor liegenden Block, ist aber unsichtbar.
+function calIsGap(en) { return !!en && en.temperature === null; }
+
+function calClampEndMin(min) {
+  return Math.max(0, Math.min(24 * 60, calSnapMin(Math.round(min))));
+}
+
+function calSortDay(day) {
+  if (!Array.isArray(draftWeeklySchedule[day])) draftWeeklySchedule[day] = [];
+  draftWeeklySchedule[day].sort((a, b) => a.start.localeCompare(b.start));
+  return draftWeeklySchedule[day];
+}
+
+// Entfernt überflüssige Marker (am Tagesanfang oder direkt nach einem anderen Marker)
+function calCleanGaps(day) {
+  const out = [];
+  for (const en of calSortDay(day)) {
+    if (calIsGap(en) && (out.length === 0 || calIsGap(out[out.length - 1]))) continue;
+    out.push(en);
+  }
+  draftWeeklySchedule[day] = out;
+}
+
+function calActiveTempAt(arr, min) {
+  let t = null;
+  for (const en of [...arr].sort((a, b) => a.start.localeCompare(b.start))) {
+    if (calHHMMToMin(en.start) <= min) t = en.temperature;
+    else break;
+  }
+  return t;
+}
+
+// Legt einen Block [startMin, endMin) an. Danach gilt wieder, was vorher dort aktiv war.
+function calInsertBlock(day, startMin, endMin, temperature) {
+  const orig = calSortDay(day);
+  const mins = orig.map(en => calHHMMToMin(en.start));
+  const hasEntryAtEnd = mins.includes(endMin);
+  const restoreTemp = endMin < 24 * 60 ? calActiveTempAt(orig, endMin) : null;
+
+  // der neue Block überschreibt alles im Bereich [startMin, endMin)
+  const arr = orig.filter((en, i) => mins[i] < startMin || mins[i] >= endMin);
+  arr.push({ start: calMinToHHMM(startMin), temperature });
+  if (endMin < 24 * 60 && !hasEntryAtEnd) {
+    arr.push({ start: calMinToHHMM(endMin), temperature: restoreTemp });
+  }
+
+  draftWeeklySchedule[day] = arr;
+  calCleanGaps(day);
+}
+
 function renderCalBlocks(day, col) {
   col.querySelectorAll(".schedule-block, .schedule-ghost").forEach(b => b.remove());
   if (!draftWeeklySchedule) return;
@@ -3415,6 +3469,7 @@ function renderCalBlocks(day, col) {
   const entries = [...(draftWeeklySchedule[day] || [])].sort((a, b) => a.start.localeCompare(b.start));
 
   entries.forEach((entry, i) => {
+    if (calIsGap(entry)) return;
     const startMin = calHHMMToMin(entry.start);
     const endMin   = i < entries.length - 1 ? calHHMMToMin(entries[i + 1].start) : 24 * 60;
     const blockH   = Math.max(calMinToPx(endMin - startMin), 22);
@@ -3458,8 +3513,14 @@ function renderCalBlocks(day, col) {
     del.textContent = "×";
     del.addEventListener("click", (e) => {
       e.stopPropagation();
-      const idx = draftWeeklySchedule[day].findIndex(en => en.start === entry.start);
-      if (idx >= 0) draftWeeklySchedule[day].splice(idx, 1);
+      const arr = calSortDay(day);
+      const idx = arr.findIndex(en => en.start === entry.start);
+      if (idx >= 0) {
+        // Block durch Lücke ersetzen, damit der Vorgänger nicht in die Fläche hineinwächst
+        arr[idx] = { start: entry.start, temperature: null };
+        if (calIsGap(arr[idx + 1])) arr.splice(idx + 1, 1);
+        calCleanGaps(day);
+      }
       renderCalBlocks(day, col);
     });
     block.appendChild(del);
@@ -3493,7 +3554,7 @@ function calCreateDragStart(e, col, day) {
   const onMove = (ev) => {
     const cy   = ev.touches ? ev.touches[0].clientY : ev.clientY;
     const rect2 = col.getBoundingClientRect();
-    currentEndMin = calSnapMin(calClampMin(Math.round(calPxToMin(cy - rect2.top))));
+    currentEndMin = calClampEndMin(calPxToMin(cy - rect2.top));
     const top  = calMinToPx(Math.min(startMin, currentEndMin));
     const hpx  = calMinToPx(Math.max(Math.abs(currentEndMin - startMin), CAL_SNAP_MIN));
     ghost.style.top    = `${top}px`;
@@ -3510,37 +3571,12 @@ function calCreateDragStart(e, col, day) {
 
     const cy  = ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY;
     const r2   = col.getBoundingClientRect();
-    const endM = calSnapMin(calClampMin(Math.round(calPxToMin(cy - r2.top))));
+    const endM = calClampEndMin(calPxToMin(cy - r2.top));
 
-    const topMin = Math.min(startMin, endM);
-    const botMin = Math.max(startMin + CAL_SNAP_MIN, Math.max(startMin, endM));
-    const hhmm   = calMinToHHMM(topMin);
+    const topMin = calClampMin(Math.min(startMin, endM));
+    const botMin = Math.max(topMin + CAL_SNAP_MIN, Math.max(startMin, endM));
 
-    if (!Array.isArray(draftWeeklySchedule[day])) draftWeeklySchedule[day] = [];
-    if (draftWeeklySchedule[day].some(en => en.start === hhmm)) return;
-
-    // temp that was active at topMin before this new block (used as restore temp)
-    const sorted = [...draftWeeklySchedule[day]].sort((a, b) => a.start.localeCompare(b.start));
-    let activeTemp = 21.0;
-    for (const en of sorted) {
-      if (calHHMMToMin(en.start) <= topMin) activeTemp = en.temperature;
-    }
-
-    draftWeeklySchedule[day].push({ start: hhmm, temperature: 21.0 });
-
-    // add restore entry at drag end only if no existing entry lies between topMin and botMin
-    if (botMin < 24 * 60) {
-      const botHHMM = calMinToHHMM(botMin);
-      const hasBlockBetween = draftWeeklySchedule[day].some(en => {
-        const m = calHHMMToMin(en.start);
-        return m > topMin && m <= botMin;
-      });
-      if (!hasBlockBetween) {
-        draftWeeklySchedule[day].push({ start: botHHMM, temperature: activeTemp });
-      }
-    }
-
-    draftWeeklySchedule[day].sort((a, b) => a.start.localeCompare(b.start));
+    calInsertBlock(day, topMin, botMin, 21.0);
     renderCalBlocks(day, col);
   };
 
@@ -3560,7 +3596,7 @@ function calBlockResizeDrag(handle, day, entry, col) {
       if (ev.cancelable) ev.preventDefault();
       const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
       const r  = col.getBoundingClientRect();
-      const newEndMin  = calSnapMin(calClampMin(Math.round(calPxToMin(cy - r.top))));
+      const newEndMin  = calClampEndMin(calPxToMin(cy - r.top));
       const startMin   = calHHMMToMin(entry.start);
       const finalEndPx = calMinToPx(Math.max(startMin + CAL_SNAP_MIN, newEndMin) - startMin);
       const block = handle.closest(".schedule-block");
@@ -3575,36 +3611,32 @@ function calBlockResizeDrag(handle, day, entry, col) {
 
       const cy = ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY;
       const r  = col.getBoundingClientRect();
-      const newEndMin = calSnapMin(calClampMin(Math.round(calPxToMin(cy - r.top))));
+      const newEndMin = calClampEndMin(calPxToMin(cy - r.top));
       const startMin  = calHHMMToMin(entry.start);
       const minEnd    = startMin + CAL_SNAP_MIN;
       const finalEnd  = Math.max(minEnd, newEndMin);
 
-      const arr = draftWeeklySchedule[day];
-      if (!arr) return;
-      const sortedArr = [...arr].sort((a, b) => a.start.localeCompare(b.start));
-      const idx = sortedArr.findIndex(en => en.start === entry.start);
+      const arr = calSortDay(day);
+      const idx = arr.findIndex(en => en.start === entry.start);
       if (idx < 0) return;
 
-      if (idx < sortedArr.length - 1) {
-        // non-last block: move next entry's start time
-        const nextEntry = sortedArr[idx + 1];
-        const maxEnd    = idx + 2 < sortedArr.length
-          ? calHHMMToMin(sortedArr[idx + 2].start) - CAL_SNAP_MIN
-          : 24 * 60;
-        const clampedEnd = Math.min(maxEnd, Math.max(minEnd, finalEnd));
-        const actualNext = arr.find(en => en.start === nextEntry.start);
-        if (actualNext) actualNext.start = calMinToHHMM(clampedEnd);
-      } else {
-        // last block: create a new restore entry at finalEnd
-        if (finalEnd >= 24 * 60) return;
-        const newEndHHMM = calMinToHHMM(finalEnd);
-        if (!arr.some(en => en.start === newEndHHMM)) {
-          const prevTemp = idx > 0 ? sortedArr[idx - 1].temperature : 21.0;
-          arr.push({ start: newEndHHMM, temperature: prevTemp });
+      const next = arr[idx + 1];
+      if (next) {
+        const after = arr[idx + 2];
+        const limit = after ? calHHMMToMin(after.start) : 24 * 60;
+        if (calIsGap(next)) {
+          // Lücken-Marker verschieben; erreicht er den nächsten Block / das Tagesende, entfällt er
+          if (finalEnd >= limit) arr.splice(idx + 1, 1);
+          else next.start = calMinToHHMM(finalEnd);
+        } else {
+          // direkt angrenzender Block: gemeinsame Grenze verschieben
+          next.start = calMinToHHMM(Math.min(limit - CAL_SNAP_MIN, finalEnd));
         }
+      } else if (finalEnd < 24 * 60) {
+        // Block lief bis Tagesende: ab hier gilt wieder kein Plan
+        arr.push({ start: calMinToHHMM(finalEnd), temperature: null });
       }
-      arr.sort((a, b) => a.start.localeCompare(b.start));
+      calCleanGaps(day);
       renderCalBlocks(day, col);
     };
 
@@ -3672,20 +3704,20 @@ function calBlockMoveDrag(block, fromDay, entry, fromCol) {
       clone.remove();
       block.style.opacity = "";
 
-      const newHHMM = calMinToHHMM(currentMin);
+      // Block aus dem alten Tag nehmen (Fläche wird zur Lücke), Länge merken
+      const oldArr = calSortDay(fromDay);
+      const idx    = oldArr.findIndex(en => en.start === entry.start);
+      if (idx < 0) return;
+      const oldStartMin = calHHMMToMin(entry.start);
+      const oldNext     = oldArr[idx + 1];
+      const duration    = (oldNext ? calHHMMToMin(oldNext.start) : 24 * 60) - oldStartMin;
+      oldArr[idx] = { start: entry.start, temperature: null };
+      if (calIsGap(oldNext)) oldArr.splice(idx + 1, 1);
+      calCleanGaps(fromDay);
 
-      // remove from original day
-      const oldArr = draftWeeklySchedule[fromDay];
-      const idx    = oldArr?.findIndex(en => en.start === entry.start);
-      if (idx >= 0) oldArr.splice(idx, 1);
-
-      // insert into target day (skip if duplicate start)
-      if (!Array.isArray(draftWeeklySchedule[currentDay])) draftWeeklySchedule[currentDay] = [];
-      const targetArr = draftWeeklySchedule[currentDay];
-      if (!targetArr.some(en => en.start === newHHMM)) {
-        targetArr.push({ start: newHHMM, temperature: entry.temperature });
-        targetArr.sort((a, b) => a.start.localeCompare(b.start));
-      }
+      // Im Ziel einfügen mit unveränderter Länge
+      const newEndMin = Math.min(24 * 60, currentMin + duration);
+      calInsertBlock(currentDay, currentMin, newEndMin, entry.temperature);
 
       // re-render affected columns
       const affectedDays = currentDay === fromDay ? [fromDay] : [fromDay, currentDay];

@@ -609,9 +609,11 @@ class SmartHeatingController:
                     continue
 
                 start = str(entry.get("start", "")).strip()
-                temperature = self._safe_float(entry.get("temperature"))
+                raw_temperature = entry.get("temperature")
+                is_gap = "temperature" in entry and raw_temperature is None
+                temperature = self._safe_float(raw_temperature)
 
-                if not start or temperature is None:
+                if not start or (temperature is None and not is_gap):
                     continue
 
                 if not self._is_valid_schedule_time(start):
@@ -620,7 +622,7 @@ class SmartHeatingController:
                 valid_entries.append(
                     {
                         "start": start[:5],
-                        "temperature": float(temperature),
+                        "temperature": None if is_gap else float(temperature),
                     }
                 )
 
@@ -670,11 +672,9 @@ class SmartHeatingController:
             start = str(entry.get("start", ""))[:5]
             temperature = self._safe_float(entry.get("temperature"))
 
-            if temperature is None:
-                continue
-
             if start <= now_hhmm:
-                active_temperature = float(temperature)
+                # temperature None = Lücke: kein Plan, Standard Tag/Nacht gilt
+                active_temperature = None if temperature is None else float(temperature)
             else:
                 break
 
