@@ -677,10 +677,8 @@ function initEls() {
     scheduleModalTitle: document.getElementById("schedule-modal-title"),
     scheduleClose: document.getElementById("schedule-close"),
     scheduleCancel: document.getElementById("schedule-cancel"),
-    scheduleAdd: document.getElementById("schedule-add"),
     scheduleSave: document.getElementById("schedule-save"),
-    scheduleEntries: document.getElementById("schedule-entries"),
-    scheduleDayButtons: document.querySelectorAll(".schedule-days button"),
+    scheduleCalendar: document.getElementById("schedule-calendar"),
     scheduleCopyRoomsBtn: document.getElementById("schedule-copy-rooms"),
 
     scheduleCopyModal: document.getElementById("schedule-copy-modal"),
@@ -704,7 +702,6 @@ let isSaving = false;
 let pendingCircuits = null;
 let activeEntityPickerId = null;
 let scheduleRoomId = null;
-let currentScheduleDay = "monday";
 let draftWeeklySchedule = null;
 // Offenes Popup: { kind: "global" | "room", roomId, isNew, snapshot, baseline, confirm }
 let editSession = null;
@@ -765,10 +762,6 @@ function applyTranslations() {
     els.scheduleModalTitle.textContent = t("schedule_title");
   }
 
-  if (els.scheduleAdd) {
-    els.scheduleAdd.textContent = t("schedule_add");
-  }
-
   if (els.scheduleSave) {
     els.scheduleSave.textContent = t("schedule_save");
   }
@@ -799,12 +792,6 @@ function applyTranslations() {
     sunday: "day_sunday",
   };
 
-  els.scheduleDayButtons.forEach((btn) => {
-    const key = dayLabelMap[btn.dataset.day];
-    if (key) {
-      btn.textContent = t(key);
-    }
-  });
 }
 
 function sortByEntityId(items) {
@@ -3299,7 +3286,6 @@ function openScheduleModal(roomId) {
   }
 
   scheduleRoomId = roomId;
-  currentScheduleDay = "monday";
   draftWeeklySchedule = normalizeWeeklySchedule(room.weekly_schedule);
 
   if (els.scheduleModalTitle) {
@@ -3308,139 +3294,325 @@ function openScheduleModal(roomId) {
   }
 
   els.scheduleModal.classList.remove("hidden");
-  renderScheduleEditor();
+  renderScheduleCalendar();
+
+  // scroll to 07:00
+  requestAnimationFrame(() => {
+    const wrap = els.scheduleModal?.querySelector(".schedule-calendar-wrap");
+    if (wrap) wrap.scrollTop = calMinToPx(7 * 60) - 36;
+  });
 }
 
 function closeScheduleModal() {
   scheduleRoomId = null;
-  currentScheduleDay = "monday";
   draftWeeklySchedule = null;
-  els.scheduleEntries.innerHTML = "";
+  if (els.scheduleCalendar) els.scheduleCalendar.innerHTML = "";
   els.scheduleModal.classList.add("hidden");
   closeScheduleCopyModal();
-}
-
-function renderScheduleDayButtons() {
-  els.scheduleDayButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.day === currentScheduleDay);
-    btn.textContent = getDayLabel(btn.dataset.day);
-  });
 }
 
 function sortScheduleEntries(entries) {
   entries.sort((a, b) => a.start.localeCompare(b.start));
 }
 
-function commitScheduleEntryInputs(entry, row, restoreInvalid = false) {
-  const timeInput = row.querySelector(".schedule-time");
-  const tempInput = row.querySelector(".schedule-temp");
-  const normalizedTime = normalizeTime(timeInput?.value, "");
+// ── Calendar helpers ────────────────────────────────
+const CAL_PX_PER_HOUR = 60;
+const CAL_SNAP_MIN = 30;
+const CAL_DAYS = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
 
-  if (normalizedTime) {
-    entry.start = normalizedTime;
-  } else if (restoreInvalid && timeInput) {
-    timeInput.value = entry.start;
+function calMinToPx(min) { return (min / 60) * CAL_PX_PER_HOUR; }
+function calPxToMin(px)  { return (px / CAL_PX_PER_HOUR) * 60; }
+function calSnapMin(min) { return Math.round(min / CAL_SNAP_MIN) * CAL_SNAP_MIN; }
+function calClampMin(min){ return Math.max(0, Math.min(23 * 60 + 30, min)); }
+function calMinToHHMM(min) {
+  min = Math.max(0, Math.min(1439, min));
+  return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+}
+function calHHMMToMin(hhmm) {
+  const [h, m] = String(hhmm || "0:0").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+// ── Calendar render ─────────────────────────────────
+function renderScheduleCalendar() {
+  const cal = els.scheduleCalendar;
+  if (!cal) return;
+  cal.innerHTML = "";
+
+  const totalH = CAL_PX_PER_HOUR * 24;
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+
+  // corner
+  const corner = document.createElement("div");
+  corner.className = "schedule-cal-corner";
+  cal.appendChild(corner);
+
+  // day headers
+  for (const day of CAL_DAYS) {
+    const hdr = document.createElement("div");
+    hdr.className = "schedule-cal-day-hdr" + (day === today ? " today" : "");
+    hdr.textContent = getDayLabel(day);
+    cal.appendChild(hdr);
   }
 
-  if (tempInput?.value !== undefined && tempInput.value !== "") {
-    entry.temperature = normalizeNumber(tempInput.value, entry.temperature);
-  } else if (restoreInvalid && tempInput) {
-    tempInput.value = String(entry.temperature);
+  // time gutter
+  const timeCol = document.createElement("div");
+  timeCol.className = "schedule-cal-time-col";
+  timeCol.style.height = `${totalH}px`;
+  for (let h = 0; h <= 24; h++) {
+    const lbl = document.createElement("div");
+    lbl.className = "schedule-cal-hour-lbl";
+    lbl.style.top = `${calMinToPx(h * 60)}px`;
+    lbl.textContent = `${String(h).padStart(2, "0")}:00`;
+    timeCol.appendChild(lbl);
+  }
+  cal.appendChild(timeCol);
+
+  // day columns
+  for (const day of CAL_DAYS) {
+    cal.appendChild(buildCalDayCol(day, totalH));
   }
 }
 
-function flushScheduleEditorValues() {
-  if (!draftWeeklySchedule || !scheduleRoomId) return;
-  const entries = draftWeeklySchedule[currentScheduleDay];
-  if (!Array.isArray(entries)) return;
-  const rows = els.scheduleEntries.querySelectorAll(".schedule-entry");
-  rows.forEach((row, i) => {
-    if (!entries[i]) return;
-    commitScheduleEntryInputs(entries[i], row);
+function buildCalDayCol(day, totalH) {
+  const col = document.createElement("div");
+  col.className = "schedule-cal-day-col";
+  col.dataset.day = day;
+  col.style.height = `${totalH}px`;
+
+  for (let h = 0; h <= 24; h++) {
+    const hl = document.createElement("div");
+    hl.className = "schedule-cal-hour-line";
+    hl.style.top = `${calMinToPx(h * 60)}px`;
+    col.appendChild(hl);
+    if (h < 24) {
+      const hh = document.createElement("div");
+      hh.className = "schedule-cal-half-line";
+      hh.style.top = `${calMinToPx(h * 60 + 30)}px`;
+      col.appendChild(hh);
+    }
+  }
+
+  renderCalBlocks(day, col);
+
+  col.addEventListener("mousedown", (e) => {
+    if (e.button !== 0 || e.target.closest(".schedule-block")) return;
+    calCreateDragStart(e, col, day);
+  });
+  col.addEventListener("touchstart", (e) => {
+    if (e.target.closest(".schedule-block")) return;
+    e.preventDefault();
+    calCreateDragStart(e.touches[0], col, day, true);
+  }, { passive: false });
+
+  return col;
+}
+
+function renderCalBlocks(day, col) {
+  col.querySelectorAll(".schedule-block, .schedule-ghost").forEach(b => b.remove());
+  if (!draftWeeklySchedule) return;
+
+  const entries = [...(draftWeeklySchedule[day] || [])].sort((a, b) => a.start.localeCompare(b.start));
+
+  entries.forEach((entry, i) => {
+    const startMin = calHHMMToMin(entry.start);
+    const endMin   = i < entries.length - 1 ? calHHMMToMin(entries[i + 1].start) : 24 * 60;
+    const blockH   = Math.max(calMinToPx(endMin - startMin), 22);
+
+    const block = document.createElement("div");
+    block.className = "schedule-block";
+    block.style.top    = `${calMinToPx(startMin)}px`;
+    block.style.height = `${blockH}px`;
+
+    const inner = document.createElement("div");
+    inner.className = "schedule-block-inner";
+
+    const startLbl = document.createElement("div");
+    startLbl.className = "schedule-block-start";
+    startLbl.textContent = entry.start;
+    inner.appendChild(startLbl);
+
+    const tempInput = document.createElement("input");
+    tempInput.className = "schedule-block-temp-input";
+    tempInput.type  = "number";
+    tempInput.min   = "5";
+    tempInput.max   = "35";
+    tempInput.step  = "0.5";
+    tempInput.value = String(entry.temperature);
+    tempInput.addEventListener("change", () => { entry.temperature = parseFloat(tempInput.value) || 20; });
+    tempInput.addEventListener("click",      (e) => e.stopPropagation());
+    tempInput.addEventListener("mousedown",  (e) => e.stopPropagation());
+    tempInput.addEventListener("touchstart", (e) => e.stopPropagation());
+    inner.appendChild(tempInput);
+
+    const unit = document.createElement("div");
+    unit.className = "schedule-block-unit";
+    unit.textContent = "°C";
+    inner.appendChild(unit);
+
+    block.appendChild(inner);
+
+    const del = document.createElement("button");
+    del.className  = "schedule-block-del";
+    del.type       = "button";
+    del.textContent = "×";
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = draftWeeklySchedule[day].findIndex(en => en.start === entry.start);
+      if (idx >= 0) draftWeeklySchedule[day].splice(idx, 1);
+      renderCalBlocks(day, col);
+    });
+    block.appendChild(del);
+
+    calBlockMoveDrag(block, day, entry, col);
+    col.appendChild(block);
   });
 }
 
-function renderScheduleEditor() {
-  // Kein flushScheduleEditorValues() hier: Beim Öffnen eines anderen Raums
-  // bzw. Wechsel des Tages stehen noch die alten Eingabezeilen im DOM und
-  // würden sonst in den neuen Raum/Tag geschrieben werden.
-  renderScheduleDayButtons();
+// ── Drag: create block ──────────────────────────────
+function calCreateDragStart(e, col, day) {
+  if (!draftWeeklySchedule) return;
+  const rect     = col.getBoundingClientRect();
+  const startMin = calSnapMin(calClampMin(Math.round(calPxToMin(e.clientY - rect.top))));
 
-  if (!draftWeeklySchedule || !scheduleRoomId) {
-    els.scheduleEntries.innerHTML = "";
-    return;
-  }
+  const ghost = document.createElement("div");
+  ghost.className   = "schedule-ghost";
+  ghost.style.top   = `${calMinToPx(startMin)}px`;
+  ghost.style.height = `${calMinToPx(CAL_SNAP_MIN)}px`;
+  col.appendChild(ghost);
 
-  const entries = draftWeeklySchedule[currentScheduleDay] || [];
-  els.scheduleEntries.innerHTML = "";
+  let currentEndMin = startMin + CAL_SNAP_MIN;
 
-  if (!entries.length) {
-    const empty = document.createElement("div");
-    empty.className = "schedule-empty";
-    empty.textContent = t("schedule_empty");
-    els.scheduleEntries.appendChild(empty);
-    return;
-  }
+  const onMove = (ev) => {
+    const cy   = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    const rect2 = col.getBoundingClientRect();
+    currentEndMin = calSnapMin(calClampMin(Math.round(calPxToMin(cy - rect2.top))));
+    const top  = calMinToPx(Math.min(startMin, currentEndMin));
+    const hpx  = calMinToPx(Math.max(Math.abs(currentEndMin - startMin), CAL_SNAP_MIN));
+    ghost.style.top    = `${top}px`;
+    ghost.style.height = `${hpx}px`;
+    if (ev.cancelable) ev.preventDefault();
+  };
 
-  entries.forEach((entry, index) => {
-    const row = document.createElement("div");
-    row.className = "schedule-entry";
+  const onUp = (ev) => {
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup",   onUp);
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend",  onUp);
+    ghost.remove();
 
-    row.innerHTML = `
-      <input class="schedule-time" type="time" value="${escapeHtml(
-        entry.start
-      )}" />
-      <input class="schedule-temp" type="number" min="5" max="30" step="0.5" value="${escapeHtml(
-        entry.temperature
-      )}" />
-      <button type="button" class="danger schedule-delete">✕</button>
-    `;
+    const cy  = ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY;
+    const r2   = col.getBoundingClientRect();
+    const endM = calSnapMin(calClampMin(Math.round(calPxToMin(cy - r2.top))));
+    const finalMin = Math.min(startMin, endM);
+    const hhmm = calMinToHHMM(finalMin);
 
-    const timeInput = row.querySelector(".schedule-time");
-    const tempInput = row.querySelector(".schedule-temp");
-    const deleteBtn = row.querySelector(".schedule-delete");
+    if (!Array.isArray(draftWeeklySchedule[day])) draftWeeklySchedule[day] = [];
+    if (draftWeeklySchedule[day].some(en => en.start === hhmm)) return;
 
-    const commitInputs = (restoreInvalid = false) => {
-      commitScheduleEntryInputs(entry, row, restoreInvalid);
+    // default temp: active temperature at that time, or 21
+    const sorted = [...draftWeeklySchedule[day]].sort((a, b) => a.start.localeCompare(b.start));
+    let defTemp = 21.0;
+    for (const en of sorted) {
+      if (en.start <= hhmm) defTemp = en.temperature;
+    }
+
+    draftWeeklySchedule[day].push({ start: hhmm, temperature: defTemp });
+    draftWeeklySchedule[day].sort((a, b) => a.start.localeCompare(b.start));
+    renderCalBlocks(day, col);
+  };
+
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup",   onUp);
+  document.addEventListener("touchmove", onMove, { passive: false });
+  document.addEventListener("touchend",  onUp);
+}
+
+// ── Drag: move block ────────────────────────────────
+function calBlockMoveDrag(block, fromDay, entry, fromCol) {
+  const onDown = (e) => {
+    if (e.target.closest(".schedule-block-del") || e.target.tagName === "INPUT") return;
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const rect    = block.getBoundingClientRect();
+    const offsetY = clientY - rect.top;
+
+    // floating clone
+    const clone       = block.cloneNode(true);
+    clone.style.position    = "fixed";
+    clone.style.width       = `${rect.width}px`;
+    clone.style.left        = `${rect.left}px`;
+    clone.style.top         = `${rect.top}px`;
+    clone.style.zIndex      = "9999";
+    clone.style.opacity     = "0.85";
+    clone.style.cursor      = "grabbing";
+    clone.style.pointerEvents = "none";
+    clone.style.transition  = "none";
+    document.body.appendChild(clone);
+    block.style.opacity = "0.3";
+
+    let currentDay = fromDay;
+    let currentMin = calHHMMToMin(entry.start);
+
+    const onMove = (ev) => {
+      const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      clone.style.top  = `${cy - offsetY}px`;
+      clone.style.left = `${cx - rect.width / 2}px`;
+
+      const target    = document.elementFromPoint(cx, cy);
+      const targetCol = target?.closest(".schedule-cal-day-col");
+      if (targetCol?.dataset.day) {
+        currentDay = targetCol.dataset.day;
+        const cr   = targetCol.getBoundingClientRect();
+        currentMin = calSnapMin(calClampMin(Math.round(calPxToMin(cy - offsetY - cr.top))));
+      }
+      if (ev.cancelable) ev.preventDefault();
     };
 
-    // A time input may emit `change` while only one segment is being edited.
-    // Keep the existing DOM node and defer sorting until a structural action
-    // (day change, add/delete or save) so typing never loses focus or selection.
-    timeInput.addEventListener("change", () => commitInputs());
-    timeInput.addEventListener("blur", () => commitInputs(true));
-    tempInput.addEventListener("change", () => commitInputs());
-    tempInput.addEventListener("blur", () => commitInputs(true));
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup",   onUp);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend",  onUp);
+      clone.remove();
+      block.style.opacity = "";
 
-    deleteBtn.addEventListener("click", () => {
-      flushScheduleEditorValues();
-      entries.splice(index, 1);
-      sortScheduleEntries(entries);
-      renderScheduleEditor();
-    });
+      const newHHMM = calMinToHHMM(currentMin);
 
-    els.scheduleEntries.appendChild(row);
-  });
-}
+      // remove from original day
+      const oldArr = draftWeeklySchedule[fromDay];
+      const idx    = oldArr?.findIndex(en => en.start === entry.start);
+      if (idx >= 0) oldArr.splice(idx, 1);
 
-function addScheduleEntry() {
-  if (!draftWeeklySchedule || !scheduleRoomId) {
-    return;
-  }
+      // insert into target day (skip if duplicate start)
+      if (!Array.isArray(draftWeeklySchedule[currentDay])) draftWeeklySchedule[currentDay] = [];
+      const targetArr = draftWeeklySchedule[currentDay];
+      if (!targetArr.some(en => en.start === newHHMM)) {
+        targetArr.push({ start: newHHMM, temperature: entry.temperature });
+        targetArr.sort((a, b) => a.start.localeCompare(b.start));
+      }
 
-  flushScheduleEditorValues();
+      // re-render affected columns
+      const affectedDays = currentDay === fromDay ? [fromDay] : [fromDay, currentDay];
+      for (const d of affectedDays) {
+        const c = els.scheduleCalendar?.querySelector(`.schedule-cal-day-col[data-day="${d}"]`);
+        if (c) renderCalBlocks(d, c);
+      }
+    };
 
-  if (!Array.isArray(draftWeeklySchedule[currentScheduleDay])) {
-    draftWeeklySchedule[currentScheduleDay] = [];
-  }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup",   onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend",  onUp);
+  };
 
-  draftWeeklySchedule[currentScheduleDay].push({
-    start: "06:00",
-    temperature: 21.0,
-  });
-
-  sortScheduleEntries(draftWeeklySchedule[currentScheduleDay]);
-  renderScheduleEditor();
+  block.addEventListener("mousedown",  onDown);
+  block.addEventListener("touchstart", onDown, { passive: false });
 }
 
 function saveScheduleDraft() {
@@ -3448,8 +3620,6 @@ function saveScheduleDraft() {
     closeScheduleModal();
     return;
   }
-
-  flushScheduleEditorValues();
 
   const room = state.config.rooms?.[scheduleRoomId];
   if (!room) {
@@ -3525,7 +3695,6 @@ function applyScheduleToSelectedRooms() {
     return;
   }
 
-  flushScheduleEditorValues();
   const copiedSchedule = normalizeWeeklySchedule(draftWeeklySchedule);
 
   for (const roomId of selectedIds) {
@@ -3540,63 +3709,23 @@ function applyScheduleToSelectedRooms() {
 }
 
 function bindScheduleEvents() {
-  if (els.scheduleClose) {
-    els.scheduleClose.addEventListener("click", closeScheduleModal);
-  }
-
-  if (els.scheduleCancel) {
-    els.scheduleCancel.addEventListener("click", closeScheduleModal);
-  }
-
-  if (els.scheduleAdd) {
-    els.scheduleAdd.addEventListener("click", addScheduleEntry);
-  }
-
-  if (els.scheduleSave) {
-    els.scheduleSave.addEventListener("click", saveScheduleDraft);
-  }
-
-  if (els.scheduleCopyRoomsBtn) {
-    els.scheduleCopyRoomsBtn.addEventListener("click", openScheduleCopyModal);
-  }
-
-  if (els.scheduleCopyClose) {
-    els.scheduleCopyClose.addEventListener("click", closeScheduleCopyModal);
-  }
-
-  if (els.scheduleCopyCancel) {
-    els.scheduleCopyCancel.addEventListener("click", closeScheduleCopyModal);
-  }
-
-  if (els.scheduleCopyApply) {
-    els.scheduleCopyApply.addEventListener("click", applyScheduleToSelectedRooms);
-  }
-
-  els.scheduleDayButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      flushScheduleEditorValues();
-      const entries = draftWeeklySchedule?.[currentScheduleDay];
-      if (Array.isArray(entries)) {
-        sortScheduleEntries(entries);
-      }
-      currentScheduleDay = btn.dataset.day;
-      renderScheduleEditor();
-    });
-  });
+  if (els.scheduleClose)        els.scheduleClose.addEventListener("click", closeScheduleModal);
+  if (els.scheduleCancel)       els.scheduleCancel.addEventListener("click", closeScheduleModal);
+  if (els.scheduleSave)         els.scheduleSave.addEventListener("click", saveScheduleDraft);
+  if (els.scheduleCopyRoomsBtn) els.scheduleCopyRoomsBtn.addEventListener("click", openScheduleCopyModal);
+  if (els.scheduleCopyClose)    els.scheduleCopyClose.addEventListener("click", closeScheduleCopyModal);
+  if (els.scheduleCopyCancel)   els.scheduleCopyCancel.addEventListener("click", closeScheduleCopyModal);
+  if (els.scheduleCopyApply)    els.scheduleCopyApply.addEventListener("click", applyScheduleToSelectedRooms);
 
   if (els.scheduleModal) {
-    els.scheduleModal.addEventListener("click", (event) => {
-      if (event.target === els.scheduleModal) {
-        closeScheduleModal();
-      }
+    els.scheduleModal.addEventListener("click", (e) => {
+      if (e.target === els.scheduleModal) closeScheduleModal();
     });
   }
 
   if (els.scheduleCopyModal) {
-    els.scheduleCopyModal.addEventListener("click", (event) => {
-      if (event.target === els.scheduleCopyModal) {
-        closeScheduleCopyModal();
-      }
+    els.scheduleCopyModal.addEventListener("click", (e) => {
+      if (e.target === els.scheduleCopyModal) closeScheduleCopyModal();
     });
   }
 }
