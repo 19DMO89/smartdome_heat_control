@@ -132,11 +132,13 @@ from .const import (
     CONF_ROOM_CLIMATE_FAN_MODE,
     CONF_ROOM_CLIMATE_PRESET,
     CONF_ROOM_CLIMATE_HVAC_MODE,
+    CONF_ROOM_CLIMATE_HEAT_BOOST,
     DEFAULT_ROOM_COOL_TARGET_DAY,
     DEFAULT_ROOM_COOL_TARGET_NIGHT,
     DEFAULT_ROOM_CLIMATE_FAN_MODE,
     DEFAULT_ROOM_CLIMATE_PRESET,
     DEFAULT_ROOM_CLIMATE_HVAC_MODE,
+    DEFAULT_ROOM_CLIMATE_HEAT_BOOST,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -872,6 +874,15 @@ class SmartHeatingController:
             if min_temp is not None:
                 return min_temp
         return 5.0
+
+    def _climate_max_temp(self, entity_id: str) -> float:
+        """Maximale Solltemperatur einer Klimaanlage lesen."""
+        state = self.hass.states.get(entity_id)
+        if state:
+            max_temp = self._safe_float(state.attributes.get("max_temp"))
+            if max_temp is not None:
+                return max_temp
+        return 30.0
 
     def _thermostat_target_step(self, entity_id: str) -> float:
         """Schrittweite des Thermostats lesen, fallback 0.5°C."""
@@ -1945,34 +1956,51 @@ class SmartHeatingController:
                             )
                     continue
                 elif use_climate:
-                    # Heizen via Klimaanlage: an nur im Zustand HEATING, sonst aus
-                    # statt nur den Sollwert zu senken. Fensterpause, Sensorausfall
-                    # und Außensperre setzen den Raumzustand bereits auf IDLE.
-                    if self._as_entity_id(room.get(CONF_ROOM_SENSOR)):
+                    heat_boost = bool(
+                        room.get(CONF_ROOM_CLIMATE_HEAT_BOOST, DEFAULT_ROOM_CLIMATE_HEAT_BOOST)
+                    )
+                    has_sensor = bool(self._as_entity_id(room.get(CONF_ROOM_SENSOR)))
+
+                    if heat_boost and has_sensor:
+                        # Boost-Modus: volle Leistung solange HEATING, sonst komplett aus.
+                        # Erfordert Raumsensor – die Zustandsmaschine übernimmt die Hysterese.
                         climate_heating = rstate.get("state") == ROOM_STATE_HEATING
+                        if climate_heating:
+                            if self._last_hvac_mode.get(climate_entity) != "heat":
+                                self._desired_targets.pop(climate_entity, None)
+                            self._set_hvac_mode_if_needed(climate_entity, "heat")
+                            self._set_temp_if_needed(
+                                climate_entity, self._climate_max_temp(climate_entity)
+                            )
+                        else:
+                            self._set_hvac_mode_if_needed(climate_entity, "off")
                     else:
+                        # Normaler use_climate-Modus: an nur im Zustand HEATING, sonst aus.
                         # Ohne Raumsensor regelt die Klimaanlage selbst auf den Sollwert.
-                        climate_heating = not (
-                            rstate.get("pause_active")
-                            or (
-                                rstate.get("outdoor_cutoff_active")
-                                and outdoor_minimum is None
+                        if has_sensor:
+                            climate_heating = rstate.get("state") == ROOM_STATE_HEATING
+                        else:
+                            climate_heating = not (
+                                rstate.get("pause_active")
+                                or (
+                                    rstate.get("outdoor_cutoff_active")
+                                    and outdoor_minimum is None
+                                )
                             )
-                        )
-                    if climate_heating:
-                        heat_target = float(
-                            rstate.get(
-                                "control_target",
-                                room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
+                        if climate_heating:
+                            heat_target = float(
+                                rstate.get(
+                                    "control_target",
+                                    room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
+                                )
                             )
-                        )
-                        # Beim Einschalten Sollwert garantiert erneut senden.
-                        if self._last_hvac_mode.get(climate_entity) != "heat":
-                            self._desired_targets.pop(climate_entity, None)
-                        self._set_hvac_mode_if_needed(climate_entity, "heat")
-                        self._set_temp_if_needed(climate_entity, heat_target)
-                    else:
-                        self._set_hvac_mode_if_needed(climate_entity, "off")
+                            # Beim Einschalten Sollwert garantiert erneut senden.
+                            if self._last_hvac_mode.get(climate_entity) != "heat":
+                                self._desired_targets.pop(climate_entity, None)
+                            self._set_hvac_mode_if_needed(climate_entity, "heat")
+                            self._set_temp_if_needed(climate_entity, heat_target)
+                        else:
+                            self._set_hvac_mode_if_needed(climate_entity, "off")
                     # Heizventile ausschalten (nicht die Klimaanlage selbst)
                     for thermostat in thermostats:
                         if thermostat != climate_entity:

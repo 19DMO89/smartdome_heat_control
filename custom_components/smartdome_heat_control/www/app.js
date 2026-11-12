@@ -273,6 +273,8 @@ const I18N = {
     room_climate_entity: "Air conditioning (climate entity)",
     room_use_climate: "Use AC for heating",
     room_use_climate_hint: "Uses the air conditioning unit for heating instead of the radiator valve.",
+    room_climate_heat_boost: "Full-power boost mode",
+    room_climate_heat_boost_hint: "Runs the AC at max temperature when heating is needed, then turns it completely off. Requires a room sensor.",
     section_room_cooling: "Cooling settings",
     room_cool_target_day: "Cooling target day (°C)",
     room_cool_target_night: "Cooling target night (°C)",
@@ -527,6 +529,8 @@ const I18N = {
     room_climate_entity: "Klimaanlage (Climate-Entity)",
     room_use_climate: "Klimaanlage zum Heizen nutzen",
     room_use_climate_hint: "Nutzt die Klimaanlage zum Heizen anstatt des Heizkörperventils.",
+    room_climate_heat_boost: "Volllast-Boost-Modus",
+    room_climate_heat_boost_hint: "Heizt mit maximaler Leistung solange Heizbedarf besteht, schaltet danach komplett ab. Erfordert einen Raumsensor.",
     section_room_cooling: "Kühleinstellungen",
     room_cool_target_day: "Kühlziel Tag (°C)",
     room_cool_target_night: "Kühlziel Nacht (°C)",
@@ -959,6 +963,7 @@ function normalizeRoom(roomId, room) {
     room_heating_mode: typeof room?.room_heating_mode === "string" ? room.room_heating_mode : "",
     climate_entity: typeof room?.climate_entity === "string" ? room.climate_entity : "",
     use_climate: room?.use_climate === true,
+    climate_heat_boost: room?.climate_heat_boost === true,
     cool_target_day: normalizeNumber(room?.cool_target_day, 23.0),
     cool_target_night: normalizeNumber(room?.cool_target_night, 24.0),
     climate_fan_mode: typeof room?.climate_fan_mode === "string" ? room.climate_fan_mode : "auto",
@@ -2115,6 +2120,15 @@ function createRoomCard(roomId, room) {
             <input class="room-use-climate" type="checkbox" ${room.use_climate ? "checked" : ""} />
           </div>
         </div>
+        <div class="toggle" style="margin-top:6px;">
+          <div class="toggle-text">
+            <strong>${escapeHtml(t("room_climate_heat_boost"))}</strong>
+            <span>${escapeHtml(t("room_climate_heat_boost_hint"))}</span>
+          </div>
+          <div class="toggle-right">
+            <input class="room-climate-heat-boost" type="checkbox" ${room.climate_heat_boost ? "checked" : ""} />
+          </div>
+        </div>
       </div>
       <div class="room-cooling-settings" style="margin-top:8px; display:none;">
         <div style="font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px;">❄️ ${escapeHtml(t("section_room_cooling"))}</div>
@@ -3058,6 +3072,7 @@ function collectFormState() {
       room_heating_mode: node.querySelector(".room-heating-mode")?.value || "",
       climate_entity: getEntityPickerValue(`room_${roomId}_climate_picker`) || "",
       use_climate: node.querySelector(".room-use-climate")?.checked === true,
+      climate_heat_boost: node.querySelector(".room-climate-heat-boost")?.checked === true,
       cool_target_day: normalizeNumber(node.querySelector(".room-cool-target-day")?.value, 23.0),
       cool_target_night: normalizeNumber(node.querySelector(".room-cool-target-night")?.value, 24.0),
       climate_fan_mode: node.querySelector(".room-climate-fan-mode")?.value || "auto",
@@ -3133,6 +3148,7 @@ function addRoom() {
     room_heating_mode: "",
     climate_entity: "",
     use_climate: false,
+    climate_heat_boost: false,
     cool_target_day: DEFAULTS.room_cool_target_day,
     cool_target_night: DEFAULTS.room_cool_target_night,
     climate_fan_mode: DEFAULTS.room_climate_fan_mode,
