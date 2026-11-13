@@ -273,6 +273,7 @@ const I18N = {
     room_climate_entity: "Air conditioning (climate entity)",
     room_use_climate: "Use AC for heating",
     room_use_climate_hint: "Uses the air conditioning unit for heating instead of the radiator valve.",
+    climate_live_off: "off",
     room_climate_heat_boost: "Full-power boost mode",
     room_climate_heat_boost_hint: "Runs the AC at max temperature when heating is needed, then turns it completely off. Requires a room sensor.",
     section_room_cooling: "Cooling settings",
@@ -529,6 +530,7 @@ const I18N = {
     room_climate_entity: "Klimaanlage (Climate-Entity)",
     room_use_climate: "Klimaanlage zum Heizen nutzen",
     room_use_climate_hint: "Nutzt die Klimaanlage zum Heizen anstatt des Heizkörperventils.",
+    climate_live_off: "aus",
     room_climate_heat_boost: "Volllast-Boost-Modus",
     room_climate_heat_boost_hint: "Heizt mit maximaler Leistung solange Heizbedarf besteht, schaltet danach komplett ab. Erfordert einen Raumsensor.",
     section_room_cooling: "Kühleinstellungen",
@@ -1108,6 +1110,27 @@ function getThermostatSetpoint(thermostatId) {
   if (!entity) return null;
   const val = Number(entity.attributes?.temperature);
   return Number.isFinite(val) ? val : null;
+}
+
+const CLIMATE_MODE_ICONS = {
+  heat: "🔥",
+  cool: "❄️",
+  dry: "💧",
+  fan_only: "🌀",
+  auto: "🔄",
+  heat_cool: "🔄",
+};
+
+// Betriebsart-Symbol + Solltemperatur der Klimaanlage, analog zum Heizkörperthermostat
+function getClimateLiveHtml(climateId) {
+  const entity = findState(climateId);
+  if (!entity) return "";
+  const mode = String(entity.state || "");
+  if (mode === "off") return escapeHtml(`⏻ ${t("climate_live_off")}`);
+  if (mode === "unavailable" || mode === "unknown") return escapeHtml(mode);
+  const icon = CLIMATE_MODE_ICONS[mode] ? `${CLIMATE_MODE_ICONS[mode]} ` : "";
+  const setpoint = getThermostatSetpoint(climateId);
+  return `${icon}${setpoint !== null ? escapeHtml(formatTemperature(setpoint)) : escapeHtml(mode)}`;
 }
 
 function isThermostatHeating(thermostatId) {
@@ -2096,7 +2119,10 @@ function createRoomCard(roomId, room) {
       <div style="font-size:13px; font-weight:600; color:var(--muted); margin-bottom:8px;">🌡️ ${escapeHtml(t("room_climate_entity"))}</div>
       <div class="room-grid" style="margin:0;">
         <div class="field full">
-          <label>${escapeHtml(t("room_climate_entity"))}</label>
+          <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>${escapeHtml(t("room_climate_entity"))}</span>
+            <span class="label-live room-climate-live"></span>
+          </label>
           <div class="room-climate-entity-picker"></div>
         </div>
       </div>
@@ -2911,6 +2937,19 @@ function updateRoomLiveState() {
       } else {
         thermostatLive.textContent = "";
         delete thermostatLive.dataset.entity;
+      }
+    }
+
+    // live climate label: mode + setpoint of the air conditioner
+    const climateLive = node.querySelector(".room-climate-live");
+    if (climateLive) {
+      const html = room.climate_entity ? getClimateLiveHtml(room.climate_entity) : "";
+      if (html) {
+        climateLive.innerHTML = html;
+        climateLive.dataset.entity = room.climate_entity;
+      } else {
+        climateLive.textContent = "";
+        delete climateLive.dataset.entity;
       }
     }
 
