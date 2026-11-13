@@ -3475,7 +3475,7 @@ function renderCalBlocks(day, col) {
     const blockH   = Math.max(calMinToPx(endMin - startMin), 22);
 
     const block = document.createElement("div");
-    block.className = "schedule-block";
+    block.className = "schedule-block" + (blockH < 56 ? " compact" : "");
     block.style.top    = `${calMinToPx(startMin)}px`;
     block.style.height = `${blockH}px`;
 
@@ -3494,7 +3494,16 @@ function renderCalBlocks(day, col) {
     tempInput.max   = "35";
     tempInput.step  = "0.5";
     tempInput.value = String(entry.temperature);
-    tempInput.addEventListener("change", () => { entry.temperature = parseFloat(tempInput.value) || 20; });
+    tempInput.inputMode = "decimal";
+    tempInput.addEventListener("input", () => {
+      const v = parseFloat(tempInput.value);
+      if (Number.isFinite(v)) entry.temperature = v;
+    });
+    tempInput.addEventListener("change", () => {
+      const v = parseFloat(tempInput.value);
+      entry.temperature = Number.isFinite(v) ? Math.min(35, Math.max(5, v)) : 20;
+      tempInput.value = String(entry.temperature);
+    });
     tempInput.addEventListener("click",      (e) => e.stopPropagation());
     tempInput.addEventListener("mousedown",  (e) => e.stopPropagation());
     tempInput.addEventListener("touchstart", (e) => e.stopPropagation());
