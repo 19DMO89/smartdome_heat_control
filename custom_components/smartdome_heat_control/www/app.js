@@ -4031,7 +4031,8 @@ async function setupLiveUpdates() {
 }
 
 // ─── −/+ stepper for temperature inputs ──────────────────────────────────────
-const STEPPER_SELECTOR = 'input[type="number"][step="0.5"]';
+const STEPPER_SELECTOR =
+  'input[type="number"][step="0.5"]:not(.schedule-block-temp-input)';
 
 function enhanceNumberStepper(input) {
   if (input.closest(".num-stepper")) return;
