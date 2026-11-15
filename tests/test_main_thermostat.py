@@ -79,3 +79,20 @@ def test_restwaerme_nur_mit_include_residual(make_controller):
     hold = {"state": controller_module.ROOM_STATE_RESIDUAL_HOLD}
     assert not ctrl._room_needs_heat(room, hold)
     assert ctrl._room_needs_heat(room, hold, include_residual=True)
+
+
+def test_klima_raum_fordert_auch_im_zustand_heizt_nicht_an(make_controller):
+    ctrl = make_controller()
+    ac_room = _room(
+        **{
+            const.CONF_ROOM_SENSOR: "sensor.klo",
+            const.CONF_ROOM_CLIMATE_ENTITY: "climate.ac",
+            const.CONF_ROOM_USE_CLIMATE: True,
+        }
+    )
+    heating = {"state": controller_module.ROOM_STATE_HEATING}
+    assert not ctrl._room_needs_heat(ac_room, heating)
+    assert not ctrl._room_needs_heat(ac_room, heating, include_residual=True)
+    # Klimaanlage eingetragen, aber nicht zum Heizen genutzt: normale Anforderung.
+    ac_room[const.CONF_ROOM_USE_CLIMATE] = False
+    assert ctrl._room_needs_heat(ac_room, heating)

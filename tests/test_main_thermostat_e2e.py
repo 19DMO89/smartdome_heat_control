@@ -131,3 +131,27 @@ def test_uebernommener_sollwert_wird_nicht_wiederholt(date_clock):
     date_clock.advance(const.MAIN_RESEND_INTERVAL + 60)
     ctrl._evaluate()
     assert _sent(hass, WALL) == [25.0]
+
+
+def _use_ac_in_klo(ctrl, hass):
+    klo = ctrl.config[const.CONF_ROOMS]["klo"]
+    klo[const.CONF_ROOM_CLIMATE_ENTITY] = "climate.klo_ac"
+    klo[const.CONF_ROOM_USE_CLIMATE] = True
+    _state(hass, "climate.klo_ac", "off", temperature=20, min_temp=16, max_temp=30)
+
+
+def test_klima_raum_schaltet_hauptthermostat_nicht_ein(date_clock):
+    ctrl, hass = _controller()
+    _use_ac_in_klo(ctrl, hass)
+    ctrl._evaluate()
+    assert ctrl._last_room_states["klo"]["state"] == controller_module.ROOM_STATE_HEATING
+    assert _sent(hass, WALL) == [5.0]
+    assert _sent(hass, "climate.klo_ac") == [21.0]
+
+
+def test_heizkoerper_raum_schaltet_trotz_klima_raum_ein(date_clock):
+    ctrl, hass = _controller()
+    _use_ac_in_klo(ctrl, hass)
+    _state(hass, "sensor.wz_temp", "19.0")  # Wohnzimmer braucht Wärme über Heizkörper
+    ctrl._evaluate()
+    assert _sent(hass, WALL) == [25.0]

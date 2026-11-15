@@ -898,6 +898,12 @@ class SmartHeatingController:
         Ventil selbst (Zustand bleibt idle); heizt das Ventil, braucht der Raum
         trotzdem Wärme vom Heizkreis.
         """
+        # Heizt der Raum über die Klimaanlage, bleiben seine Ventile zu: Er nimmt
+        # dem Heizkreis keine Wärme ab und fordert deshalb auch keine an.
+        if self._as_entity_id(room.get(CONF_ROOM_CLIMATE_ENTITY, "")) and room.get(
+            CONF_ROOM_USE_CLIMATE, False
+        ):
+            return False
         states = (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD) if include_residual else (ROOM_STATE_HEATING,)
         if rstate.get("state") in states:
             return True
@@ -905,10 +911,6 @@ class SmartHeatingController:
             self._as_entity_id(room.get(CONF_ROOM_SENSOR))
             or rstate.get("pause_active")
             or rstate.get("outdoor_cutoff_active")
-            or (
-                self._as_entity_id(room.get(CONF_ROOM_CLIMATE_ENTITY, ""))
-                and room.get(CONF_ROOM_USE_CLIMATE, False)
-            )
         ):
             return False
         for thermostat in self._room_thermostats(room):
