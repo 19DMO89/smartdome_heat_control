@@ -140,6 +140,7 @@ from .const import (
     DEFAULT_ROOM_CLIMATE_HVAC_MODE,
     DEFAULT_ROOM_CLIMATE_HEAT_BOOST,
     MIN_MAIN_BOOST_DELTA,
+    MAIN_RESEND_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -942,6 +943,26 @@ class SmartHeatingController:
         base = max(readings) if readings else fallback_target
         target = base + max(boost_delta, MIN_MAIN_BOOST_DELTA)
         return min(target, self._climate_max_temp(entity_id))
+
+    def _resend_if_main_target_lost(self, entity_id: str) -> None:
+        """Sollwert des Hauptthermostats erneut senden, wenn das Gerät ihn verloren hat.
+
+        Das Hauptthermostat gehört der Integration. Weicht sein gemeldeter
+        Sollwert vom zuletzt gesendeten ab (eigenes Zeitprogramm, Verstellen
+        am Gerät), wird der Befehl frühestens nach ``MAIN_RESEND_INTERVAL``
+        wiederholt.
+        """
+        desired = self._desired_targets.get(entity_id)
+        state = self.hass.states.get(entity_id)
+        if desired is None or state is None:
+            return
+        observed = self._safe_float(state.attributes.get("temperature"))
+        if observed is None or abs(observed - desired) < RECONCILE_TOLERANCE:
+            return
+        last_sent = self._last_command_sent_at.get(entity_id, 0.0)
+        if dt_util.now().timestamp() - last_sent < MAIN_RESEND_INTERVAL:
+            return
+        self._desired_targets.pop(entity_id, None)
 
     def _thermostat_target_step(self, entity_id: str) -> float:
         """Schrittweite des Thermostats lesen, fallback 0.5°C."""
@@ -1908,18 +1929,42 @@ class SmartHeatingController:
                     else:
                         # Idle: ganz herunter auf die Mindesttemperatur.
                         circuit_target = self._thermostat_min_temp(ct)
+                    self._resend_if_main_target_lost(ct)
                     self._set_temp_if_needed(ct, circuit_target)
-        else:
-            # Single-circuit fallback: use global main_thermostat or main_switch
+
+        # Globales Hauptthermostat: zuständig für alle Räume ohne (existierenden)
+        # Heizkreis ("Kein Kreis (global)"), auch wenn daneben Heizkreise angelegt sind.
+        multi_circuit = bool(circuits) and isinstance(circuits, dict)
+        circuit_outputs: set[str] = set()
+        if multi_circuit:
+            for circuit in circuits.values():
+                if not isinstance(circuit, dict):
+                    continue
+                if circuit.get(CONF_CIRCUIT_CONTROL_TYPE, "thermostat") == CONTROL_TYPE_SWITCH:
+                    output = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_SWITCH))
+                else:
+                    output = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
+                if output:
+                    circuit_outputs.add(output)
+        global_room_states = {
+            rid: rs
+            for rid, rs in room_states.items()
+            if not multi_circuit or rooms[rid].get(CONF_ROOM_CIRCUIT_ID) not in circuits
+        }
+
+        if global_room_states or not multi_circuit:
             any_room_needs_heat = any(
                 self._room_needs_heat(rooms[rid], rs)
-                for rid, rs in room_states.items()
+                for rid, rs in global_room_states.items()
             )
             main_control_type = self.config.get(CONF_MAIN_CONTROL_TYPE, "thermostat")
             if main_control_type == CONTROL_TYPE_SWITCH:
                 main_entity = self._as_entity_id(self.config.get(CONF_MAIN_SWITCH))
             else:
                 main_entity = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+            if main_entity in circuit_outputs:
+                # Wird bereits als Heizkreis gesteuert, nicht doppelt ansteuern.
+                main_entity = None
             if main_entity and main_entity not in room_managed_thermostats:
                 # Übergang heating → idle: _desired_targets löschen damit
                 # Befehl garantiert gesendet wird.
@@ -1938,11 +1983,12 @@ class SmartHeatingController:
                             main_entity,
                             self._as_entity_id(self.config.get(CONF_MAIN_SENSOR)),
                             boost_delta,
-                            max(rs["target"] for rs in room_states.values()),
+                            max(rs["target"] for rs in global_room_states.values()),
                         )
                     else:
                         # Idle: ganz herunter auf die Mindesttemperatur.
                         main_target = self._thermostat_min_temp(main_entity)
+                    self._resend_if_main_target_lost(main_entity)
                     self._set_temp_if_needed(main_entity, main_target)
             elif (
                 main_entity
@@ -1953,7 +1999,7 @@ class SmartHeatingController:
                     main_entity,
                     self._as_entity_id(self.config.get(CONF_MAIN_SENSOR)),
                     boost_delta,
-                    max(rs["target"] for rs in room_states.values()),
+                    max(rs["target"] for rs in global_room_states.values()),
                 )
 
         for room_id, room in rooms.items():
