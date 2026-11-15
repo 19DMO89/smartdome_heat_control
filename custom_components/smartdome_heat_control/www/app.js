@@ -2828,6 +2828,8 @@ function syncFormsWithConfig() {
   entityPickerState.clear();
   renderGlobalSettings();
   renderRooms();
+  // Live-Werte neben den Entitäten (Sollwert, Ist-Temperatur) wieder füllen.
+  updateRoomLiveState();
 }
 
 function openNewRoomModal() {
