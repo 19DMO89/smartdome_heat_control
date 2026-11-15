@@ -19,12 +19,14 @@ from .const import (
     CONF_AWAY_ENABLED,
     CONF_CIRCUIT_CONTROL_TYPE,
     CONF_CIRCUIT_ENABLED,
+    CONF_CIRCUIT_IDLE_TEMPERATURE,
     CONF_CIRCUIT_LABEL,
     CONF_CIRCUIT_MAIN_SENSOR,
     CONF_CIRCUIT_MAIN_SWITCH,
     CONF_CIRCUIT_MAIN_THERMOSTAT,
     CONF_CIRCUITS,
     CONF_MAIN_CONTROL_TYPE,
+    CONF_MAIN_IDLE_TEMPERATURE,
     CONF_MAIN_SWITCH,
     CONTROL_TYPE_THERMOSTAT,
     DEFAULT_MAIN_CONTROL_TYPE,
@@ -442,6 +444,16 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
     return normalized
 
 
+def _optional_temperature(value: Any) -> float | None:
+    """Optionale Temperatur: leer/ungültig → None (= automatisch)."""
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _normalize_circuits(circuits: Any) -> dict[str, dict[str, Any]]:
     """Heizkreise normalisieren."""
     if not isinstance(circuits, dict):
@@ -457,6 +469,9 @@ def _normalize_circuits(circuits: Any) -> dict[str, dict[str, Any]]:
             CONF_CIRCUIT_MAIN_THERMOSTAT: circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT, ""),
             CONF_CIRCUIT_MAIN_SWITCH: circuit.get(CONF_CIRCUIT_MAIN_SWITCH, ""),
             CONF_CIRCUIT_MAIN_SENSOR: circuit.get(CONF_CIRCUIT_MAIN_SENSOR, ""),
+            CONF_CIRCUIT_IDLE_TEMPERATURE: _optional_temperature(
+                circuit.get(CONF_CIRCUIT_IDLE_TEMPERATURE)
+            ),
             CONF_CIRCUIT_ENABLED: bool(circuit.get(CONF_CIRCUIT_ENABLED, True)),
         }
     return normalized
@@ -471,6 +486,9 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault(DATA_ENABLED, DEFAULT_ENABLED)
     normalized.setdefault(CONF_MAIN_CONTROL_TYPE, DEFAULT_MAIN_CONTROL_TYPE)
     normalized.setdefault(CONF_MAIN_SWITCH, "")
+    normalized[CONF_MAIN_IDLE_TEMPERATURE] = _optional_temperature(
+        normalized.get(CONF_MAIN_IDLE_TEMPERATURE)
+    )
     normalized.setdefault(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)
     normalized.setdefault(CONF_VACATION_TEMPERATURE, DEFAULT_VACATION_TEMPERATURE)
     normalized.setdefault(CONF_AWAY_ENABLED, DEFAULT_AWAY_ENABLED)

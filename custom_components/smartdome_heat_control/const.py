@@ -20,12 +20,15 @@ SERVICE_RELOAD = "reload"
 # Globale Config-Keys
 CONF_MAIN_THERMOSTAT = "main_thermostat"
 CONF_MAIN_SENSOR = "main_sensor"
+# Sollwert des Hauptthermostats ohne Wärmebedarf; None = Mindesttemperatur des Geräts.
+CONF_MAIN_IDLE_TEMPERATURE = "main_idle_temperature"
 
 # Heizkreise
 CONF_CIRCUITS = "circuits"
 CONF_CIRCUIT_LABEL = "label"
 CONF_CIRCUIT_MAIN_THERMOSTAT = "main_thermostat"
 CONF_CIRCUIT_MAIN_SENSOR = "main_sensor"
+CONF_CIRCUIT_IDLE_TEMPERATURE = "idle_temperature"
 CONF_CIRCUIT_ENABLED = "enabled"
 CONF_ROOM_CIRCUIT_ID = "circuit_id"
 CONF_BOOST_DELTA = "boost_delta"

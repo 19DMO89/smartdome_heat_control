@@ -112,6 +112,36 @@ def test_ohne_globale_raeume_bleibt_hauptthermostat_unberuehrt(date_clock):
     assert _sent(hass, WALL) == []
 
 
+def test_ohne_waermebedarf_gilt_eingestellte_leerlauf_temperatur(date_clock):
+    ctrl, hass = _controller()
+    ctrl.config[const.CONF_MAIN_IDLE_TEMPERATURE] = 16.0
+    _state(hass, "sensor.klo_temp", "22.0")  # kein Raum braucht Wärme
+    ctrl._evaluate()
+    assert _sent(hass, WALL) == [16.0]
+
+
+def test_leerlauf_temperatur_aendert_heizen_nicht(date_clock):
+    ctrl, hass = _controller()
+    ctrl.config[const.CONF_MAIN_IDLE_TEMPERATURE] = 16.0
+    ctrl._evaluate()
+    assert _sent(hass, WALL) == [25.0]
+
+
+def test_heizkreis_nutzt_eigene_leerlauf_temperatur(date_clock):
+    circuits = {
+        "og": {
+            "label": "OG",
+            "main_thermostat": CIRCUIT_VALVE,
+            const.CONF_CIRCUIT_IDLE_TEMPERATURE: 15.0,
+        }
+    }
+    ctrl, hass = _controller(circuits=circuits, klo_circuit="og")
+    _state(hass, "sensor.klo_temp", "22.0")  # Kreis braucht keine Wärme
+    ctrl._evaluate()
+    assert _sent(hass, CIRCUIT_VALVE) == [15.0]
+    assert _sent(hass, WALL) == [5.0]  # global ohne Einstellung: Mindesttemperatur
+
+
 def test_verlorener_sollwert_wird_nach_wartezeit_erneut_gesendet(date_clock):
     ctrl, hass = _controller()
     ctrl._evaluate()

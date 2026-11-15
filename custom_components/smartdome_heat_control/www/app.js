@@ -139,6 +139,9 @@ const I18N = {
     main_thermostat: "Heating pump controller (climate entity)",
     main_switch: "Heating pump controller (switch entity)",
     main_sensor: "Temperature sensor",
+    main_idle_temperature: "Temperature without heat demand (°C)",
+    idle_temperature_placeholder: "Auto",
+    idle_temperature_hint: "Leave empty: minimum temperature of the thermostat.",
     boost_delta: "Boost delta (°C)",
     tolerance: "Tolerance (°C)",
     heating_mode: "Heating mode",
@@ -396,6 +399,9 @@ const I18N = {
     main_thermostat: "Heizpumpensteuerung (Climate-Entity)",
     main_switch: "Heizpumpensteuerung (Switch-Entity)",
     main_sensor: "Temperatursensor",
+    main_idle_temperature: "Temperatur ohne Heizbedarf (°C)",
+    idle_temperature_placeholder: "Auto",
+    idle_temperature_hint: "Leer lassen: Mindesttemperatur des Thermostats.",
     boost_delta: "Boost-Delta (°C)",
     tolerance: "Toleranz (°C)",
     heating_mode: "Heizmodus",
@@ -573,6 +579,7 @@ const DEFAULTS = {
   main_thermostat: "",
   main_switch: "",
   main_sensor: "",
+  main_idle_temperature: null,
   boost_delta: 2.0,
   tolerance: 0.5,
   heating_mode: "balanced",
@@ -654,6 +661,8 @@ function initEls() {
     mainSwitchPicker: document.getElementById("main_switch_picker"),
     mainSensorField: document.getElementById("main_sensor_field"),
     mainSensorPicker: document.getElementById("main_sensor_picker"),
+    mainIdleTemperatureField: document.getElementById("main_idle_temperature_field"),
+    mainIdleTemperature: document.getElementById("main_idle_temperature"),
     boostDelta: document.getElementById("boost_delta"),
     tolerance: document.getElementById("tolerance"),
     modePickerContainer: document.getElementById("heating_mode_picker"),
@@ -857,6 +866,13 @@ function normalizeNumber(value, fallback) {
   return Number.isFinite(num) ? num : fallback;
 }
 
+// Optionale Zahl: leer/ungültig → null (= automatisch).
+function normalizeOptionalNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 function normalizeHeatingMode(value) {
   if (typeof value !== "string") {
     return DEFAULTS.heating_mode;
@@ -980,6 +996,7 @@ function normalizeCircuit(circuitId, circuit) {
       typeof circuit?.main_switch === "string" ? circuit.main_switch : "",
     main_sensor:
       typeof circuit?.main_sensor === "string" ? circuit.main_sensor : "",
+    idle_temperature: normalizeOptionalNumber(circuit?.idle_temperature),
     enabled: circuit?.enabled !== false,
   };
 }
@@ -998,6 +1015,7 @@ function normalizeConfig(input) {
   cfg.main_switch =
     typeof cfg.main_switch === "string" ? cfg.main_switch : "";
   cfg.main_sensor = typeof cfg.main_sensor === "string" ? cfg.main_sensor : "";
+  cfg.main_idle_temperature = normalizeOptionalNumber(cfg.main_idle_temperature);
   cfg.boost_delta = normalizeNumber(cfg.boost_delta, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(cfg.tolerance, DEFAULTS.tolerance);
   cfg.heating_mode = normalizeHeatingMode(cfg.heating_mode);
@@ -1317,6 +1335,7 @@ function addCircuit() {
     main_thermostat: "",
     main_switch: "",
     main_sensor: "",
+    idle_temperature: null,
     enabled: true,
   };
   pendingCircuits = { ...state.config.circuits };
@@ -1365,6 +1384,19 @@ function createCircuitCard(circuitId, circuit) {
         <label>${escapeHtml(t("circuit_sensor"))}</label>
         <div class="circuit-sensor-picker"></div>
       </div>
+      <div class="field circuit-idle-field"${circuit.control_type === "switch" ? ' style="display:none;"' : ""}>
+        <label>${escapeHtml(t("main_idle_temperature"))}</label>
+        <input
+          class="circuit-idle-temperature"
+          type="number"
+          min="5"
+          max="30"
+          step="0.5"
+          placeholder="${escapeHtml(t("idle_temperature_placeholder"))}"
+          value="${circuit.idle_temperature ?? ""}"
+        />
+        <div class="footer-note" style="margin-top:6px;">${escapeHtml(t("idle_temperature_hint"))}</div>
+      </div>
     </div>
   `;
 
@@ -1374,6 +1406,7 @@ function createCircuitCard(circuitId, circuit) {
     card.querySelector(".circuit-thermostat-field").style.display = isSwitch ? "none" : "";
     card.querySelector(".circuit-switch-field").style.display = isSwitch ? "" : "none";
     card.querySelector(".circuit-sensor-field").style.display = isSwitch ? "none" : "";
+    card.querySelector(".circuit-idle-field").style.display = isSwitch ? "none" : "";
   });
 
   const enabledCheckbox = card.querySelector(".circuit-enabled-checkbox");
@@ -1760,6 +1793,9 @@ function updateMainControlTypeVisibility(type) {
   if (els.mainThermostatField) els.mainThermostatField.style.display = isSwitch ? "none" : "";
   if (els.mainSwitchField) els.mainSwitchField.style.display = isSwitch ? "" : "none";
   if (els.mainSensorField) els.mainSensorField.style.display = isSwitch ? "none" : "";
+  if (els.mainIdleTemperatureField) {
+    els.mainIdleTemperatureField.style.display = isSwitch ? "none" : "";
+  }
 }
 
 function renderGlobalSettings() {
@@ -1767,6 +1803,10 @@ function renderGlobalSettings() {
 
   els.enabled.checked = cfg.enabled;
   els.boostDelta.value = String(cfg.boost_delta);
+  if (els.mainIdleTemperature) {
+    els.mainIdleTemperature.value =
+      cfg.main_idle_temperature === null ? "" : String(cfg.main_idle_temperature);
+  }
   els.tolerance.value = String(cfg.tolerance);
   els.nightStart.value = cfg.night_start;
   els.morningBoostStart.value = cfg.morning_boost_start;
@@ -3013,6 +3053,9 @@ function collectFormState() {
   cfg.main_thermostat = getEntityPickerValue("global_main_thermostat_picker");
   cfg.main_switch = getEntityPickerValue("global_main_switch_picker");
   cfg.main_sensor = getEntityPickerValue("global_main_sensor_picker");
+  if (els.mainIdleTemperature) {
+    cfg.main_idle_temperature = normalizeOptionalNumber(els.mainIdleTemperature.value);
+  }
   cfg.boost_delta = normalizeNumber(els.boostDelta.value, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(els.tolerance.value, DEFAULTS.tolerance);
   cfg.heating_mode = normalizeHeatingMode(getModePickerValue());
@@ -3146,6 +3189,7 @@ function collectFormState() {
         getEntityPickerValue(`circuit_${circuitId}_switch_picker`) || "",
       main_sensor:
         getEntityPickerValue(`circuit_${circuitId}_sensor_picker`) || "",
+      idle_temperature: node.querySelector(".circuit-idle-temperature")?.value ?? "",
       enabled: node.querySelector(".circuit-enabled-checkbox")?.checked !== false,
     });
   }

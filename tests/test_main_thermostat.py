@@ -41,6 +41,32 @@ def test_deckelung_auf_maximaltemperatur(make_controller):
     assert _target(ctrl, sensor_temp=29.0, own_temp=29.0, max_temp=30.0) == 30.0
 
 
+def test_leerlauf_ohne_einstellung_ist_mindesttemperatur(make_controller):
+    ctrl = make_controller()
+    ctrl.hass.states.set(MAIN, None, min_temp=7.0, max_temp=30.0)
+    assert ctrl._main_idle_target(MAIN, None) == 7.0
+    assert ctrl._main_idle_target(MAIN, "") == 7.0
+    ctrl.hass.states.set(MAIN, None)
+    assert ctrl._main_idle_target(MAIN, None) == 5.0
+
+
+def test_eingestellte_leerlauf_temperatur_gilt(make_controller):
+    ctrl = make_controller()
+    ctrl.hass.states.set(MAIN, None, min_temp=5.0, max_temp=30.0)
+    assert ctrl._main_idle_target(MAIN, 16.0) == 16.0
+    assert ctrl._main_idle_target(MAIN, "17.5") == 17.5
+    # Gerät ohne gemeldeten Bereich: Wert unverändert.
+    ctrl.hass.states.set(MAIN, None)
+    assert ctrl._main_idle_target(MAIN, 4.0) == 4.0
+
+
+def test_leerlauf_temperatur_bleibt_im_bereich_des_geraets(make_controller):
+    ctrl = make_controller()
+    ctrl.hass.states.set(MAIN, None, min_temp=10.0, max_temp=28.0)
+    assert ctrl._main_idle_target(MAIN, 6.0) == 10.0
+    assert ctrl._main_idle_target(MAIN, 35.0) == 28.0
+
+
 def _room(**extra):
     return {const.CONF_ROOM_THERMOSTAT: VALVE, **extra}
 

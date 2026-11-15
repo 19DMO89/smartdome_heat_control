@@ -52,12 +52,14 @@ from .const import (
     DEFAULT_OUTDOOR_TEMP_CUTOFF_ENABLED,
     CONF_CIRCUIT_CONTROL_TYPE,
     CONF_CIRCUIT_ENABLED,
+    CONF_CIRCUIT_IDLE_TEMPERATURE,
     CONF_CIRCUIT_LABEL,
     CONF_CIRCUIT_MAIN_SENSOR,
     CONF_CIRCUIT_MAIN_SWITCH,
     CONF_CIRCUIT_MAIN_THERMOSTAT,
     CONF_CIRCUITS,
     CONF_MAIN_CONTROL_TYPE,
+    CONF_MAIN_IDLE_TEMPERATURE,
     CONF_MAIN_SWITCH,
     CONTROL_TYPE_SWITCH,
     CONF_ENERGY_RESIDUAL_HEAT_HOLD,
@@ -877,6 +879,26 @@ class SmartHeatingController:
                 return min_temp
         return 5.0
 
+    def _main_idle_target(self, entity_id: str, configured: Any) -> float:
+        """Sollwert des Hauptthermostats/Heizkreises ohne Wärmebedarf.
+
+        Ist eine Leerlauf-Temperatur eingestellt, gilt diese (begrenzt auf den
+        vom Gerät gemeldeten Bereich, sonst lehnt Home Assistant den Befehl ab).
+        Ohne Einstellung: Mindesttemperatur des Geräts.
+        """
+        idle = self._safe_float(configured)
+        if idle is None:
+            return self._thermostat_min_temp(entity_id)
+        state = self.hass.states.get(entity_id)
+        if state:
+            min_temp = self._safe_float(state.attributes.get("min_temp"))
+            max_temp = self._safe_float(state.attributes.get("max_temp"))
+            if min_temp is not None:
+                idle = max(idle, min_temp)
+            if max_temp is not None:
+                idle = min(idle, max_temp)
+        return idle
+
     def _climate_max_temp(self, entity_id: str) -> float:
         """Maximale Solltemperatur einer Klimaanlage lesen."""
         state = self.hass.states.get(entity_id)
@@ -1511,12 +1533,18 @@ class SmartHeatingController:
                 ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
                 if not ct:
                     continue
-                self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
+                self._set_temp_if_needed(
+                    ct,
+                    self._main_idle_target(ct, circuit.get(CONF_CIRCUIT_IDLE_TEMPERATURE)),
+                )
         else:
             main_thermostat = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
             if main_thermostat:
                 self._set_temp_if_needed(
-                    main_thermostat, self._thermostat_min_temp(main_thermostat)
+                    main_thermostat,
+                    self._main_idle_target(
+                        main_thermostat, self.config.get(CONF_MAIN_IDLE_TEMPERATURE)
+                    ),
                 )
 
     def _update_room_state(
@@ -1858,7 +1886,12 @@ class SmartHeatingController:
                         if circuit_control_type == CONTROL_TYPE_SWITCH:
                             self._turn_switch_if_needed(ct, False)
                         else:
-                            self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
+                            self._set_temp_if_needed(
+                                ct,
+                                self._main_idle_target(
+                                    ct, circuit.get(CONF_CIRCUIT_IDLE_TEMPERATURE)
+                                ),
+                            )
                     continue
                 circuit_control_type = circuit.get(CONF_CIRCUIT_CONTROL_TYPE, "thermostat")
                 if circuit_control_type == CONTROL_TYPE_SWITCH:
@@ -1884,12 +1917,17 @@ class SmartHeatingController:
                         )
                     continue
                 if not circuit_room_states:
-                    # Keine Räume in diesem Kreis → Schalten ausschalten / min_temp
+                    # Keine Räume in diesem Kreis → Schalter aus / Leerlauf-Temperatur
                     self._desired_targets.pop(ct, None)
                     if circuit_control_type == CONTROL_TYPE_SWITCH:
                         self._turn_switch_if_needed(ct, False)
                     else:
-                        self._set_temp_if_needed(ct, self._thermostat_min_temp(ct))
+                        self._set_temp_if_needed(
+                            ct,
+                            self._main_idle_target(
+                                ct, circuit.get(CONF_CIRCUIT_IDLE_TEMPERATURE)
+                            ),
+                        )
                     continue
                 # RESIDUAL_HOLD zählt ebenfalls als "braucht Wärme":
                 # Im Energy-Modus halten Räume den Heizkreis nach Zielerreichung
@@ -1929,8 +1967,10 @@ class SmartHeatingController:
                             max(rs["target"] for rs in circuit_room_states.values()),
                         )
                     else:
-                        # Idle: ganz herunter auf die Mindesttemperatur.
-                        circuit_target = self._thermostat_min_temp(ct)
+                        # Idle: eingestellte Leerlauf-Temperatur, sonst Mindesttemperatur.
+                        circuit_target = self._main_idle_target(
+                            ct, circuit.get(CONF_CIRCUIT_IDLE_TEMPERATURE)
+                        )
                     self._resend_if_main_target_lost(ct)
                     self._set_temp_if_needed(ct, circuit_target)
 
@@ -1988,8 +2028,10 @@ class SmartHeatingController:
                             max(rs["target"] for rs in global_room_states.values()),
                         )
                     else:
-                        # Idle: ganz herunter auf die Mindesttemperatur.
-                        main_target = self._thermostat_min_temp(main_entity)
+                        # Idle: eingestellte Leerlauf-Temperatur, sonst Mindesttemperatur.
+                        main_target = self._main_idle_target(
+                            main_entity, self.config.get(CONF_MAIN_IDLE_TEMPERATURE)
+                        )
                     self._resend_if_main_target_lost(main_entity)
                     self._set_temp_if_needed(main_entity, main_target)
             elif (

@@ -1684,6 +1684,21 @@
                 </label>
                 <div id="main_sensor_picker"></div>
               </div>
+              <div class="field" id="main_idle_temperature_field">
+                <label for="main_idle_temperature" data-i18n="main_idle_temperature">Temperatur ohne Heizbedarf (°C)</label>
+                <input
+                  id="main_idle_temperature"
+                  type="number"
+                  min="5"
+                  max="30"
+                  step="0.5"
+                  placeholder="Auto"
+                  data-i18n-placeholder="idle_temperature_placeholder"
+                />
+                <div class="footer-note" style="margin-top:6px;" data-i18n="idle_temperature_hint">
+                  Leer lassen: Mindesttemperatur des Thermostats.
+                </div>
+              </div>
             </div>
           </div>
 
