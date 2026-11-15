@@ -885,6 +885,37 @@ class SmartHeatingController:
                 return max_temp
         return 30.0
 
+    def _room_needs_heat(
+        self,
+        room: dict[str, Any],
+        rstate: dict[str, Any],
+        include_residual: bool = False,
+    ) -> bool:
+        """Fordert der Raum Wärme vom Hauptthermostat/Heizkreis an?
+
+        Räume mit Sensor: Zustandsmaschine. Räume ohne Sensor regeln über das
+        Ventil selbst (Zustand bleibt idle); heizt das Ventil, braucht der Raum
+        trotzdem Wärme vom Heizkreis.
+        """
+        states = (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD) if include_residual else (ROOM_STATE_HEATING,)
+        if rstate.get("state") in states:
+            return True
+        if (
+            self._as_entity_id(room.get(CONF_ROOM_SENSOR))
+            or rstate.get("pause_active")
+            or rstate.get("outdoor_cutoff_active")
+            or (
+                self._as_entity_id(room.get(CONF_ROOM_CLIMATE_ENTITY, ""))
+                and room.get(CONF_ROOM_USE_CLIMATE, False)
+            )
+        ):
+            return False
+        for thermostat in self._room_thermostats(room):
+            thermostat_state = self.hass.states.get(thermostat)
+            if thermostat_state and thermostat_state.attributes.get("hvac_action") == "heating":
+                return True
+        return False
+
     def _main_heating_target(
         self,
         entity_id: str,
@@ -1819,8 +1850,8 @@ class SmartHeatingController:
                 }
                 if ct in room_managed_thermostats:
                     if circuit_control_type != CONTROL_TYPE_SWITCH and any(
-                        rs["state"] in (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD)
-                        for rs in circuit_room_states.values()
+                        self._room_needs_heat(rooms[rid], rs, include_residual=True)
+                        for rid, rs in circuit_room_states.items()
                     ):
                         main_heat_overrides[ct] = self._main_heating_target(
                             ct,
@@ -1841,8 +1872,8 @@ class SmartHeatingController:
                 # Im Energy-Modus halten Räume den Heizkreis nach Zielerreichung
                 # noch kurz aktiv, damit Restwärme verteilt wird.
                 any_circuit_needs_heat = any(
-                    rs["state"] in (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD)
-                    for rs in circuit_room_states.values()
+                    self._room_needs_heat(rooms[rid], rs, include_residual=True)
+                    for rid, rs in circuit_room_states.items()
                 )
                 # Übergang heating → idle: _desired_targets löschen damit
                 # Befehl garantiert gesendet wird.
@@ -1881,8 +1912,8 @@ class SmartHeatingController:
         else:
             # Single-circuit fallback: use global main_thermostat or main_switch
             any_room_needs_heat = any(
-                rs["state"] == ROOM_STATE_HEATING
-                for rs in room_states.values()
+                self._room_needs_heat(rooms[rid], rs)
+                for rid, rs in room_states.items()
             )
             main_control_type = self.config.get(CONF_MAIN_CONTROL_TYPE, "thermostat")
             if main_control_type == CONTROL_TYPE_SWITCH:
