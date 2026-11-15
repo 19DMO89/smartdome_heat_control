@@ -1781,6 +1781,11 @@ class SmartHeatingController:
             )
         }
 
+        # Ist das Hauptthermostat zugleich Raum-Thermostat (z. B. im Wohnzimmer), gilt bei
+        # Wärmebedarf eines anderen Raums der Mindest-Sollwert hier als Untergrenze in der
+        # Raumlogik, sonst bliebe es auf dem Sollwert seines eigenen Raums (zu warm → kein Heizen).
+        main_heat_overrides: dict[str, float] = {}
+
         circuits = self.config.get(CONF_CIRCUITS, {})
         if circuits and isinstance(circuits, dict):
             # Multi-circuit mode: each circuit controls its own main thermostat or switch
@@ -1806,12 +1811,24 @@ class SmartHeatingController:
                     ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_SWITCH))
                 else:
                     ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
-                if not ct or ct in room_managed_thermostats:
+                if not ct:
                     continue
                 circuit_room_states = {
                     rid: rs for rid, rs in room_states.items()
                     if rooms[rid].get(CONF_ROOM_CIRCUIT_ID) == circuit_id
                 }
+                if ct in room_managed_thermostats:
+                    if circuit_control_type != CONTROL_TYPE_SWITCH and any(
+                        rs["state"] in (ROOM_STATE_HEATING, ROOM_STATE_RESIDUAL_HOLD)
+                        for rs in circuit_room_states.values()
+                    ):
+                        main_heat_overrides[ct] = self._main_heating_target(
+                            ct,
+                            self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_SENSOR)),
+                            boost_delta,
+                            max(rs["target"] for rs in circuit_room_states.values()),
+                        )
+                    continue
                 if not circuit_room_states:
                     # Keine Räume in diesem Kreis → Schalten ausschalten / min_temp
                     self._desired_targets.pop(ct, None)
@@ -1896,6 +1913,17 @@ class SmartHeatingController:
                         # Idle: ganz herunter auf die Mindesttemperatur.
                         main_target = self._thermostat_min_temp(main_entity)
                     self._set_temp_if_needed(main_entity, main_target)
+            elif (
+                main_entity
+                and main_control_type != CONTROL_TYPE_SWITCH
+                and any_room_needs_heat
+            ):
+                main_heat_overrides[main_entity] = self._main_heating_target(
+                    main_entity,
+                    self._as_entity_id(self.config.get(CONF_MAIN_SENSOR)),
+                    boost_delta,
+                    max(rs["target"] for rs in room_states.values()),
+                )
 
         for room_id, room in rooms.items():
             thermostats = self._room_thermostats(room)
@@ -2071,6 +2099,10 @@ class SmartHeatingController:
                 )
                 if not at_min_temp and thermostat_offset != 0.0:
                     room_target = room_target + thermostat_offset
+
+                override_target = main_heat_overrides.get(thermostat)
+                if override_target is not None and not room_state["pause_active"]:
+                    room_target = max(room_target, override_target)
 
                 desired = self._round_to_step(
                     float(room_target),
