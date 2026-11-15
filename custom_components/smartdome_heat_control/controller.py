@@ -139,6 +139,7 @@ from .const import (
     DEFAULT_ROOM_CLIMATE_PRESET,
     DEFAULT_ROOM_CLIMATE_HVAC_MODE,
     DEFAULT_ROOM_CLIMATE_HEAT_BOOST,
+    MIN_MAIN_BOOST_DELTA,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -883,6 +884,33 @@ class SmartHeatingController:
             if max_temp is not None:
                 return max_temp
         return 30.0
+
+    def _main_heating_target(
+        self,
+        entity_id: str,
+        sensor_id: str | None,
+        boost_delta: float,
+        fallback_target: float,
+    ) -> float:
+        """Sollwert des Hauptthermostats bei Wärmebedarf.
+
+        Das Thermostat regelt nach seiner eigenen Temperatur (z. B. 22 °C im
+        Wohnzimmer), ein separater Hauptsensor kann davon abweichen. Daher gilt
+        die höhere beider Messungen als Basis, plus mindestens
+        ``MIN_MAIN_BOOST_DELTA``, damit es sicher einschaltet.
+        """
+        readings: list[float] = []
+        sensor_temp = self._get_state_float(sensor_id) if sensor_id else None
+        if sensor_temp is not None:
+            readings.append(sensor_temp)
+        state = self.hass.states.get(entity_id)
+        if state:
+            own_temp = self._safe_float(state.attributes.get("current_temperature"))
+            if own_temp is not None:
+                readings.append(own_temp)
+        base = max(readings) if readings else fallback_target
+        target = base + max(boost_delta, MIN_MAIN_BOOST_DELTA)
+        return min(target, self._climate_max_temp(entity_id))
 
     def _thermostat_target_step(self, entity_id: str) -> float:
         """Schrittweite des Thermostats lesen, fallback 0.5°C."""
@@ -1820,36 +1848,18 @@ class SmartHeatingController:
                 if circuit_control_type == CONTROL_TYPE_SWITCH:
                     self._turn_switch_if_needed(ct, any_circuit_needs_heat)
                 else:
-                    # Read circuit sensor once – used for both heating and idle target.
-                    ct_sensor_id = self._as_entity_id(
-                        circuit.get(CONF_CIRCUIT_MAIN_SENSOR)
-                    )
-                    ct_current = (
-                        self._get_state_float(ct_sensor_id) if ct_sensor_id else None
-                    )
-                    if ct_current is None:
-                        ct_state = self.hass.states.get(ct)
-                        if ct_state:
-                            ct_current = self._safe_float(
-                                ct_state.attributes.get("current_temperature")
-                            )
                     if any_circuit_needs_heat:
-                        # Dynamic boost: setpoint = current sensor + boost_delta so the
-                        # heating circuit turns ON reliably regardless of room targets.
-                        if ct_current is not None:
-                            circuit_target = ct_current + boost_delta
-                        else:
-                            circuit_target = (
-                                max(rs["target"] for rs in circuit_room_states.values())
-                                + boost_delta
-                            )
+                        # Mindestens MIN_MAIN_BOOST_DELTA über der Eigentemperatur
+                        # des Thermostats, damit der Heizkreis sicher einschaltet.
+                        circuit_target = self._main_heating_target(
+                            ct,
+                            self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_SENSOR)),
+                            boost_delta,
+                            max(rs["target"] for rs in circuit_room_states.values()),
+                        )
                     else:
-                        # Idle: set 5°C below current sensor so the circuit shuts off
-                        # reliably even if the thermostat has no min_temp attribute.
-                        if ct_current is not None:
-                            circuit_target = ct_current - 5.0
-                        else:
-                            circuit_target = self._thermostat_min_temp(ct)
+                        # Idle: ganz herunter auf die Mindesttemperatur.
+                        circuit_target = self._thermostat_min_temp(ct)
                     self._set_temp_if_needed(ct, circuit_target)
         else:
             # Single-circuit fallback: use global main_thermostat or main_switch
@@ -1873,38 +1883,18 @@ class SmartHeatingController:
                 if main_control_type == CONTROL_TYPE_SWITCH:
                     self._turn_switch_if_needed(main_entity, any_room_needs_heat)
                 else:
-                    # Read main sensor once – used for both heating and idle target.
-                    main_sensor_id = self._as_entity_id(
-                        self.config.get(CONF_MAIN_SENSOR)
-                    )
-                    main_current = (
-                        self._get_state_float(main_sensor_id)
-                        if main_sensor_id
-                        else None
-                    )
-                    if main_current is None:
-                        mt_state = self.hass.states.get(main_entity)
-                        if mt_state:
-                            main_current = self._safe_float(
-                                mt_state.attributes.get("current_temperature")
-                            )
                     if any_room_needs_heat:
-                        # Dynamic boost: setpoint = current sensor + boost_delta so the
-                        # heating circuit turns ON reliably regardless of room targets.
-                        if main_current is not None:
-                            main_target = main_current + boost_delta
-                        else:
-                            main_target = (
-                                max(rs["target"] for rs in room_states.values())
-                                + boost_delta
-                            )
+                        # Mindestens MIN_MAIN_BOOST_DELTA über der Eigentemperatur
+                        # des Thermostats, damit der Heizkreis sicher einschaltet.
+                        main_target = self._main_heating_target(
+                            main_entity,
+                            self._as_entity_id(self.config.get(CONF_MAIN_SENSOR)),
+                            boost_delta,
+                            max(rs["target"] for rs in room_states.values()),
+                        )
                     else:
-                        # Idle: set 5°C below current sensor so the circuit shuts off
-                        # reliably even if the thermostat has no min_temp attribute.
-                        if main_current is not None:
-                            main_target = main_current - 5.0
-                        else:
-                            main_target = self._thermostat_min_temp(main_entity)
+                        # Idle: ganz herunter auf die Mindesttemperatur.
+                        main_target = self._thermostat_min_temp(main_entity)
                     self._set_temp_if_needed(main_entity, main_target)
 
         for room_id, room in rooms.items():

@@ -2612,8 +2612,12 @@ function createTile(kind, roomId = "") {
   tile.dataset.tile = kind;
 
   const open = () => {
+    if (kind === "add") {
+      openNewRoomModal();
+      return;
+    }
+    syncFormsWithConfig();
     if (kind === "global") openEditModal("global");
-    else if (kind === "add") openNewRoomModal();
     else openEditModal("room", roomId);
   };
 
@@ -2815,7 +2819,19 @@ function openEditModal(kind, roomId = null, { isNew = false, snapshot = null } =
   }
 }
 
+// Formulare vor jeder Bearbeitung aus der aktuellen Konfiguration neu aufbauen.
+// Gespeichert wird immer der komplette Formularstand: Eine veraltete Auswahl
+// (z. B. eine auf einem anderen Gerät nachträglich gesetzte Klimaanlage) würde
+// sonst beim nächsten Speichern zurückgeschrieben.
+function syncFormsWithConfig() {
+  if (editSession) return;
+  entityPickerState.clear();
+  renderGlobalSettings();
+  renderRooms();
+}
+
 function openNewRoomModal() {
+  syncFormsWithConfig();
   const snapshot = structuredClone(state.config);
   const roomId = addRoom();
   openEditModal("room", roomId, { isNew: true, snapshot });

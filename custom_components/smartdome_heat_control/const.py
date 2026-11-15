@@ -226,6 +226,8 @@ DEFAULT_ROOM_CLIMATE_HEAT_BOOST = False
 # Defaults
 DEFAULT_ENABLED = True
 DEFAULT_BOOST_DELTA = 2.0
+# Mindestabstand des Hauptthermostat-Sollwerts über dessen eigener Temperatur bei Wärmebedarf
+MIN_MAIN_BOOST_DELTA = 2.0
 DEFAULT_TOLERANCE = 0.5
 DEFAULT_NIGHT_START = "22:00"
 DEFAULT_MORNING_BOOST_START = "05:00"
