@@ -2203,6 +2203,21 @@ function appendSwitchActuatorRow(listEl, roomId, switchId) {
   });
 }
 
+function updateExtraThermostatLive(row, roomId) {
+  const live = row.querySelector(".room-extra-thermostat-live");
+  if (!live) return;
+  const entityId = getEntityPickerValue(row.dataset.thermostatPickerId);
+  const setpoint = entityId ? getThermostatSetpoint(entityId) : null;
+  if (setpoint !== null) {
+    const heating = isRoomHeating(roomId);
+    live.innerHTML = `${heating ? "🔥 " : ""}${escapeHtml(formatTemperature(setpoint))}`;
+    live.dataset.entity = entityId;
+  } else {
+    live.textContent = "";
+    delete live.dataset.entity;
+  }
+}
+
 function appendExtraThermostatRow(listEl, roomId, thermostatId) {
   const pickerId = nextListPickerId(`room_${roomId}_extra_thermostat`);
 
@@ -2221,7 +2236,13 @@ function appendExtraThermostatRow(listEl, roomId, thermostatId) {
   removeBtn.textContent = "✕";
   bindListRowRemove(removeBtn, row, pickerId);
 
+  // Live-Sollwert wie beim Hauptventil; antippen öffnet die Entität.
+  const live = document.createElement("span");
+  live.className = "label-live room-extra-thermostat-live";
+  live.style.flexShrink = "0";
+
   row.appendChild(pickerContainer);
+  row.appendChild(live);
   row.appendChild(removeBtn);
   listEl.appendChild(row);
 
@@ -2232,8 +2253,9 @@ function appendExtraThermostatRow(listEl, roomId, thermostatId) {
     getItems: () => state.climates,
     selectedValue: thermostatId || "",
     emptyLabel: t("select_not_set"),
-    onChange: () => {},
+    onChange: () => updateExtraThermostatLive(row, roomId),
   });
+  updateExtraThermostatLive(row, roomId);
 }
 
 function createRoomCard(roomId, room) {
@@ -3243,6 +3265,11 @@ function updateRoomLiveState() {
         delete thermostatLive.dataset.entity;
       }
     }
+
+    // live labels of the additional radiator valves
+    node.querySelectorAll(".room-extra-thermostat-row").forEach((row) =>
+      updateExtraThermostatLive(row, roomId)
+    );
 
     // live climate label: mode + setpoint of the air conditioner
     const climateLive = node.querySelector(".room-climate-live");
