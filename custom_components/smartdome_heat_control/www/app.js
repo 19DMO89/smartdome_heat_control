@@ -2121,9 +2121,24 @@ function renderGlobalSettings() {
   updateMainLiveStatus();
 }
 
+// Eindeutige IDs für Listen-Picker. Früher war die ID die Zeilennummer: Nach
+// Entfernen + Hinzufügen teilten sich zwei Zeilen eine ID, und eine neue Auswahl
+// überschrieb ein bestehendes Ventil bzw. die alte Auswahl blieb hängen.
+let listPickerSeq = 0;
+function nextListPickerId(prefix) {
+  listPickerSeq += 1;
+  return `${prefix}_${listPickerSeq}`;
+}
+
+function bindListRowRemove(button, row, pickerId) {
+  button.addEventListener("click", () => {
+    row.remove();
+    entityPickerState.delete(pickerId);
+  });
+}
+
 function appendWindowSensorRow(listEl, roomId, sensorId) {
-  const index = listEl.children.length;
-  const pickerId = `room_${roomId}_ws_${index}`;
+  const pickerId = nextListPickerId(`room_${roomId}_ws`);
 
   const row = document.createElement("div");
   row.className = "room-window-sensor-row";
@@ -2138,7 +2153,7 @@ function appendWindowSensorRow(listEl, roomId, sensorId) {
   removeBtn.className = "ghost";
   removeBtn.style.cssText = "padding:8px 10px; flex-shrink:0;";
   removeBtn.textContent = "✕";
-  removeBtn.addEventListener("click", () => row.remove());
+  bindListRowRemove(removeBtn, row, pickerId);
 
   row.appendChild(pickerContainer);
   row.appendChild(removeBtn);
@@ -2156,8 +2171,7 @@ function appendWindowSensorRow(listEl, roomId, sensorId) {
 }
 
 function appendSwitchActuatorRow(listEl, roomId, switchId) {
-  const index = listEl.children.length;
-  const pickerId = `room_${roomId}_switch_actuator_${index}`;
+  const pickerId = nextListPickerId(`room_${roomId}_switch_actuator`);
 
   const row = document.createElement("div");
   row.className = "room-switch-actuator-row";
@@ -2172,7 +2186,7 @@ function appendSwitchActuatorRow(listEl, roomId, switchId) {
   removeBtn.className = "ghost";
   removeBtn.style.cssText = "padding:8px 10px; flex-shrink:0;";
   removeBtn.textContent = "✕";
-  removeBtn.addEventListener("click", () => row.remove());
+  bindListRowRemove(removeBtn, row, pickerId);
 
   row.appendChild(pickerContainer);
   row.appendChild(removeBtn);
@@ -2190,8 +2204,7 @@ function appendSwitchActuatorRow(listEl, roomId, switchId) {
 }
 
 function appendExtraThermostatRow(listEl, roomId, thermostatId) {
-  const index = listEl.children.length;
-  const pickerId = `room_${roomId}_extra_thermostat_${index}`;
+  const pickerId = nextListPickerId(`room_${roomId}_extra_thermostat`);
 
   const row = document.createElement("div");
   row.className = "room-extra-thermostat-row";
@@ -2206,7 +2219,7 @@ function appendExtraThermostatRow(listEl, roomId, thermostatId) {
   removeBtn.className = "ghost";
   removeBtn.style.cssText = "padding:8px 10px; flex-shrink:0;";
   removeBtn.textContent = "✕";
-  removeBtn.addEventListener("click", () => row.remove());
+  bindListRowRemove(removeBtn, row, pickerId);
 
   row.appendChild(pickerContainer);
   row.appendChild(removeBtn);

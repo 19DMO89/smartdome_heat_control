@@ -317,6 +317,20 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     hass.data[DOMAIN]["_frontend_registered"] = True
 
 
+def _merge_discovered_room(
+    existing: dict[str, Any], discovered: dict[str, Any]
+) -> dict[str, Any]:
+    """Erkannten Raum in einen bestehenden übernehmen, ohne etwas zu überschreiben."""
+    merged = dict(existing)
+    for key, value in discovered.items():
+        merged.setdefault(key, value)
+    merged.setdefault("away_temperature", DEFAULT_ROOM_AWAY_TEMPERATURE)
+    if CONF_ROOM_WINDOW_SENSORS not in merged or merged.get("window_sensor"):
+        merged[CONF_ROOM_WINDOW_SENSORS] = normalize_window_sensors(merged)
+        merged["window_sensor"] = ""
+    return merged
+
+
 def _normalize_extra_thermostats(room: dict[str, Any]) -> list[str]:
     """Zusätzliche Heizkörperventile normalisieren."""
     thermostats = room.get(CONF_ROOM_EXTRA_THERMOSTATS)
@@ -727,41 +741,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
                 }
                 continue
 
-            existing = existing_rooms[room_id]
-            existing_rooms[room_id] = {
-                "label": existing.get("label", discovered_room.get("label", room_id)),
-                "area_id": existing.get("area_id", discovered_room.get("area_id", "")),
-                "thermostat": existing.get(
-                    "thermostat",
-                    discovered_room.get("thermostat", ""),
-                ),
-                "sensor": existing.get("sensor", discovered_room.get("sensor", "")),
-                "window_sensor": "",
-                CONF_ROOM_WINDOW_SENSORS: (
-                    normalize_window_sensors(existing)
-                    if CONF_ROOM_WINDOW_SENSORS in existing
-                    or existing.get("window_sensor")
-                    else normalize_window_sensors(discovered_room)
-                ),
-                "target_day": existing.get(
-                    "target_day",
-                    discovered_room.get("target_day", 21.0),
-                ),
-                "target_night": existing.get(
-                    "target_night",
-                    discovered_room.get("target_night", 18.0),
-                ),
-                "away_temperature": existing.get(
-                    "away_temperature",
-                    discovered_room.get(
-                        "away_temperature",
-                        DEFAULT_ROOM_AWAY_TEMPERATURE,
-                    ),
-                ),
-                "day_start": existing.get("day_start", ""),
-                "night_start": existing.get("night_start", ""),
-                "enabled": existing.get("enabled", True),
-            }
+            # Bestehender Raum: nur fehlende Felder ergänzen. Früher wurde der
+            # Raum aus wenigen Feldern neu aufgebaut, dabei gingen zusätzliche
+            # Ventile, Klimaanlage, Wochenschemata, Heizkreis usw. verloren.
+            existing_rooms[room_id] = _merge_discovered_room(
+                existing_rooms[room_id], discovered_room
+            )
 
         cfg = _normalize_config(cfg)
 
