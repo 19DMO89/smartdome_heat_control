@@ -1379,6 +1379,72 @@
       overflow-wrap: anywhere;
     }
 
+    .manual-banner {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--warning);
+      background: rgba(245, 185, 66, 0.1);
+    }
+
+    .manual-banner.hidden {
+      display: none;
+    }
+
+    .manual-banner button {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .schedule-profiles-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .schedule-profile-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .schedule-profile-row input {
+      flex: 1;
+      margin: 0;
+    }
+
+    .schedule-profile-row button {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .schedule-profile-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px 18px;
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+      font-size: 13px;
+    }
+
+    .schedule-profile-bar select {
+      width: auto;
+      min-width: 160px;
+      margin: 0;
+    }
+
+    .schedule-profile-active {
+      color: var(--muted);
+    }
+
     .edit-modal-live {
       margin-top: 4px;
       color: var(--muted);
@@ -1531,6 +1597,10 @@
         <div>
           <h2 id="edit-modal-title"></h2>
           <div id="edit-modal-live" class="edit-modal-live"></div>
+          <div id="edit-manual-banner" class="manual-banner hidden">
+            <span id="edit-manual-text"></span>
+            <button id="edit-manual-clear" type="button" class="ghost" data-i18n="manual_override_clear">Zurück zur Automatik</button>
+          </div>
         </div>
         <button id="edit-modal-close" type="button" class="ghost">✕</button>
       </div>
@@ -1573,6 +1643,32 @@
                 </span>
               </div>
               <input id="away_enabled" type="checkbox" />
+            </div>
+
+            <div class="toggle">
+              <div class="toggle-text">
+                <strong data-i18n="manual_override_enabled">Von Hand am Thermostat verstellen erlauben</strong>
+                <span data-i18n="manual_override_enabled_hint">
+                  Wird am Thermostat oder an der Klima von Hand eine andere Temperatur eingestellt, gilt sie bis zum nächsten Wechsel im Zeitplan bzw. Tag/Nacht.
+                </span>
+              </div>
+              <input id="manual_override_enabled" type="checkbox" />
+            </div>
+          </div>
+
+          <!-- Zeitplan-Profile -->
+          <div class="settings-group">
+            <div class="settings-group-label" data-i18n="section_schedule_profiles">Zeitpläne</div>
+            <div class="fields">
+              <div class="field full">
+                <label for="active_schedule_profile" data-i18n="active_schedule_profile">Aktiver Zeitplan</label>
+                <select id="active_schedule_profile"></select>
+              </div>
+            </div>
+            <div id="schedule_profiles_list" class="schedule-profiles-list"></div>
+            <button id="add_schedule_profile" type="button" class="ghost" data-i18n="add_schedule_profile">Zeitplan hinzufügen</button>
+            <div class="footer-note" style="margin-top:8px;" data-i18n="schedule_profiles_hint">
+              Jeder Raum hat pro Zeitplan ein eigenes Wochenschema (Raum → Wochenschema). Räume ohne Schema im aktiven Zeitplan nutzen ihre Tag/Nacht-Temperaturen.
             </div>
           </div>
 
@@ -1818,6 +1914,11 @@
       <div class="modal-header" style="padding:14px 18px;border-bottom:1px solid var(--line);flex-shrink:0;">
         <h2 id="schedule-modal-title">Wochenschema</h2>
         <button id="schedule-close" type="button" class="ghost">✕</button>
+      </div>
+      <div id="schedule-profile-bar" class="schedule-profile-bar">
+        <label for="schedule-profile" data-i18n="schedule_profile_edit">Zeitplan</label>
+        <select id="schedule-profile"></select>
+        <span id="schedule-profile-active" class="schedule-profile-active"></span>
       </div>
       <div class="schedule-calendar-wrap">
         <div class="schedule-calendar" id="schedule-calendar"></div>

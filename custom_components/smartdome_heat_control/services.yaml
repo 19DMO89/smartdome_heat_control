@@ -97,3 +97,13 @@ remove_room:
 reload:
   name: Reload rooms
   description: Rediscover rooms and refresh the Smartdome Heat Control configuration.
+
+clear_manual_override:
+  name: End manual temperature
+  description: End a temperature set by hand on a thermostat; automatic control takes over again. Without room ID, for all rooms.
+  fields:
+    room_id:
+      name: Room ID
+      description: Unique room identifier. Leave empty for all rooms.
+      required: false
+      example: kinderzimmer

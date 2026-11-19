@@ -104,7 +104,23 @@ CONTROL_TYPE_SWITCH = "switch"
 DEFAULT_MAIN_CONTROL_TYPE = CONTROL_TYPE_THERMOSTAT
 
 #Wochenplan
+# Wochenschema des Standard-Profils (Feldname aus der Zeit vor den Profilen)
 CONF_ROOM_WEEKLY_SCHEDULE = "weekly_schedule"
+# Wochenschemata der übrigen Profile: {profil_id: wochenschema}
+CONF_ROOM_WEEKLY_SCHEDULES = "weekly_schedules"
+
+# Zeitplan-Profile (global): {profil_id: {"label": "..."}} + aktives Profil
+CONF_SCHEDULE_PROFILES = "schedule_profiles"
+CONF_ACTIVE_SCHEDULE_PROFILE = "active_schedule_profile"
+DEFAULT_SCHEDULE_PROFILE_ID = "default"
+DEFAULT_SCHEDULE_PROFILE_LABEL = "Standard"
+
+# Manuelle Bedienung am Thermostat: gilt bis zum nächsten Wechsel des Sollwerts
+CONF_MANUAL_OVERRIDE_ENABLED = "manual_override_enabled"
+DEFAULT_MANUAL_OVERRIDE_ENABLED = False
+# Änderungen so kurz nach einem eigenen Befehl gelten nicht als manuell (s)
+MANUAL_CHANGE_COMMAND_GRACE = 120
+SERVICE_CLEAR_MANUAL_OVERRIDE = "clear_manual_override"
 
 DEFAULT_ROOM_WEEKLY_SCHEDULE = {
     "monday": [],
@@ -233,6 +249,10 @@ DEFAULT_BOOST_DELTA = 2.0
 MIN_MAIN_BOOST_DELTA = 2.0
 # Verliert das Hauptthermostat den gesendeten Sollwert, frühestens nach so vielen Sekunden erneut senden
 MAIN_RESEND_INTERVAL = 300
+# Klimaanlage: HVAC-Modus erneut senden, wenn das Gerät ihn nach so vielen Sekunden nicht übernommen hat
+HVAC_RESEND_INTERVAL = 120
+# Klimaanlage von Hand ausgeschaltet, obwohl sie laufen soll: so lange (s) respektieren
+CLIMATE_MANUAL_OFF_HOLD = 1800
 DEFAULT_TOLERANCE = 0.5
 DEFAULT_NIGHT_START = "22:00"
 DEFAULT_MORNING_BOOST_START = "05:00"

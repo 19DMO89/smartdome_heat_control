@@ -88,7 +88,15 @@ from .const import (
     DEFAULT_VACATION_ENABLED,
     DEFAULT_VACATION_TEMPERATURE,
     CONF_ROOM_WEEKLY_SCHEDULE,
+    CONF_ROOM_WEEKLY_SCHEDULES,
     DEFAULT_ROOM_WEEKLY_SCHEDULE,
+    CONF_ACTIVE_SCHEDULE_PROFILE,
+    CONF_MANUAL_OVERRIDE_ENABLED,
+    CONF_SCHEDULE_PROFILES,
+    DEFAULT_MANUAL_OVERRIDE_ENABLED,
+    DEFAULT_SCHEDULE_PROFILE_ID,
+    DEFAULT_SCHEDULE_PROFILE_LABEL,
+    SERVICE_CLEAR_MANUAL_OVERRIDE,
     CONF_ROOM_CLIMATE_ENTITY,
     CONF_ROOM_USE_CLIMATE,
     CONF_COOLING_ENABLED,
@@ -418,6 +426,11 @@ def _normalize_rooms(rooms: Any) -> dict[str, dict[str, Any]]:
                 CONF_ROOM_WEEKLY_SCHEDULE,
                 DEFAULT_ROOM_WEEKLY_SCHEDULE,
             ),
+            CONF_ROOM_WEEKLY_SCHEDULES: (
+                dict(room.get(CONF_ROOM_WEEKLY_SCHEDULES))
+                if isinstance(room.get(CONF_ROOM_WEEKLY_SCHEDULES), dict)
+                else {}
+            ),
             CONF_ROOM_CYCLE_TARGET_TEMP: room.get(CONF_ROOM_CYCLE_TARGET_TEMP),
             CONF_ROOM_CYCLE_PEAK_TEMP: room.get(CONF_ROOM_CYCLE_PEAK_TEMP),
             CONF_ROOM_CYCLE_START_TS: None,
@@ -452,6 +465,22 @@ def _optional_temperature(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_schedule_profiles(profiles: Any) -> dict[str, dict[str, str]]:
+    """Zeitplan-Profile normalisieren; das Standard-Profil gibt es immer (zuerst)."""
+    normalized: dict[str, dict[str, str]] = {}
+    if isinstance(profiles, dict):
+        for profile_id, profile in profiles.items():
+            if not isinstance(profile_id, str) or not profile_id.strip():
+                continue
+            label = profile.get("label") if isinstance(profile, dict) else None
+            label = str(label).strip() if label is not None else ""
+            normalized[profile_id] = {"label": label or profile_id}
+    default = normalized.pop(
+        DEFAULT_SCHEDULE_PROFILE_ID, {"label": DEFAULT_SCHEDULE_PROFILE_LABEL}
+    )
+    return {DEFAULT_SCHEDULE_PROFILE_ID: default, **normalized}
 
 
 def _normalize_circuits(circuits: Any) -> dict[str, dict[str, Any]]:
@@ -495,6 +524,20 @@ def _normalize_config(cfg: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault(CONF_HEATING_MODE, DEFAULT_HEATING_MODE)
     normalized[CONF_ROOMS] = _normalize_rooms(normalized.get(CONF_ROOMS, {}))
     normalized[CONF_CIRCUITS] = _normalize_circuits(normalized.get(CONF_CIRCUITS, {}))
+    profiles = _normalize_schedule_profiles(normalized.get(CONF_SCHEDULE_PROFILES))
+    normalized[CONF_SCHEDULE_PROFILES] = profiles
+    if normalized.get(CONF_ACTIVE_SCHEDULE_PROFILE) not in profiles:
+        normalized[CONF_ACTIVE_SCHEDULE_PROFILE] = DEFAULT_SCHEDULE_PROFILE_ID
+    # Schemata gelöschter Profile verwerfen (Standard liegt in weekly_schedule).
+    for room in normalized[CONF_ROOMS].values():
+        room[CONF_ROOM_WEEKLY_SCHEDULES] = {
+            profile_id: schedule
+            for profile_id, schedule in room[CONF_ROOM_WEEKLY_SCHEDULES].items()
+            if profile_id in profiles and profile_id != DEFAULT_SCHEDULE_PROFILE_ID
+        }
+    normalized[CONF_MANUAL_OVERRIDE_ENABLED] = bool(
+        normalized.get(CONF_MANUAL_OVERRIDE_ENABLED, DEFAULT_MANUAL_OVERRIDE_ENABLED)
+    )
     normalized.setdefault(CONF_ENERGY_RESIDUAL_HEAT_HOLD, DEFAULT_ENERGY_RESIDUAL_HEAT_HOLD)
     normalized.setdefault(CONF_GLOBAL_TARGET_DAY, DEFAULT_GLOBAL_TARGET_DAY)
     normalized.setdefault(CONF_GLOBAL_TARGET_NIGHT, DEFAULT_GLOBAL_TARGET_NIGHT)
@@ -744,6 +787,21 @@ def _async_register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({vol.Required("room_id"): str}),
     )
     hass.services.async_register(DOMAIN, SERVICE_RELOAD, handle_reload)
+
+    async def handle_clear_manual_override(call: ServiceCall) -> None:
+        target_entry = _get_single_entry(hass)
+        if target_entry is None:
+            return
+        data = hass.data[DOMAIN][target_entry.entry_id]
+        controller = data[DATA_CONTROLLER]
+        controller.clear_manual_override(call.data.get("room_id") or None)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CLEAR_MANUAL_OVERRIDE,
+        handle_clear_manual_override,
+        schema=vol.Schema({vol.Optional("room_id"): str}),
+    )
 
     hass.data[DOMAIN]["_services_registered"] = True
 

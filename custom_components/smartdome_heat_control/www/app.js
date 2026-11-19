@@ -66,6 +66,24 @@ const I18N = {
     tile_operation: "Operation",
     tile_outdoor: "Outdoor",
     tile_heating_mode: "Heating mode",
+    tile_schedule_profile: "Schedule",
+    note_manual: "✋ Manual",
+    manual_override_banner: "Set by hand to {temp} – applies until the next change.",
+    manual_override_clear: "Back to automatic",
+    manual_override_enabled: "Allow adjusting by hand on the thermostat",
+    manual_override_enabled_hint:
+      "If someone sets a different temperature on the thermostat or air conditioner, it applies until the next change in the schedule or day/night.",
+    section_schedule_profiles: "Schedules",
+    active_schedule_profile: "Active schedule",
+    add_schedule_profile: "Add schedule",
+    schedule_profiles_hint:
+      "Each room has its own weekly schedule per schedule (room → weekly schedule). Rooms without a schedule in the active one use their day/night temperatures.",
+    schedule_profile_default: "Standard",
+    schedule_profile_new: "New schedule",
+    schedule_profile_delete: "Delete",
+    schedule_profile_edit: "Schedule",
+    schedule_profile_is_active: "(active)",
+    schedule_profile_not_active: "(not active – for later)",
     tile_running_heat: "{count} of {total} heating",
     tile_running_cool: "{count} of {total} cooling",
     op_normal: "Normal",
@@ -325,6 +343,24 @@ const I18N = {
     tile_operation: "Betrieb",
     tile_outdoor: "Außen",
     tile_heating_mode: "Heizmodus",
+    tile_schedule_profile: "Zeitplan",
+    note_manual: "✋ Manuell",
+    manual_override_banner: "Von Hand auf {temp} gestellt – gilt bis zum nächsten Wechsel.",
+    manual_override_clear: "Zurück zur Automatik",
+    manual_override_enabled: "Von Hand am Thermostat verstellen erlauben",
+    manual_override_enabled_hint:
+      "Wird am Thermostat oder an der Klima von Hand eine andere Temperatur eingestellt, gilt sie bis zum nächsten Wechsel im Zeitplan bzw. Tag/Nacht.",
+    section_schedule_profiles: "Zeitpläne",
+    active_schedule_profile: "Aktiver Zeitplan",
+    add_schedule_profile: "Zeitplan hinzufügen",
+    schedule_profiles_hint:
+      "Jeder Raum hat pro Zeitplan ein eigenes Wochenschema (Raum → Wochenschema). Räume ohne Schema im aktiven Zeitplan nutzen ihre Tag/Nacht-Temperaturen.",
+    schedule_profile_default: "Standard",
+    schedule_profile_new: "Neuer Zeitplan",
+    schedule_profile_delete: "Löschen",
+    schedule_profile_edit: "Zeitplan",
+    schedule_profile_is_active: "(aktiv)",
+    schedule_profile_not_active: "(nicht aktiv – für später)",
     tile_running_heat: "{count} von {total} heizen",
     tile_running_cool: "{count} von {total} kühlen",
     op_normal: "Normal",
@@ -571,6 +607,7 @@ function getPanelVersion() {
 
 const PANEL_VERSION = getPanelVersion();
 const HEATING_MODES = ["comfort", "balanced", "energy", "adaptive"];
+const DEFAULT_PROFILE_ID = "default";
 const CONTROL_PROFILES = ["standard", "self_regulating"];
 
 const DEFAULTS = {
@@ -580,6 +617,9 @@ const DEFAULTS = {
   main_switch: "",
   main_sensor: "",
   main_idle_temperature: null,
+  manual_override_enabled: false,
+  schedule_profiles: { default: { label: "Standard" } },
+  active_schedule_profile: "default",
   boost_delta: 2.0,
   tolerance: 0.5,
   heating_mode: "balanced",
@@ -663,6 +703,15 @@ function initEls() {
     mainSensorPicker: document.getElementById("main_sensor_picker"),
     mainIdleTemperatureField: document.getElementById("main_idle_temperature_field"),
     mainIdleTemperature: document.getElementById("main_idle_temperature"),
+    manualOverrideEnabled: document.getElementById("manual_override_enabled"),
+    activeScheduleProfile: document.getElementById("active_schedule_profile"),
+    scheduleProfilesList: document.getElementById("schedule_profiles_list"),
+    addScheduleProfileBtn: document.getElementById("add_schedule_profile"),
+    editManualBanner: document.getElementById("edit-manual-banner"),
+    editManualText: document.getElementById("edit-manual-text"),
+    editManualClear: document.getElementById("edit-manual-clear"),
+    scheduleProfileSelect: document.getElementById("schedule-profile"),
+    scheduleProfileActive: document.getElementById("schedule-profile-active"),
     boostDelta: document.getElementById("boost_delta"),
     tolerance: document.getElementById("tolerance"),
     modePickerContainer: document.getElementById("heating_mode_picker"),
@@ -714,6 +763,9 @@ let pendingCircuits = null;
 let activeEntityPickerId = null;
 let scheduleRoomId = null;
 let draftWeeklySchedule = null;
+// Wochenschema-Dialog: bearbeiteter Zeitplan und Entwürfe je Zeitplan
+let scheduleProfileId = "default";
+let scheduleDrafts = {};
 // Offenes Popup: { kind: "global" | "room", roomId, isNew, snapshot, baseline, confirm }
 let editSession = null;
 
@@ -959,6 +1011,20 @@ function normalizeRoom(roomId, room) {
     room_away_enabled: room?.room_away_enabled === true,
     room_target_reconcile_enabled: room?.room_target_reconcile_enabled === true,
     weekly_schedule: normalizeWeeklySchedule(room?.weekly_schedule),
+    // Wochenschemata der übrigen Zeitplan-Profile (Standard liegt in weekly_schedule)
+    weekly_schedules: (() => {
+      const source =
+        room?.weekly_schedules && typeof room.weekly_schedules === "object"
+          ? room.weekly_schedules
+          : {};
+      const result = {};
+      for (const [profileId, schedule] of Object.entries(source)) {
+        if (profileId && profileId !== DEFAULT_PROFILE_ID) {
+          result[profileId] = normalizeWeeklySchedule(schedule);
+        }
+      }
+      return result;
+    })(),
     day_start: normalizeTime(room?.day_start, ""),
     night_start: normalizeTime(room?.night_start, ""),
     enabled: room?.enabled !== false,
@@ -1065,7 +1131,56 @@ function normalizeConfig(input) {
   }
   cfg.circuits = normalizedCircuits;
 
+  cfg.manual_override_enabled = cfg.manual_override_enabled === true;
+  cfg.schedule_profiles = normalizeScheduleProfiles(cfg.schedule_profiles);
+  if (!cfg.schedule_profiles[cfg.active_schedule_profile]) {
+    cfg.active_schedule_profile = DEFAULT_PROFILE_ID;
+  }
+  // Schemata gelöschter Zeitpläne verwerfen.
+  for (const room of Object.values(cfg.rooms)) {
+    for (const profileId of Object.keys(room.weekly_schedules)) {
+      if (!cfg.schedule_profiles[profileId]) delete room.weekly_schedules[profileId];
+    }
+  }
+
   return cfg;
+}
+
+// Zeitplan-Profile: Standard gibt es immer und steht zuerst.
+function normalizeScheduleProfiles(profiles) {
+  const result = {};
+  const source = profiles && typeof profiles === "object" ? profiles : {};
+  const defaultLabel = source[DEFAULT_PROFILE_ID]?.label;
+  result[DEFAULT_PROFILE_ID] = {
+    label:
+      typeof defaultLabel === "string" && defaultLabel.trim()
+        ? defaultLabel.trim()
+        : t("schedule_profile_default"),
+  };
+  for (const [profileId, profile] of Object.entries(source)) {
+    if (!profileId || profileId === DEFAULT_PROFILE_ID) continue;
+    const label = typeof profile?.label === "string" ? profile.label.trim() : "";
+    result[profileId] = { label: label || profileId };
+  }
+  return result;
+}
+
+function getProfileLabel(profileId) {
+  return state.config.schedule_profiles?.[profileId]?.label || profileId;
+}
+
+// Wochenschema eines Raums in einem Zeitplan (Standard liegt in weekly_schedule).
+function getRoomProfileSchedule(room, profileId) {
+  if (profileId === DEFAULT_PROFILE_ID) return room.weekly_schedule;
+  return room.weekly_schedules?.[profileId] || DEFAULT_WEEKLY_SCHEDULE;
+}
+
+function setRoomProfileSchedule(room, profileId, schedule) {
+  if (profileId === DEFAULT_PROFILE_ID) {
+    room.weekly_schedule = schedule;
+    return;
+  }
+  room.weekly_schedules = { ...(room.weekly_schedules || {}), [profileId]: schedule };
 }
 
 function findState(entityId) {
@@ -1321,6 +1436,82 @@ function createModePicker(currentValue) {
   document.addEventListener("click", () => root.classList.remove("open"), { once: false });
 
   updateEnergyFieldVisibility();
+}
+
+// ── Zeitplan-Profile (Haupteinstellungen) ─────────────────────────────────
+// Änderungen gehen direkt in state.config (wie bei Heizkreisen); Abbrechen
+// stellt den Schnappschuss wieder her.
+function renderScheduleProfiles({ keepSelection = false } = {}) {
+  const profiles = state.config.schedule_profiles || {};
+  const active = state.config.active_schedule_profile || DEFAULT_PROFILE_ID;
+
+  if (els.activeScheduleProfile) {
+    const previous = keepSelection ? els.activeScheduleProfile.value : "";
+    els.activeScheduleProfile.innerHTML = "";
+    for (const [profileId, profile] of Object.entries(profiles)) {
+      const option = document.createElement("option");
+      option.value = profileId;
+      option.textContent = profile.label || profileId;
+      els.activeScheduleProfile.appendChild(option);
+    }
+    const wanted = profiles[previous] && previous ? previous : active;
+    els.activeScheduleProfile.value = profiles[wanted] ? wanted : DEFAULT_PROFILE_ID;
+  }
+
+  if (!els.scheduleProfilesList) return;
+  els.scheduleProfilesList.innerHTML = "";
+  for (const [profileId, profile] of Object.entries(profiles)) {
+    const row = document.createElement("div");
+    row.className = "schedule-profile-row";
+    row.dataset.profileId = profileId;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "schedule-profile-label";
+    input.value = profile.label || "";
+    input.placeholder = profileId === DEFAULT_PROFILE_ID ? t("schedule_profile_default") : t("schedule_profile_new");
+    input.addEventListener("input", () => {
+      state.config.schedule_profiles[profileId].label = input.value.trim() || input.placeholder;
+      const option = els.activeScheduleProfile?.querySelector(`option[value="${CSS.escape(profileId)}"]`);
+      if (option) option.textContent = state.config.schedule_profiles[profileId].label;
+    });
+    row.appendChild(input);
+
+    if (profileId !== DEFAULT_PROFILE_ID) {
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "danger";
+      del.textContent = t("schedule_profile_delete");
+      del.addEventListener("click", () => {
+        delete state.config.schedule_profiles[profileId];
+        for (const room of Object.values(state.config.rooms || {})) {
+          if (room.weekly_schedules) delete room.weekly_schedules[profileId];
+        }
+        if (els.activeScheduleProfile?.value === profileId) {
+          els.activeScheduleProfile.value = DEFAULT_PROFILE_ID;
+        }
+        renderScheduleProfiles({ keepSelection: true });
+      });
+      row.appendChild(del);
+    }
+
+    els.scheduleProfilesList.appendChild(row);
+  }
+}
+
+function addScheduleProfile() {
+  const profileId = `profile_${Math.random().toString(16).slice(2, 10)}`;
+  const count = Object.keys(state.config.schedule_profiles || {}).length;
+  state.config.schedule_profiles = {
+    ...(state.config.schedule_profiles || {}),
+    [profileId]: { label: `${t("schedule_profile_new")} ${count}` },
+  };
+  renderScheduleProfiles({ keepSelection: true });
+  const input = els.scheduleProfilesList?.querySelector(
+    `.schedule-profile-row[data-profile-id="${CSS.escape(profileId)}"] input`
+  );
+  input?.focus();
+  input?.select();
 }
 
 function generateCircuitId() {
@@ -1803,6 +1994,10 @@ function renderGlobalSettings() {
 
   els.enabled.checked = cfg.enabled;
   els.boostDelta.value = String(cfg.boost_delta);
+  if (els.manualOverrideEnabled) {
+    els.manualOverrideEnabled.checked = cfg.manual_override_enabled === true;
+  }
+  renderScheduleProfiles();
   if (els.mainIdleTemperature) {
     els.mainIdleTemperature.value =
       cfg.main_idle_temperature === null ? "" : String(cfg.main_idle_temperature);
@@ -2506,6 +2701,7 @@ function getRoomTileInfo(roomId, room) {
   if (!live.cooling) {
     if (state.config.vacation_enabled) note = t("note_vacation");
     else if (live.away_active) note = t("note_away");
+    else if (live.manual_override) note = t("note_manual");
     else if (live.outdoor_minimum_active) note = t("note_minimum");
   }
 
@@ -2597,6 +2793,13 @@ function globalTileHtml() {
       ${outdoorRow}
       <dt>${escapeHtml(t("tile_heating_mode"))}</dt>
       <dd>${escapeHtml(t(`mode_${cfg.heating_mode}`))}</dd>
+      ${
+        Object.keys(cfg.schedule_profiles || {}).length > 1
+          ? `<dt>${escapeHtml(t("tile_schedule_profile"))}</dt><dd>${escapeHtml(
+              getProfileLabel(cfg.active_schedule_profile || DEFAULT_PROFILE_ID)
+            )}</dd>`
+          : ""
+      }
     </dl>
     <div class="tile-foot"><span class="tile-pill">${escapeHtml(running)}</span></div>
   `;
@@ -2782,11 +2985,13 @@ function updateEditHeader() {
   if (editSession.kind === "global") {
     els.editModalTitle.textContent = t("global_settings");
     els.editModalLive.textContent = "";
+    updateManualBanner(null);
     return;
   }
 
   const room = state.config.rooms?.[editSession.roomId];
   if (!room) return;
+  updateManualBanner(editSession.isNew ? null : state.roomStatus?.[editSession.roomId]?.manual_override);
 
   const labelInput = els.roomsContainer.querySelector(
     `.room[data-room-id="${CSS.escape(editSession.roomId)}"] .room-label`
@@ -2802,6 +3007,34 @@ function updateEditHeader() {
     ? ` · ${t("tile_target")} ${formatTileTemperature(info.target)}`
     : "";
   els.editModalLive.textContent = editSession.isNew ? "" : `${actual}${target} · ${info.label}`;
+}
+
+function updateManualBanner(override) {
+  if (!els.editManualBanner) return;
+  const active = Boolean(override && Number.isFinite(Number(override.target)));
+  els.editManualBanner.classList.toggle("hidden", !active);
+  if (active && els.editManualText) {
+    els.editManualText.textContent = t("manual_override_banner").replace(
+      "{temp}",
+      formatTileTemperature(Number(override.target))
+    );
+  }
+}
+
+async function clearManualOverrideForEditedRoom() {
+  const roomId = editSession?.roomId;
+  if (!roomId) return;
+  try {
+    els.editManualClear.disabled = true;
+    await callService(DOMAIN, "clear_manual_override", { room_id: roomId });
+    if (state.roomStatus?.[roomId]) state.roomStatus[roomId].manual_override = null;
+    updateManualBanner(null);
+    updateTiles();
+  } catch (error) {
+    console.warn("clear_manual_override", error);
+  } finally {
+    els.editManualClear.disabled = false;
+  }
 }
 
 function setEditConfirm(mode) {
@@ -3056,6 +3289,12 @@ function collectFormState() {
   if (els.mainIdleTemperature) {
     cfg.main_idle_temperature = normalizeOptionalNumber(els.mainIdleTemperature.value);
   }
+  if (els.manualOverrideEnabled) {
+    cfg.manual_override_enabled = els.manualOverrideEnabled.checked;
+  }
+  if (els.activeScheduleProfile?.value) {
+    cfg.active_schedule_profile = els.activeScheduleProfile.value;
+  }
   cfg.boost_delta = normalizeNumber(els.boostDelta.value, DEFAULTS.boost_delta);
   cfg.tolerance = normalizeNumber(els.tolerance.value, DEFAULTS.tolerance);
   cfg.heating_mode = normalizeHeatingMode(getModePickerValue());
@@ -3152,6 +3391,7 @@ function collectFormState() {
       room_target_reconcile_enabled:
         node.querySelector(".room-target-reconcile-enabled")?.checked === true,
       weekly_schedule: existingRoom.weekly_schedule || DEFAULT_WEEKLY_SCHEDULE,
+      weekly_schedules: existingRoom.weekly_schedules || {},
       day_start: node.querySelector(".room-day-start").value || "",
       night_start: node.querySelector(".room-night-start").value || "",
       enabled: node.querySelector(".room-enabled").checked,
@@ -3390,13 +3630,19 @@ function openScheduleModal(roomId) {
   }
 
   scheduleRoomId = roomId;
-  draftWeeklySchedule = normalizeWeeklySchedule(room.weekly_schedule);
+  scheduleDrafts = {};
+  scheduleProfileId = state.config.schedule_profiles?.[state.config.active_schedule_profile]
+    ? state.config.active_schedule_profile
+    : DEFAULT_PROFILE_ID;
+  draftWeeklySchedule = normalizeWeeklySchedule(getRoomProfileSchedule(room, scheduleProfileId));
+  scheduleDrafts[scheduleProfileId] = draftWeeklySchedule;
 
   if (els.scheduleModalTitle) {
     const label = room.label || roomId;
     els.scheduleModalTitle.textContent = `${t("schedule_title")} · ${label}`;
   }
 
+  renderScheduleProfileBar();
   els.scheduleModal.classList.remove("hidden");
   renderScheduleCalendar();
 
@@ -3407,9 +3653,50 @@ function openScheduleModal(roomId) {
   });
 }
 
+// Auswahl, welcher Zeitplan im Wochenschema-Dialog bearbeitet wird.
+function renderScheduleProfileBar() {
+  const select = els.scheduleProfileSelect;
+  if (!select) return;
+  const profiles = state.config.schedule_profiles || {};
+  const bar = select.closest(".schedule-profile-bar");
+  // Nur ein Zeitplan: Auswahl ausblenden, alles wie bisher.
+  if (bar) bar.classList.toggle("hidden", Object.keys(profiles).length < 2);
+
+  select.innerHTML = "";
+  for (const [profileId, profile] of Object.entries(profiles)) {
+    const option = document.createElement("option");
+    option.value = profileId;
+    option.textContent = profile.label || profileId;
+    select.appendChild(option);
+  }
+  select.value = scheduleProfileId;
+  updateScheduleProfileHint();
+}
+
+function updateScheduleProfileHint() {
+  if (!els.scheduleProfileActive) return;
+  const isActive = scheduleProfileId === (state.config.active_schedule_profile || DEFAULT_PROFILE_ID);
+  els.scheduleProfileActive.textContent = t(
+    isActive ? "schedule_profile_is_active" : "schedule_profile_not_active"
+  );
+}
+
+function switchScheduleProfile(profileId) {
+  const room = state.config.rooms?.[scheduleRoomId];
+  if (!room || !profileId) return;
+  scheduleProfileId = profileId;
+  if (!scheduleDrafts[profileId]) {
+    scheduleDrafts[profileId] = normalizeWeeklySchedule(getRoomProfileSchedule(room, profileId));
+  }
+  draftWeeklySchedule = scheduleDrafts[profileId];
+  updateScheduleProfileHint();
+  renderScheduleCalendar();
+}
+
 function closeScheduleModal() {
   scheduleRoomId = null;
   draftWeeklySchedule = null;
+  scheduleDrafts = {};
   if (els.scheduleCalendar) els.scheduleCalendar.innerHTML = "";
   els.scheduleModal.classList.add("hidden");
   closeScheduleCopyModal();
@@ -3859,7 +4146,9 @@ function saveScheduleDraft() {
     return;
   }
 
-  room.weekly_schedule = normalizeWeeklySchedule(draftWeeklySchedule);
+  for (const [profileId, draft] of Object.entries(scheduleDrafts)) {
+    setRoomProfileSchedule(room, profileId, normalizeWeeklySchedule(draft));
+  }
   closeScheduleModal();
 }
 
@@ -3934,7 +4223,11 @@ function applyScheduleToSelectedRooms() {
       continue;
     }
 
-    state.config.rooms[roomId].weekly_schedule = structuredClone(copiedSchedule);
+    setRoomProfileSchedule(
+      state.config.rooms[roomId],
+      scheduleProfileId,
+      structuredClone(copiedSchedule)
+    );
   }
 
   closeScheduleCopyModal();
@@ -3948,6 +4241,13 @@ function bindScheduleEvents() {
   if (els.scheduleCopyClose)    els.scheduleCopyClose.addEventListener("click", closeScheduleCopyModal);
   if (els.scheduleCopyCancel)   els.scheduleCopyCancel.addEventListener("click", closeScheduleCopyModal);
   if (els.scheduleCopyApply)    els.scheduleCopyApply.addEventListener("click", applyScheduleToSelectedRooms);
+  if (els.scheduleProfileSelect) {
+    els.scheduleProfileSelect.addEventListener("change", () =>
+      switchScheduleProfile(els.scheduleProfileSelect.value)
+    );
+  }
+  if (els.addScheduleProfileBtn) els.addScheduleProfileBtn.addEventListener("click", addScheduleProfile);
+  if (els.editManualClear) els.editManualClear.addEventListener("click", clearManualOverrideForEditedRoom);
 
   if (els.scheduleModal) {
     els.scheduleModal.addEventListener("click", (e) => {

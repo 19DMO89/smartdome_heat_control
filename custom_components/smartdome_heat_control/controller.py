@@ -143,6 +143,15 @@ from .const import (
     DEFAULT_ROOM_CLIMATE_HEAT_BOOST,
     MIN_MAIN_BOOST_DELTA,
     MAIN_RESEND_INTERVAL,
+    HVAC_RESEND_INTERVAL,
+    CLIMATE_MANUAL_OFF_HOLD,
+    CONF_ACTIVE_SCHEDULE_PROFILE,
+    CONF_MANUAL_OVERRIDE_ENABLED,
+    CONF_ROOM_WEEKLY_SCHEDULES,
+    CONF_SCHEDULE_PROFILES,
+    DEFAULT_MANUAL_OVERRIDE_ENABLED,
+    DEFAULT_SCHEDULE_PROFILE_ID,
+    MANUAL_CHANGE_COMMAND_GRACE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -204,6 +213,7 @@ class SmartHeatingController:
 
         # Zuletzt gesendeter HVAC-/Fan-/Preset-Modus pro Climate-Entity
         self._last_hvac_mode: dict[str, str] = {}
+        self._hvac_mode_sent_at: dict[str, float] = {}
         self._last_fan_mode: dict[str, str] = {}
         self._last_preset_mode: dict[str, str] = {}
 
@@ -214,6 +224,10 @@ class SmartHeatingController:
 
         # Sollwert-Abgleich pro Thermostat (nur Räume mit aktivierter Option)
         self._reconcile: dict[str, dict[str, Any]] = {}
+
+        # Von Hand am Gerät eingestellte Raumtemperatur, gilt bis zum nächsten
+        # Wechsel: {room_id: {"target", "period", "since", "entity_id"}}
+        self._manual_overrides: dict[str, dict[str, Any]] = {}
 
         self._apply_config_defaults()
 
@@ -262,6 +276,10 @@ class SmartHeatingController:
             if self._is_self_regulating_room(room) or self._reconcile_enabled(room):
                 for thermostat in self._room_thermostats(room):
                     watch_entities.add(thermostat)
+
+            # Manuelle Bedienung: Sollwert-Änderungen an den Geräten erkennen.
+            if self._manual_override_enabled():
+                watch_entities.update(self._manual_entities_for_room(room))
 
         if watch_entities:
             self._unsub.append(
@@ -653,39 +671,198 @@ class SmartHeatingController:
             and 0 <= minutes <= 59
         )
 
-    def _scheduled_target_for_room(self, room: dict[str, Any]) -> float | None:
-        """Zieltemperatur aus dem Wochenplan lesen.
-
-        Gibt None zurück, wenn für den aktuellen Tag keine gültigen
-        Schedule-Einträge vorhanden sind.
-        """
-        schedule = self._normalize_weekly_schedule(
-            room.get(CONF_ROOM_WEEKLY_SCHEDULE, DEFAULT_ROOM_WEEKLY_SCHEDULE)
+    def _active_schedule_profile(self) -> str:
+        """ID des aktiven Zeitplan-Profils (unbekannt → Standard)."""
+        active = str(
+            self.config.get(CONF_ACTIVE_SCHEDULE_PROFILE, DEFAULT_SCHEDULE_PROFILE_ID)
+            or DEFAULT_SCHEDULE_PROFILE_ID
         )
+        profiles = self.config.get(CONF_SCHEDULE_PROFILES)
+        if active != DEFAULT_SCHEDULE_PROFILE_ID and (
+            not isinstance(profiles, dict) or active not in profiles
+        ):
+            return DEFAULT_SCHEDULE_PROFILE_ID
+        return active
+
+    def _room_active_schedule(self, room: dict[str, Any]) -> Any:
+        """Wochenschema des Raums im aktiven Profil.
+
+        Das Standard-Profil liegt aus Kompatibilitätsgründen in
+        ``weekly_schedule``, alle anderen in ``weekly_schedules``. Hat ein Raum
+        für das aktive Profil kein Schema, gelten seine Tag/Nacht-Temperaturen.
+        """
+        profile_id = self._active_schedule_profile()
+        if profile_id == DEFAULT_SCHEDULE_PROFILE_ID:
+            return room.get(CONF_ROOM_WEEKLY_SCHEDULE, DEFAULT_ROOM_WEEKLY_SCHEDULE)
+        schedules = room.get(CONF_ROOM_WEEKLY_SCHEDULES)
+        if not isinstance(schedules, dict):
+            return DEFAULT_ROOM_WEEKLY_SCHEDULE
+        return schedules.get(profile_id, DEFAULT_ROOM_WEEKLY_SCHEDULE)
+
+    def _active_schedule_entry(
+        self, room: dict[str, Any]
+    ) -> tuple[str, str, float | None] | None:
+        """Gerade gültigen Wochenplan-Eintrag liefern: (Tag, Start, Temperatur).
+
+        Temperatur None = Lücke (Standard Tag/Nacht gilt). None, wenn heute
+        noch kein Eintrag begonnen hat.
+        """
+        schedule = self._normalize_weekly_schedule(self._room_active_schedule(room))
 
         day_key = dt_util.now().strftime("%A").lower()
         entries = schedule.get(day_key, [])
-
-        if not entries:
-            return None
-
         now_hhmm = self._time_hhmm()
-        active_temperature: float | None = None
+        active: tuple[str, str, float | None] | None = None
 
         for entry in entries:
             start = str(entry.get("start", ""))[:5]
-            temperature = self._safe_float(entry.get("temperature"))
-
-            if start <= now_hhmm:
-                # temperature None = Lücke: kein Plan, Standard Tag/Nacht gilt
-                active_temperature = None if temperature is None else float(temperature)
-            else:
+            if start > now_hhmm:
                 break
+            temperature = self._safe_float(entry.get("temperature"))
+            active = (day_key, start, None if temperature is None else float(temperature))
 
-        if active_temperature is not None:
-            return active_temperature
+        return active
 
-        return None
+    def _scheduled_target_for_room(self, room: dict[str, Any]) -> float | None:
+        """Zieltemperatur aus dem Wochenplan des aktiven Profils lesen.
+
+        None, wenn gerade kein Plan-Eintrag gilt (keiner begonnen oder Lücke).
+        """
+        entry = self._active_schedule_entry(room)
+        return entry[2] if entry is not None else None
+
+    def _target_period_key(self, room: dict[str, Any]) -> tuple[Any, ...]:
+        """Kennung des aktuell gültigen Sollwert-Abschnitts eines Raums.
+
+        Ändert sich die Kennung (neuer Wochenplan-Block, Tag/Nacht-Wechsel,
+        Profilwechsel, Urlaub/Abwesend), endet eine manuelle Übersteuerung.
+        """
+        if bool(self.config.get(CONF_VACATION_ENABLED, DEFAULT_VACATION_ENABLED)):
+            return ("vacation",)
+        if self._is_room_away_active(room):
+            return ("away",)
+        profile_id = self._active_schedule_profile()
+        entry = self._active_schedule_entry(room)
+        if entry is not None and entry[2] is not None:
+            return ("schedule", profile_id, entry[0], entry[1])
+        # Tag/Nacht-Grenze zählt auch ohne Nachtabsenkung als Wechsel, sonst
+        # bliebe eine manuelle Temperatur bei konstantem Sollwert für immer.
+        return ("base", profile_id, "night" if self._is_night_for_room(room) else "day")
+
+    # --- Manuelle Bedienung am Thermostat ---------------------------------
+
+    def _manual_override_enabled(self) -> bool:
+        return bool(
+            self.config.get(CONF_MANUAL_OVERRIDE_ENABLED, DEFAULT_MANUAL_OVERRIDE_ENABLED)
+        )
+
+    def _main_outputs(self) -> set[str]:
+        """Hauptthermostat und Heizkreis-Thermostate (keine Raumgeräte)."""
+        outputs: set[str] = set()
+        main = self._as_entity_id(self.config.get(CONF_MAIN_THERMOSTAT))
+        if main:
+            outputs.add(main)
+        circuits = self.config.get(CONF_CIRCUITS, {})
+        if isinstance(circuits, dict):
+            for circuit in circuits.values():
+                if isinstance(circuit, dict):
+                    ct = self._as_entity_id(circuit.get(CONF_CIRCUIT_MAIN_THERMOSTAT))
+                    if ct:
+                        outputs.add(ct)
+        return outputs
+
+    def _manual_entities_for_room(self, room: dict[str, Any]) -> list[str]:
+        """Geräte eines Raums, an denen von Hand die Temperatur verstellt werden kann."""
+        main_outputs = self._main_outputs()
+        entities = [t for t in self._room_thermostats(room) if t not in main_outputs]
+        climate_entity = self._as_entity_id(room.get(CONF_ROOM_CLIMATE_ENTITY, ""))
+        if (
+            climate_entity
+            and room.get(CONF_ROOM_USE_CLIMATE, False)
+            and not room.get(CONF_ROOM_CLIMATE_HEAT_BOOST, DEFAULT_ROOM_CLIMATE_HEAT_BOOST)
+            and climate_entity not in entities
+        ):
+            entities.append(climate_entity)
+        return entities
+
+    def _note_manual_room_change(
+        self, entity_id: str, old_target: float | None, new_target: float | None
+    ) -> None:
+        """Von Hand am Thermostat/an der Klima eingestellte Temperatur übernehmen.
+
+        Erkannt wird eine Änderung, wenn das Gerät vorher den zuletzt von uns
+        gesendeten Wert hatte, jetzt davon abweicht und wir nicht gerade erst
+        gesendet haben. Der neue Wert (ohne Thermostat-Offset) gilt als
+        Zieltemperatur des Raums bis zum nächsten Wechsel (Zeitplan, Tag/Nacht).
+        Fällt das Gerät auf seine Mindesttemperatur (aus/Fensterfunktion), ist
+        das keine Übersteuerung.
+        """
+        if not self._manual_override_enabled() or self._is_cooling_active():
+            return
+        if old_target is None or new_target is None:
+            return
+        if abs(old_target - new_target) < RECONCILE_TOLERANCE:
+            return
+        desired = self._desired_targets.get(entity_id)
+        if desired is None or abs(old_target - desired) > RECONCILE_TOLERANCE:
+            return
+        if abs(new_target - desired) <= RECONCILE_TOLERANCE:
+            return
+        now_ts = dt_util.now().timestamp()
+        if now_ts - self._last_command_sent_at.get(entity_id, 0.0) <= MANUAL_CHANGE_COMMAND_GRACE:
+            return
+        if new_target <= self._thermostat_min_temp(entity_id) + 0.01:
+            return
+
+        for room_id, room in self._active_rooms().items():
+            if entity_id not in self._manual_entities_for_room(room):
+                continue
+            if room_id in self._window_paused_rooms:
+                return
+            offset = 0.0
+            if entity_id in self._room_thermostats(room):
+                offset = float(
+                    room.get(CONF_ROOM_THERMOSTAT_OFFSET, DEFAULT_ROOM_THERMOSTAT_OFFSET)
+                )
+            target = min(30.0, max(5.0, new_target - offset))
+            self._manual_overrides[room_id] = {
+                "target": target,
+                "period": self._target_period_key(room),
+                "since": now_ts,
+                "entity_id": entity_id,
+            }
+            _LOGGER.info(
+                "Raum %s: am Gerät %s von Hand auf %.1f °C gestellt – gilt bis zum nächsten Wechsel",
+                room.get("label", room_id),
+                entity_id,
+                target,
+            )
+            return
+
+    def _apply_manual_override(
+        self, room_id: str, room: dict[str, Any], target: float
+    ) -> float:
+        """Zieltemperatur durch eine laufende manuelle Übersteuerung ersetzen."""
+        override = self._manual_overrides.get(room_id)
+        if override is None:
+            return target
+        if not self._manual_override_enabled() or override["period"] != self._target_period_key(room):
+            self._manual_overrides.pop(room_id, None)
+            _LOGGER.info(
+                "Raum %s: manuelle Temperatur beendet, Automatik übernimmt wieder",
+                room.get("label", room_id),
+            )
+            return target
+        return float(override["target"])
+
+    def clear_manual_override(self, room_id: str | None = None) -> None:
+        """Manuelle Übersteuerung beenden (ein Raum oder alle)."""
+        if room_id:
+            self._manual_overrides.pop(room_id, None)
+        else:
+            self._manual_overrides.clear()
+        if self._enabled:
+            self._evaluate()
 
     def _is_night_for_room(self, room: dict[str, Any]) -> bool:
         """Raumbezogene Tag-/Nacht-Zeit prüfen."""
@@ -773,6 +950,17 @@ class SmartHeatingController:
             "outdoor_cutoff_active": last_state.get("outdoor_cutoff_active", False),
             "outdoor_minimum_active": last_state.get("outdoor_minimum_active", False),
             "sensor_fault": room_id in self._room_sensor_fault,
+            "manual_override": self._manual_override_status(room_id),
+        }
+
+    def _manual_override_status(self, room_id: str) -> dict[str, Any] | None:
+        override = self._manual_overrides.get(room_id)
+        if override is None:
+            return None
+        return {
+            "target": override["target"],
+            "since": override["since"],
+            "entity_id": override.get("entity_id"),
         }
 
     def get_panel_room_status(self) -> dict[str, dict[str, Any]]:
@@ -808,6 +996,7 @@ class SmartHeatingController:
                 "away_active": status.get("away_active"),
                 "outdoor_cutoff_active": status.get("outdoor_cutoff_active"),
                 "outdoor_minimum_active": status.get("outdoor_minimum_active"),
+                "manual_override": status.get("manual_override"),
             }
         return result
 
@@ -1269,11 +1458,47 @@ class SmartHeatingController:
                 for actuator in self._room_switch_actuators(room):
                     self._set_room_switch_if_needed(room, actuator, False, force=True)
 
-    def _set_hvac_mode_if_needed(self, entity_id: str, hvac_mode: str) -> None:
-        """HVAC-Modus setzen, aber nur wenn er sich geändert hat."""
+    def _set_hvac_mode_if_needed(self, entity_id: str, hvac_mode: str) -> str:
+        """HVAC-Modus setzen und mit dem tatsächlichen Gerätezustand abgleichen.
+
+        Rückgabe:
+        - ``"ok"``: Gerät steht bereits auf dem Modus
+        - ``"sent"``: Befehl gesendet (oder kurz zuvor gesendet, Bestätigung ausstehend)
+        - ``"held"``: Gerät wurde von Hand umgestellt, wird vorerst respektiert
+        - ``"unavailable"``: Gerät nicht erreichbar
+
+        Früher wurde nur gesendet, wenn sich der gewünschte Modus änderte. Wurde
+        die Klima von Hand ausgeschaltet oder ging der Befehl verloren, blieb sie
+        aus, obwohl der Raum heizen sollte.
+        """
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            # Nach dem Wiederverbinden sofort neu senden.
+            self._last_hvac_mode.pop(entity_id, None)
+            return "unavailable"
+
+        if state.state == hvac_mode:
+            self._last_hvac_mode[entity_id] = hvac_mode
+            return "ok"
+
+        now_ts = dt_util.now().timestamp()
         if self._last_hvac_mode.get(entity_id) == hvac_mode:
-            return
+            sent_at = self._hvac_mode_sent_at.get(entity_id, 0.0)
+            last_changed = getattr(state, "last_changed", None)
+            changed_ts = last_changed.timestamp() if last_changed is not None else 0.0
+            if changed_ts > sent_at:
+                # Nach unserem Befehl von Hand umgestellt.
+                if hvac_mode == "off":
+                    # Von Hand eingeschaltet, obwohl aus sein soll: respektieren.
+                    return "held"
+                if now_ts - changed_ts < CLIMATE_MANUAL_OFF_HOLD:
+                    return "held"
+            elif now_ts - sent_at < HVAC_RESEND_INTERVAL:
+                # Befehl unterwegs, Gerät hat noch nicht reagiert.
+                return "sent"
+
         self._last_hvac_mode[entity_id] = hvac_mode
+        self._hvac_mode_sent_at[entity_id] = now_ts
         self.hass.async_create_task(
             self.hass.services.async_call(
                 CLIMATE_DOMAIN,
@@ -1282,6 +1507,20 @@ class SmartHeatingController:
                 blocking=True,
             )
         )
+        return "sent"
+
+    def _climate_heat(self, entity_id: str, target: float) -> None:
+        """Klimaanlage auf Heizen mit Sollwert stellen.
+
+        Beim (erneuten) Einschalten wird der Sollwert garantiert mitgesendet.
+        Ist sie von Hand ausgeschaltet (Haltezeit) oder nicht erreichbar, wird
+        kein Sollwert gesendet, weil manche Geräte dadurch einschalten.
+        """
+        status = self._set_hvac_mode_if_needed(entity_id, "heat")
+        if status == "sent":
+            self._desired_targets.pop(entity_id, None)
+        if status in ("ok", "sent"):
+            self._set_temp_if_needed(entity_id, target)
 
     def _set_fan_mode_if_needed(self, entity_id: str, fan_mode: str) -> None:
         """Lüftermodus setzen, aber nur wenn er sich geändert hat."""
@@ -1456,6 +1695,7 @@ class SmartHeatingController:
         self._last_applied_room_state.clear()
         self._circuit_heating_active.clear()
         self._last_hvac_mode.clear()
+        self._hvac_mode_sent_at.clear()
         self._last_fan_mode.clear()
         self._last_preset_mode.clear()
         self._switch_command_sent_at.clear()
@@ -1471,6 +1711,7 @@ class SmartHeatingController:
             self._room_sensor_missing_since,
             self._window_open_since,
             self._window_closed_since,
+            self._manual_overrides,
         ):
             for room_id in [rid for rid in store if rid not in active_rooms]:
                 del store[room_id]
@@ -1495,6 +1736,7 @@ class SmartHeatingController:
         self._residual_heat_hold_until.clear()
         self._room_sensor_missing_since.clear()
         self._room_sensor_fault.clear()
+        self._manual_overrides.clear()
         self._outdoor_cutoff_latched = False
 
     def _restore_non_boost_targets(self) -> None:
@@ -1782,7 +2024,9 @@ class SmartHeatingController:
 
         for room_id, room in rooms.items():
             actual = self._room_temp(room)
-            target = self._effective_target_for_room(room)
+            target = self._apply_manual_override(
+                room_id, room, self._effective_target_for_room(room)
+            )
             pause_active = self._window_pause_active(room_id, room)
             mode = self._get_room_heating_mode(room)
             room_tolerance = self._room_tolerance(room, tolerance)
@@ -2105,10 +2349,7 @@ class SmartHeatingController:
                         # Erfordert Raumsensor – die Zustandsmaschine übernimmt die Hysterese.
                         climate_heating = rstate.get("state") == ROOM_STATE_HEATING
                         if climate_heating:
-                            if self._last_hvac_mode.get(climate_entity) != "heat":
-                                self._desired_targets.pop(climate_entity, None)
-                            self._set_hvac_mode_if_needed(climate_entity, "heat")
-                            self._set_temp_if_needed(
+                            self._climate_heat(
                                 climate_entity, self._climate_max_temp(climate_entity)
                             )
                         else:
@@ -2133,11 +2374,7 @@ class SmartHeatingController:
                                     room.get(CONF_ROOM_TARGET_DAY, DEFAULT_TARGET_DAY),
                                 )
                             )
-                            # Beim Einschalten Sollwert garantiert erneut senden.
-                            if self._last_hvac_mode.get(climate_entity) != "heat":
-                                self._desired_targets.pop(climate_entity, None)
-                            self._set_hvac_mode_if_needed(climate_entity, "heat")
-                            self._set_temp_if_needed(climate_entity, heat_target)
+                            self._climate_heat(climate_entity, heat_target)
                         else:
                             self._set_hvac_mode_if_needed(climate_entity, "off")
                     # Heizventile ausschalten (nicht die Klimaanlage selbst)
@@ -2293,6 +2530,7 @@ class SmartHeatingController:
                 )
             ):
                 self._note_possible_manual_change(entity_id, old_target, new_target)
+            self._note_manual_room_change(entity_id, old_target, new_target)
         self._evaluate()
 
     @callback

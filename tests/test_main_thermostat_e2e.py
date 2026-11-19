@@ -179,6 +179,88 @@ def test_klima_raum_schaltet_hauptthermostat_nicht_ein(date_clock):
     assert _sent(hass, "climate.klo_ac") == [21.0]
 
 
+def _hvac_calls(hass, entity_id):
+    return [
+        data["hvac_mode"]
+        for _domain, service, data in hass.service_calls
+        if service == "set_hvac_mode" and data["entity_id"] == entity_id
+    ]
+
+
+def _set_ac(hass, mode, changed_at, temperature=21):
+    _state(
+        hass,
+        "climate.klo_ac",
+        mode,
+        temperature=temperature,
+        min_temp=16,
+        max_temp=30,
+    )
+    hass.states.get("climate.klo_ac").last_changed = changed_at
+
+
+def test_klima_von_hand_aus_geht_nach_30_minuten_wieder_an(date_clock):
+    ctrl, hass = _controller()
+    _use_ac_in_klo(ctrl, hass)
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == ["heat"]
+    _set_ac(hass, "heat", date_clock.now())  # Gerät hat übernommen
+
+    date_clock.advance(300)
+    _set_ac(hass, "off", date_clock.now())  # von Hand ausgeschaltet
+    date_clock.advance(60)
+    ctrl._evaluate()
+    date_clock.advance(const.CLIMATE_MANUAL_OFF_HOLD - 120)
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == ["heat"]  # Haltezeit läuft
+
+    date_clock.advance(120)
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == ["heat", "heat"]
+    assert _sent(hass, "climate.klo_ac") == [21.0, 21.0]  # Sollwert mitgesendet
+
+
+def test_klima_befehl_verloren_wird_wiederholt(date_clock):
+    ctrl, hass = _controller()
+    _use_ac_in_klo(ctrl, hass)
+    hass.states.get("climate.klo_ac").last_changed = date_clock.now() - datetime.timedelta(hours=5)
+    ctrl._evaluate()
+    date_clock.advance(60)
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == ["heat"]  # Bestätigung abwarten
+    date_clock.advance(const.HVAC_RESEND_INTERVAL)
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == ["heat", "heat"]
+
+
+def test_klima_nicht_erreichbar_wird_nach_rueckkehr_eingeschaltet(date_clock):
+    ctrl, hass = _controller()
+    _use_ac_in_klo(ctrl, hass)
+    _set_ac(hass, "unavailable", date_clock.now())
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == []
+    assert _sent(hass, "climate.klo_ac") == []
+    date_clock.advance(60)
+    _set_ac(hass, "off", date_clock.now())
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == ["heat"]
+
+
+def test_klima_von_hand_an_bleibt_an_wenn_raum_warm(date_clock):
+    ctrl, hass = _controller()
+    _use_ac_in_klo(ctrl, hass)
+    _set_ac(hass, "heat", date_clock.now() - datetime.timedelta(hours=1))
+    _state(hass, "sensor.klo_temp", "22.0")  # kein Heizbedarf
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == ["off"]
+    _set_ac(hass, "off", date_clock.now())
+    date_clock.advance(600)
+    _set_ac(hass, "heat", date_clock.now())  # von Hand wieder an
+    date_clock.advance(600)
+    ctrl._evaluate()
+    assert _hvac_calls(hass, "climate.klo_ac") == ["off"]
+
+
 def test_heizkoerper_raum_schaltet_trotz_klima_raum_ein(date_clock):
     ctrl, hass = _controller()
     _use_ac_in_klo(ctrl, hass)
